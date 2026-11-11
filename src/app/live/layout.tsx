@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { COMPANY_LEGAL } from '@/lib/company';
 import Link from 'next/link';
 
-const NAV = [['/demo', 'Home'], ['/live', 'Live'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/wallet', 'Wallet'], ['/demo/dashboard', 'Dashboard'], ['/legal', 'Legal']];
+const NAV = [['/demo', 'Home'], ['/live', 'Live'], ['/whitepaper', 'Whitepaper'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/wallet', 'Wallet'], ['/demo/dashboard', 'Dashboard'], ['/legal', 'Legal']];
 
 export const metadata = { title: 'Cletus live recorded book', description: 'Anonymized recorded trades from Cletus. Not financial advice. Past results do not predict future results.' };
 
@@ -23,6 +23,8 @@ export default function LiveLayout({ children }: { children: ReactNode }) {
       <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
       <footer className="max-w-5xl mx-auto px-4 py-8 text-xs text-zinc-500 border-t border-zinc-800">
         Not financial advice. Past results, including simulated or paper results, do not predict future results. Losses, including total loss, can occur.
+        {' '}<Link href="/whitepaper" className="text-amber-300 hover:text-amber-200">Whitepaper</Link>
+        {' · '}<a href="/cletus-whitepaper.pdf" className="text-amber-300 hover:text-amber-200">Download PDF</a>
         <div className="mt-2 text-zinc-600">© 2026 {COMPANY_LEGAL}</div>
       </footer>
     </div>

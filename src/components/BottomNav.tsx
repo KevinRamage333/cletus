@@ -26,7 +26,7 @@ export default function BottomNav() {
             <Link key={t.href} href={t.href} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${active(t.href) ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40' : 'text-white/60 hover:text-white'}`}>{t.icon} {t.label}</Link>
           ))}
           <span className="ml-auto flex gap-2 shrink-0 text-[11px] text-white/40">
-            <Link href="/app/wallet" className="hover:text-white">Wallet</Link>·<Link href="/tax" className="hover:text-white">Tax</Link>·<Link href="/app/staking" className="hover:text-white">Staking</Link>·<Link href="/" className="hover:text-white">Engine</Link>
+            <Link href="/app/wallet" className="hover:text-white">Wallet</Link>·<Link href="/tax" className="hover:text-white">Tax</Link>·<Link href="/app/staking" className="hover:text-white">Staking</Link>·<Link href="/whitepaper" className="hover:text-white">Whitepaper</Link>·<Link href="/" className="hover:text-white">Engine</Link>
           </span>
         </div>
       </nav>
