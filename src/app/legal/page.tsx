@@ -97,6 +97,16 @@ export default function LegalEntryPage() {
             </p>
 
             <p>
+              <strong className="text-white">Fees.</strong> Each swap through Cletus
+              includes a <strong className="text-white">0.5% (50 basis points)</strong> platform
+              fee charged by Cletus Technologies LLC and collected via the Jupiter Referral
+              Program ($0.50 on a $100 swap). Jupiter retains 20% of that fee; the rest is
+              paid to Cletus Technologies LLC. Network fees and slippage also apply. The
+              fee is included in paper-trading results and is not charged on the operator&apos;s
+              own trades. The full Terms describe this in more detail.
+            </p>
+
+            <p>
               <strong className="text-white">Eligibility.</strong> You represent that you
               are of legal age in your jurisdiction and that using this software is lawful
               where you live. You are responsible for complying with applicable laws and

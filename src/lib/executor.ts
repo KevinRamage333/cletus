@@ -24,7 +24,10 @@ export function connection(cfg: Config) {
 /**
  * LIVE swap via Jupiter Swap API V2 Meta-Aggregator: GET /order (taker = operator wallet, fixed slippageBps for
  * deterministic bot behaviour) -> sign -> POST /execute (Jupiter lands it: RTSE, priority fees, Beam, confirmation).
- * `transaction: ""` responses and /execute error codes are surfaced; retryable /execute codes get one fresh order.
+ * When a Jupiter referral account is configured and the taker should be charged, /order is called with
+ * referralAccount + referralFee (default 50 bps). Owner trades matching OPERATOR_FEE_WALLET are skipped unless
+ * OPERATOR_FEE_ON_OWNER=true. `transaction: ""` responses and /execute error codes are surfaced; retryable
+ * /execute codes get one fresh order.
  */
 export async function executeSwap(cfg: Config, r: SwapRequest): Promise<SwapResult> {
   if (cfg.mode !== 'live') throw new Error('executeSwap called outside live mode');

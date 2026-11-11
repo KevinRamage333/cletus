@@ -129,7 +129,8 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
       priceUsd: price, marketCap: mcap, volume24h: v24, liquidityUsd: p.liquidity?.usd ?? null, ageHours,
       priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: compositeScore(signals, weights),
     };
-    // Fee-aware score: Jupiter charges 50 bps/side on tokens < 24 h old (vs 10), so a round trip costs 80 bps more.
+    // Fee-aware score: expectedFeeBps includes Jupiter's age-based platform fee and the 0.5% operator fee (50 bps,
+    // which replaces the platform fee when the referral program is active). feePenalty nets the extra round-trip cost.
     c.estFeeBps = expectedFeeBps(ageHours);
     c.composite = Math.max(0, c.composite - feePenalty(c.estFeeBps));
     if (!(price > 0)) c.rejected = 'no price';

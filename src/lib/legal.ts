@@ -5,7 +5,7 @@ import { COMPANY_LEGAL } from './company';
  *
  * TEMPLATE LANGUAGE — must be reviewed by a qualified lawyer before any public use.
  */
-export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.2';
+export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.3';
 export const RISK_VERSION = TERMS_VERSION;
 
 export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
@@ -43,6 +43,11 @@ export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
     'These Terms may be updated. When the Terms version changes you will be required to read and accept the new version before continuing to use Cletus. Your acceptance (user id, Terms version and timestamp) is recorded.' ] },
   { title: '13. Template notice', body: [
     'This document is a template provided for an early beta and has not been reviewed by a lawyer. It must be reviewed and adapted by qualified legal counsel for your jurisdiction before Cletus is offered to anyone else.' ] },
+  { title: '14. Platform and swap fees', body: [
+    'Cletus Technologies LLC charges a platform fee of 0.5% (50 basis points) on each swap executed through Cletus. On a $100 swap that fee is $0.50. The fee is collected automatically through the Jupiter Referral Program at the time of the swap.',
+    'Jupiter, the swap venue, retains 20% of that integrator fee and pays the remaining 80% to Cletus Technologies LLC. Of the 0.5% charged on a swap, 0.1% is retained by Jupiter and 0.4% is paid to Cletus Technologies LLC. When this referral fee is applied, Jupiter does not charge a separate platform fee on the same swap. Network (gas/priority) fees and price slippage still apply and are separate from the platform fee.',
+    'The platform fee is not charged on swaps placed from the operator wallet (the owner\'s own trades), unless the operator has expressly enabled charging on those trades. Paper-trading (simulated) results include the same 0.5% fee so that simulations stay realistic.',
+    'Third-party venues and networks may charge their own fees. Fee rates may be updated; a change to these Terms will be published under a new Terms version, which you must accept before continuing to use Cletus.' ] },
 ];
 
 export const RISK_POINTS: string[] = [
@@ -50,6 +55,7 @@ export const RISK_POINTS: string[] = [
   'Losses do occur — individual trades, losing streaks, and the loss of your entire balance are all possible.',
   'Crypto micro-cap tokens are extremely volatile: prices can move 50–100% in minutes, liquidity can vanish, and tokens can be rugged or become unsellable (honeypots).',
   'Security checks and signals are heuristics on third-party data and can be wrong.',
-  'Simulated (paper) results use real market data but do not include every real-world cost or failure, and do not predict live results.',
+  'Simulated (paper) results use real market data but do not include every real-world cost or failure, and do not predict live results. Paper fills do include the 0.5% Cletus platform fee described below, plus modelled Jupiter and network fees.',
+  'Each swap through Cletus includes a 0.5% (50 basis points) platform fee charged by Cletus Technologies LLC, collected via the Jupiter Referral Program. On a $100 swap that is $0.50. Jupiter retains 20% of that fee (0.1% of the swap); 0.4% of the swap is paid to Cletus Technologies LLC. Network fees and slippage also apply. This fee is not charged on the operator\'s own trades.',
   'Nothing in Cletus is financial advice. You are solely responsible for your decisions, your wallet, and your keys.',
 ];

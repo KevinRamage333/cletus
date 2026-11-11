@@ -141,6 +141,8 @@ export interface Config {
   txConfirmationTimeoutSec: number; txRetryCount: number; priorityFeeEscalation: number; maxPriorityFeeLamports: number;
   slippageWidenStepBps: number; maxSlippageBps: number; maxConsecutiveFailures: number; failurePauseMinutes: number;
   jupiterApiKey: string | null; jupiterBaseUrl: string; rpcUrl: string;
+  // operator / platform fee (Jupiter referral program)
+  operatorFeeWallet: string; operatorFeeBps: number; operatorReferralAccount: string | null; operatorFeeOnOwner: boolean;
   // compliance gate
   secMaxVolumeShare: number; secMaxLiquidityShare: number; secWashTradeWindowMin: number; secMaxTradesPer5Min: number;
   // simulation
@@ -286,6 +288,10 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     failurePauseMinutes: num(env.FAILURE_PAUSE_MINUTES, 15),
     jupiterApiKey: env.JUPITER_API_KEY && !env.JUPITER_API_KEY.startsWith('your_') ? env.JUPITER_API_KEY : null,
     jupiterBaseUrl: str(env.JUPITER_SWAP_BASE, 'https://api.jup.ag/swap/v2'), // Swap API V2 (/order + /execute); see src/lib/jupiter.ts
+    operatorFeeWallet: str(env.OPERATOR_FEE_WALLET, 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq'),
+    operatorFeeBps: (() => { const n = num(env.OPERATOR_FEE_BPS, 50); if (n <= 0) return 0; return Math.min(255, Math.max(50, Math.round(n))); })(),
+    operatorReferralAccount: (env.JUPITER_REFERRAL_ACCOUNT || env.OPERATOR_REFERRAL_ACCOUNT || '').trim() || null,
+    operatorFeeOnOwner: bool(env.OPERATOR_FEE_ON_OWNER, false),
     rpcUrl: str(env.HELIUS_RPC_URL && !env.HELIUS_RPC_URL.includes('your_') ? env.HELIUS_RPC_URL : env.RPC_URL, 'https://api.mainnet-beta.solana.com'),
     secMaxVolumeShare: num(env.SEC_MAX_VOLUME_SHARE, 0.05),
     secMaxLiquidityShare: num(env.SEC_MAX_LIQUIDITY_SHARE, 0.02), // max position = 2% of pool liquidity

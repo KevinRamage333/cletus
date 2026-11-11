@@ -6,6 +6,7 @@
  * Live mode: only the operator account trades, via Jupiter, signed with the server wallet.
  */
 import { simBuy, simSell, simFeesUsd } from './sim-quote';
+import { shouldChargeOperatorFee } from './jupiter';
 import type { Account, Position } from '@prisma/client';
 import { prisma } from './db';
 import { log } from './logger';
@@ -75,6 +76,19 @@ export async function getWeights(): Promise<Record<SignalName, number>> {
     return w;
   }
   return Object.fromEntries(rows.map((r) => [r.name, r.weight])) as Record<SignalName, number>;
+}
+
+
+/** Paper fills: charge the operator fee on user accounts; skip the operator/server wallet unless OPERATOR_FEE_ON_OWNER. */
+async function chargeOperatorFeeForAccount(a: { isOperator: boolean }): Promise<boolean> {
+  let taker: string | null = null;
+  if (a.isOperator) {
+    try {
+      const { getOperatorPublicKey } = await import('./wallet');
+      taker = getOperatorPublicKey();
+    } catch { taker = null; }
+  }
+  return shouldChargeOperatorFee(taker, { isOwnerAccount: a.isOperator });
 }
 
 export async function ensureOperatorAccount() {
@@ -298,7 +312,8 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     }
   } else {
     // Realistic paper fill from a keyless Jupiter V2 /order quote (impact + feeBps incl. 50 bps new-token fee); model fallback.
-    const q = await simBuy({ mint: cand.mint, sizeUsd, mid: cand.priceUsd, solPriceUsd: (mem.solPrice || c.solPriceFallbackUsd), liquidityUsd: liquidity, fallbackImpact: c.slippageTolerance, ageHours: cand.ageHours });
+    const chargeFee = await chargeOperatorFeeForAccount(a);
+    const q = await simBuy({ mint: cand.mint, sizeUsd, mid: cand.priceUsd, solPriceUsd: (mem.solPrice || c.solPriceFallbackUsd), liquidityUsd: liquidity, fallbackImpact: c.slippageTolerance, ageHours: cand.ageHours, chargeOperatorFee: chargeFee });
     fillPrice = q.fillPrice;
     tokenAmount = sizeUsd / fillPrice;
     fees = simFeesUsd(sizeUsd, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
@@ -451,7 +466,9 @@ export async function partialClose(positionId: string, price: number, fraction: 
       return;
     }
   } else {
-    const q = await simSell({ mint: p.mint, tokenAmount: sellTokens, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance });
+    const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
+    const chargeFee = await chargeOperatorFeeForAccount({ isOperator: !!acct?.isOperator });
+    const q = await simSell({ mint: p.mint, tokenAmount: sellTokens, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance, chargeOperatorFee: chargeFee });
     proceeds = sellTokens * q.fillPrice;
     fee = simFeesUsd(proceeds, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
@@ -490,7 +507,8 @@ export async function closePosition(positionId: string, price: number, reason: s
     }
   } else {
     // Realistic: fill at the observed (possibly gapped) price, minus pool price impact for our size.
-    const q = await simSell({ mint: p.mint, tokenAmount: p.tokenAmount, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance });
+    const chargeFee = await chargeOperatorFeeForAccount(a);
+    const q = await simSell({ mint: p.mint, tokenAmount: p.tokenAmount, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance, chargeOperatorFee: chargeFee });
     exitPrice = q.fillPrice;
     proceeds = p.tokenAmount * exitPrice;
     exitFees = simFeesUsd(proceeds, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));

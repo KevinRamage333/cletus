@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   orderUrl, parseOrder, orderTxProblem, describeOrderError, parseExecute, describeExecute, RETRYABLE_EXECUTE,
-  expectedFeeBps, feePenalty, bucketRps, jupiterKey, reserve, newLimiter, backoffFromHeaders, JUP_SWAP_BASE, getOrder, executeOrder, jupFetch, JupiterRateLimited, SOL_MINT,
+  expectedFeeBps, platformFeeBps, feePenalty, effectiveQuoteFeeBps, operatorFeeConfig, shouldChargeOperatorFee,
+  referralParamsForOrder, DEFAULT_OPERATOR_FEE_WALLET, bucketRps, jupiterKey, reserve, newLimiter, backoffFromHeaders,
+  JUP_SWAP_BASE, getOrder, executeOrder, jupFetch, JupiterRateLimited, SOL_MINT,
 } from '../src/lib/jupiter';
 import { fillFromQuote, simFeesUsd, simBuy } from '../src/lib/sim-quote';
 
@@ -45,10 +47,50 @@ describe('Jupiter Swap API V2 client', () => {
     for (const c of [-2, -3, -1002, -1003, -2004]) expect(RETRYABLE_EXECUTE.has(c)).toBe(false);
   });
 
-  it('fee model: 50 bps for tokens < 24 h old, 10 bps otherwise; penalty nets the extra round trip', () => {
-    expect(expectedFeeBps(3)).toBe(50); expect(expectedFeeBps(23.9)).toBe(50);
-    expect(expectedFeeBps(24)).toBe(10); expect(expectedFeeBps(null)).toBe(10);
+  it('platform fee table: 50 bps for tokens < 24 h old, 10 bps otherwise; penalty nets the extra round trip', () => {
+    const off = { OPERATOR_FEE_BPS: '0' };
+    expect(platformFeeBps(3, off)).toBe(50); expect(platformFeeBps(23.9, off)).toBe(50);
+    expect(platformFeeBps(24, off)).toBe(10); expect(platformFeeBps(null, off)).toBe(10);
+    expect(expectedFeeBps(24, off, { chargeOperatorFee: false })).toBe(10);
     expect(feePenalty(10)).toBe(0); expect(feePenalty(50)).toBeCloseTo(0.04);
+  });
+
+  it('operator fee defaults to 50 bps on the payout wallet, clamped to Jupiter 50–255, disabled at 0', () => {
+    expect(operatorFeeConfig({}).wallet).toBe(DEFAULT_OPERATOR_FEE_WALLET);
+    expect(operatorFeeConfig({}).feeBps).toBe(50);
+    expect(operatorFeeConfig({}).enabled).toBe(true);
+    expect(operatorFeeConfig({ OPERATOR_FEE_BPS: '0' }).enabled).toBe(false);
+    expect(operatorFeeConfig({ OPERATOR_FEE_BPS: '25' }).feeBps).toBe(50); // Jupiter minimum
+    expect(operatorFeeConfig({ OPERATOR_FEE_BPS: '300' }).feeBps).toBe(255);
+    expect(operatorFeeConfig({ OPERATOR_FEE_WALLET: ' Wallet111 ' }).wallet).toBe('Wallet111');
+    expect(operatorFeeConfig({ JUPITER_REFERRAL_ACCOUNT: 'Ref111' }).referralAccount).toBe('Ref111');
+  });
+
+  it('charges users 50 bps even on older tokens; skips the operator wallet unless OPERATOR_FEE_ON_OWNER', () => {
+    const env = { OPERATOR_FEE_BPS: '50', OPERATOR_FEE_WALLET: DEFAULT_OPERATOR_FEE_WALLET };
+    expect(shouldChargeOperatorFee('SomeUser111', {}, env)).toBe(true);
+    expect(shouldChargeOperatorFee(DEFAULT_OPERATOR_FEE_WALLET, {}, env)).toBe(false);
+    expect(shouldChargeOperatorFee(null, { isOwnerAccount: true }, env)).toBe(false);
+    expect(shouldChargeOperatorFee(DEFAULT_OPERATOR_FEE_WALLET, { isOwnerAccount: true }, { ...env, OPERATOR_FEE_ON_OWNER: 'true' })).toBe(true);
+    expect(expectedFeeBps(24, env, { chargeOperatorFee: true })).toBe(50);
+    expect(expectedFeeBps(3, env, { chargeOperatorFee: true })).toBe(50);
+    expect(expectedFeeBps(24, env, { chargeOperatorFee: false })).toBe(10);
+    expect(effectiveQuoteFeeBps(10, env, { chargeOperatorFee: true })).toBe(50);
+    expect(effectiveQuoteFeeBps(10, env, { chargeOperatorFee: false })).toBe(10);
+    expect(effectiveQuoteFeeBps(10, env, { chargeOperatorFee: true, referralAttached: true })).toBe(10);
+    expect(referralParamsForOrder('SomeUser111', env)).toBeNull(); // no referral account yet
+    expect(referralParamsForOrder('SomeUser111', { ...env, JUPITER_REFERRAL_ACCOUNT: 'Ref111' })).toEqual({ referralAccount: 'Ref111', referralFee: 50 });
+    expect(referralParamsForOrder(DEFAULT_OPERATOR_FEE_WALLET, { ...env, JUPITER_REFERRAL_ACCOUNT: 'Ref111' })).toBeNull();
+  });
+
+  it('attaches referralAccount + referralFee to /order only when configured and the taker should be charged', () => {
+    const env = { JUPITER_REFERRAL_ACCOUNT: 'Ref111', OPERATOR_FEE_BPS: '50', OPERATOR_FEE_WALLET: DEFAULT_OPERATOR_FEE_WALLET };
+    const charged = orderUrl({ inputMint: SOL_MINT, outputMint: BONK, amount: 5, taker: 'User111' }, undefined, env);
+    expect(charged).toContain('referralAccount=Ref111'); expect(charged).toContain('referralFee=50');
+    const owner = orderUrl({ inputMint: SOL_MINT, outputMint: BONK, amount: 5, taker: DEFAULT_OPERATOR_FEE_WALLET }, undefined, env);
+    expect(owner).not.toContain('referralAccount');
+    const off = orderUrl({ inputMint: SOL_MINT, outputMint: BONK, amount: 5, taker: 'User111', applyOperatorFee: false }, undefined, env);
+    expect(off).not.toContain('referralAccount');
   });
 
   it('rate limits: keyless 0.5 RPS, free key 1 RPS, separate /execute bucket; 429 backoff honours x-ratelimit-reset', () => {
@@ -105,5 +147,22 @@ describe('simulation fills from keyless quotes', () => {
     const f = await simBuy({ mint: BONK, sizeUsd: 15, mid: 2, solPriceUsd: 150, fallbackImpact: 0.05, ageHours: 2 });
     expect(f).toMatchObject({ source: 'jupiter', feeBps: 50, router: 'metis' }); expect(f.fillPrice).toBeCloseTo(2.02);
     expect(url).not.toContain('taker'); expect(url).toContain('amount=100000000');
+  });
+  it('books the 0.5% operator fee on a 10 bps quote when no referral account is set, and skips it for the owner', async () => {
+    vi.stubEnv('JUPITER_RPS', '1000'); vi.stubEnv('OPERATOR_FEE_BPS', '50'); vi.stubEnv('JUPITER_REFERRAL_ACCOUNT', '');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ...live, feeBps: 10, priceImpactPct: '0' }), { status: 200 })));
+    const user = await simBuy({ mint: BONK, sizeUsd: 15, mid: 2, solPriceUsd: 150, fallbackImpact: 0.05, ageHours: 48, chargeOperatorFee: true });
+    expect(user).toMatchObject({ source: 'jupiter', feeBps: 50 });
+    const owner = await simBuy({ mint: BONK, sizeUsd: 15, mid: 2, solPriceUsd: 150, fallbackImpact: 0.05, ageHours: 48, chargeOperatorFee: false });
+    expect(owner).toMatchObject({ source: 'jupiter', feeBps: 10 });
+  });
+  it('model fallback for an older token still charges 50 bps when the operator fee applies', async () => {
+    vi.stubEnv('SIM_JUPITER_QUOTES', 'off'); vi.stubEnv('OPERATOR_FEE_BPS', '50');
+    const mint = 'ModelMint11111111111111111111111111111111111';
+    const user = await simBuy({ mint, sizeUsd: 50, mid: 1, solPriceUsd: 150, liquidityUsd: 100_000, fallbackImpact: 0.05, ageHours: 48, chargeOperatorFee: true });
+    expect(user.source).toBe('model'); expect(user.feeBps).toBe(50);
+    const ownerMint = 'ModelMint22222222222222222222222222222222222';
+    const owner = await simBuy({ mint: ownerMint, sizeUsd: 50, mid: 1, solPriceUsd: 150, liquidityUsd: 100_000, fallbackImpact: 0.05, ageHours: 48, chargeOperatorFee: false });
+    expect(owner.feeBps).toBe(10);
   });
 });

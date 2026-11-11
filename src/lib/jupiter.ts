@@ -57,18 +57,29 @@ export async function jupFetch(url: string, init: RequestInit & { bucket?: 'main
   return res;
 }
 
-export interface OrderParams { inputMint: string; outputMint: string; amount: bigint | string | number; taker?: string | null; slippageBps?: number | null }
+export interface OrderParams {
+  inputMint: string; outputMint: string; amount: bigint | string | number; taker?: string | null; slippageBps?: number | null;
+  /** When set, used as-is. Otherwise referralParamsForOrder() may attach the operator fee. */
+  referralAccount?: string | null; referralFee?: number | null;
+  /** Default true: attach the operator referral fee when configured and the taker should be charged. */
+  applyOperatorFee?: boolean;
+}
 export interface JupOrder {
   requestId: string; inAmount: string; outAmount: string; otherAmountThreshold: string | null; router: string; mode: string; swapType: string | null;
-  feeBps: number; platformFeeBps: number | null; feeMint: string | null; priceImpactPct: number; slippageBps: number | null;
+  feeBps: number; platformFeeBps: number | null; feeMint: string | null; referralAccount: string | null; priceImpactPct: number; slippageBps: number | null;
   inUsdValue: number | null; outUsdValue: number | null; transaction: string | null; gasless: boolean; lastValidBlockHeight: number | null;
   errorCode: number | null; errorMessage: string | null;
 }
 
-export function orderUrl(p: OrderParams, base = JUP_SWAP_BASE()): string {
+export function orderUrl(p: OrderParams, base = JUP_SWAP_BASE(), env: Record<string, string | undefined> = process.env): string {
   const q = new URLSearchParams({ inputMint: p.inputMint, outputMint: p.outputMint, amount: String(p.amount) });
   if (p.taker) q.set('taker', p.taker);
   if (p.slippageBps !== undefined && p.slippageBps !== null) q.set('slippageBps', String(Math.round(p.slippageBps)));
+  const explicit = p.referralAccount && p.referralFee != null;
+  const ref = explicit
+    ? { referralAccount: p.referralAccount!, referralFee: p.referralFee! }
+    : (p.applyOperatorFee === false ? null : referralParamsForOrder(p.taker, env));
+  if (ref) { q.set('referralAccount', ref.referralAccount); q.set('referralFee', String(ref.referralFee)); }
   return `${base}/order?${q}`;
 }
 
@@ -81,6 +92,7 @@ export function parseOrder(j: Record<string, unknown>): JupOrder {
     otherAmountThreshold: j.otherAmountThreshold != null ? String(j.otherAmountThreshold) : null,
     router: String(j.router ?? 'unknown'), mode: String(j.mode ?? 'unknown'), swapType: j.swapType ? String(j.swapType) : null,
     feeBps: Number(j.feeBps ?? pf?.feeBps ?? 0), platformFeeBps: pf?.feeBps ?? null, feeMint: (j.feeMint as string) ?? pf?.feeMint ?? null,
+    referralAccount: typeof j.referralAccount === 'string' && j.referralAccount ? j.referralAccount : null,
     priceImpactPct: Math.abs(Number(j.priceImpactPct ?? 0)) || 0, slippageBps: n(j.slippageBps),
     inUsdValue: n(j.inUsdValue), outUsdValue: n(j.outUsdValue),
     transaction: j.transaction === undefined ? null : (j.transaction as string | null),
@@ -143,13 +155,88 @@ export async function executeOrder(signedTransaction: string, requestId: string)
   return parseExecute(body);
 }
 
-/** Expected Jupiter fee for a token (Meta-Aggregator platform fee table): 50 bps if the token is < 24 h old, else 10 bps. */
-export function expectedFeeBps(ageHours: number | null | undefined, env: Record<string, string | undefined> = process.env): number {
+/** Jupiter Meta-Aggregator platform fee table only (no operator fee): 50 bps if the token is < 24 h old, else 10 bps. */
+export function platformFeeBps(ageHours: number | null | undefined, env: Record<string, string | undefined> = process.env): number {
   const young = Number(env.JUP_NEW_TOKEN_FEE_BPS ?? 50), base = Number(env.JUP_DEFAULT_FEE_BPS ?? 10);
   return ageHours !== null && ageHours !== undefined && ageHours < 24 ? young : base;
 }
+/** Expected all-in swap fee, including the operator/platform fee when it applies. When the Jupiter referral program is active it replaces the separate platform fee, so this is max(platform, operator). */
+export function expectedFeeBps(ageHours: number | null | undefined, env: Record<string, string | undefined> = process.env, opts?: { chargeOperatorFee?: boolean }): number {
+  const platform = platformFeeBps(ageHours, env);
+  const charge = opts?.chargeOperatorFee ?? shouldChargeOperatorFee(null, { isOwnerAccount: false }, env);
+  return charge ? Math.max(platform, operatorFeeConfig(env).feeBps) : platform;
+}
+/** For a live /order quote: if we could not attach a referral account, still book at least the operator fee so paper fills stay realistic. */
+export function effectiveQuoteFeeBps(quotedFeeBps: number, env: Record<string, string | undefined> = process.env, opts?: { chargeOperatorFee?: boolean; referralAttached?: boolean }): number {
+  const charge = opts?.chargeOperatorFee ?? true;
+  if (!charge) return quotedFeeBps;
+  if (opts?.referralAttached) return quotedFeeBps;
+  return Math.max(quotedFeeBps, operatorFeeConfig(env).feeBps);
+}
 /** Composite penalty for round-trip fees above the 2×10 bps baseline: (2·fee − 20) / 2000 → 0.04 for a 50 bps token. */
 export function feePenalty(feeBps: number): number { return Math.max(0, 2 * feeBps - 20) / 2000; }
+
+// ---- Operator / platform fee (Jupiter Swap API V2 referral program) -------------------------
+// Docs: https://developers.jup.ag/docs/swap/order-and-execute  (Referral fees)
+//       https://developers.jup.ag/docs/tool-kits/referral-program
+// Pass referralAccount + referralFee (50–255 bps) to GET /order. Jupiter keeps 20% of the
+// integrator fee and does not charge a separate platform fee when referral is active. A
+// referral account and per-mint referralTokenAccounts must be created once (see docs/OPERATOR_FEE.md).
+// We never create those accounts or sign setup transactions from this app.
+
+export const DEFAULT_OPERATOR_FEE_WALLET = 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq';
+export const DEFAULT_OPERATOR_FEE_BPS = 50;
+export const JUP_REFERRAL_FEE_MIN_BPS = 50;
+export const JUP_REFERRAL_FEE_MAX_BPS = 255;
+/** Jupiter retains this fraction of the integrator/referral fee (20%). */
+export const JUPITER_INTEGRATOR_KEEP = 0.20;
+export const JUPITER_ULTRA_REFERRAL_PROJECT = 'DkiqsTrw1u1bYFumumC7sCG2S8K25qc2vemJFHyW2wJc';
+
+export interface OperatorFeeConfig {
+  wallet: string;                 // partner / payout wallet (OPERATOR_FEE_WALLET)
+  referralAccount: string | null; // on-chain referral account; required to actually collect
+  feeBps: number;                 // 0 = disabled; otherwise clamped to 50–255
+  chargeOwner: boolean;           // OPERATOR_FEE_ON_OWNER
+  enabled: boolean;
+}
+
+export function operatorFeeConfig(env: Record<string, string | undefined> = process.env): OperatorFeeConfig {
+  const wallet = (env.OPERATOR_FEE_WALLET ?? DEFAULT_OPERATOR_FEE_WALLET).trim() || DEFAULT_OPERATOR_FEE_WALLET;
+  const referralAccount = (env.JUPITER_REFERRAL_ACCOUNT ?? env.OPERATOR_REFERRAL_ACCOUNT ?? '').trim() || null;
+  const raw = env.OPERATOR_FEE_BPS;
+  let feeBps = DEFAULT_OPERATOR_FEE_BPS;
+  if (raw !== undefined && String(raw).trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      if (n <= 0) feeBps = 0;
+      else feeBps = Math.min(JUP_REFERRAL_FEE_MAX_BPS, Math.max(JUP_REFERRAL_FEE_MIN_BPS, Math.round(n)));
+    }
+  }
+  const chargeOwner = ['1', 'true', 'yes', 'on'].includes((env.OPERATOR_FEE_ON_OWNER ?? '').trim().toLowerCase());
+  return { wallet, referralAccount, feeBps, chargeOwner, enabled: feeBps >= JUP_REFERRAL_FEE_MIN_BPS };
+}
+
+function samePubkey(a?: string | null, b?: string | null): boolean {
+  return !!a && !!b && a.trim() === b.trim();
+}
+
+/** Whether this swap should include the operator fee. Owner/operator-wallet trades are skipped unless OPERATOR_FEE_ON_OWNER is set. */
+export function shouldChargeOperatorFee(taker: string | null | undefined, opts?: { isOwnerAccount?: boolean }, env: Record<string, string | undefined> = process.env): boolean {
+  const cfg = operatorFeeConfig(env);
+  if (!cfg.enabled) return false;
+  if (cfg.chargeOwner) return true;
+  if (taker && samePubkey(taker, cfg.wallet)) return false;
+  // Paper operator account with no known pubkey, or whose pubkey is the fee wallet: skip.
+  if (opts?.isOwnerAccount && (!taker || samePubkey(taker, cfg.wallet))) return false;
+  return true;
+}
+
+/** Params to attach to /order when we can actually collect (referral account configured and this taker should be charged). */
+export function referralParamsForOrder(taker?: string | null, env: Record<string, string | undefined> = process.env): { referralAccount: string; referralFee: number } | null {
+  const cfg = operatorFeeConfig(env);
+  if (!shouldChargeOperatorFee(taker, undefined, env) || !cfg.referralAccount) return null;
+  return { referralAccount: cfg.referralAccount, referralFee: cfg.feeBps };
+}
 
 /** Jupiter Price API V3 (USD), up to 50 mints per call, through the MAIN bucket. Missing mints are omitted. */
 export async function jupPrices(mints: string[], opts: { maxWaitMs?: number } = {}): Promise<Record<string, number>> {
