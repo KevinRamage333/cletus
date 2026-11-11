@@ -40,3 +40,14 @@ export class InFlight {
 
 /** Seconds since `at` (ms) or null. */
 export const ageSec = (at: number | null | undefined, now = Date.now()) => (at ? Math.round((now - at) / 1000) : null);
+
+/** Share one in-flight/recent result of `fn` for `ms` (failures are not cached). Cuts duplicate RPC reads per scan. */
+export function memoizeFor<T>(ms: number, fn: () => Promise<T>, now: () => number = Date.now): () => Promise<T> {
+  let at = -Infinity; let p: Promise<T> | null = null;
+  return () => {
+    if (p && now() - at < ms) return p;
+    at = now();
+    p = fn().catch((e) => { p = null; throw e; });
+    return p;
+  };
+}

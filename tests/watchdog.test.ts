@@ -46,3 +46,15 @@ describe('watchdog', () => {
     expect(l.tryAcquire('p1')).toBe(true);
   });
 });
+
+describe('memoizeFor', () => {
+  it('shares a result within the window, refreshes after, never caches failures', async () => {
+    const { memoizeFor } = await import('../src/lib/watchdog');
+    let t = 0, calls = 0, fail = false;
+    const f = memoizeFor(10_000, async () => { calls++; if (fail) throw new Error('rpc down'); return calls; }, () => t);
+    expect(await f()).toBe(1); expect(await f()).toBe(1); expect(calls).toBe(1);
+    t = 10_001; expect(await f()).toBe(2);
+    t = 30_000; fail = true; await expect(f()).rejects.toThrow('rpc down');
+    fail = false; expect(await f()).toBe(4); // failure was not cached
+  });
+});

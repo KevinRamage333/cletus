@@ -24,7 +24,7 @@ import { parseSettings, effectiveConfig, withinTradingHours, dailyLimitHit, size
 import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
-import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, type TickFence } from './watchdog';
+import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, memoizeFor, type TickFence } from './watchdog';
 import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
@@ -211,6 +211,14 @@ async function operatorLamports(c: Config): Promise<number | null> {
   return connection(c).getBalance(new PublicKey(op));
 }
 
+/** Entry gating reads the wallet once per 10 s instead of once per candidate (sizing a real buy still reads fresh). */
+let lamportsMemo: { key: string; get: () => Promise<number | null> } | null = null;
+function cachedOperatorLamports(c: Config): Promise<number | null> {
+  const key = c.rpcUrl;
+  if (!lamportsMemo || lamportsMemo.key !== key) lamportsMemo = { key, get: memoizeFor(envNum('ENTRY_GATE_BALANCE_CACHE_MS', 10_000), () => operatorLamports(c)) };
+  return lamportsMemo.get();
+}
+
 /**
  * Why an account may not open new trades right now (null = allowed).
  * A LIVE operator account checks its loss limits against the on-chain wallet and real
@@ -228,7 +236,7 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
     const bal = await resolveSizingBalances({
       live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice,
       liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0),
-      getLamports: deps.getLamports ?? (() => operatorLamports(c)),
+      getLamports: deps.getLamports ?? (() => cachedOperatorLamports(c)),
     });
     if (!bal.ok) return `on-chain wallet balance unavailable (${bal.reason})`;
     equity = bal.equityUsd;
