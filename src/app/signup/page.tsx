@@ -34,7 +34,7 @@ export default function SignupPage() {
         <input id="invite" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="optional" />
         {err && <div className="err">{err}</div>}
         <div style={{ marginTop: 16 }}><button className="btn primary" disabled={busy}>Continue</button></div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>Next you will read the full Terms and Conditions, acknowledge the Risk Disclaimer, and set up a wallet before you can use the app.</p>
+        <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>Next you will read the full Terms and Conditions, acknowledge the Risk Disclaimer, then optionally connect your own wallet (or continue in paper mode). Cletus never holds your keys.</p>
       </form>
     </div>
   );

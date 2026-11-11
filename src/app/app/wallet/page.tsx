@@ -4,7 +4,7 @@ import { COMPANY_LEGAL } from '@/lib/company';
 /**
  * Page 3 — Cletus Wallet
  * After Tax Center registration. Black background, logo on every page.
- * Shows managed Cletus wallet, 30-day trial countdown, fund instructions.
+ * Shows the user's connected (non-custodial) wallet, 30-day trial countdown, fund instructions.
  * Route: /app/wallet
  */
 
@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import WithdrawPanel from '@/components/WithdrawPanel';
+import ConnectWallet from '@/components/ConnectWallet';
 
 type WalletState = {
   address: string | null;
@@ -141,9 +142,9 @@ export default function CletusWalletPage() {
       <main className="flex-1 flex items-center justify-center px-6 py-10">
         <div className="w-full max-w-2xl space-y-6">
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Cletus Wallet</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Your wallet</h1>
             <p className="text-sm text-white/50 mt-1">
-              Your browser wallet (created or imported during onboarding). Cletus only ever sees the public address.
+              Non-custodial: you connect a wallet you already control, or just watch in paper mode. Cletus never stores or sees private keys or recovery phrases.
             </p>
           </div>
 
@@ -196,7 +197,7 @@ export default function CletusWalletPage() {
           <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-5">
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                Your wallet · live on-chain balances
+                Connected wallet · live on-chain balances
               </div>
               {loading && (
                 <span className="text-xs text-white/30 font-mono">Loading…</span>
@@ -207,7 +208,7 @@ export default function CletusWalletPage() {
               <div className="text-xs text-white/40 mb-1.5">Address</div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-sm font-mono text-white break-all bg-black/50 rounded-lg px-3 py-2.5 border border-white/10">
-                  {wallet.address ?? 'Creating…'}
+                  {wallet.address ?? 'Paper mode — no wallet connected'}
                 </code>
                 <button
                   type="button"
@@ -242,17 +243,25 @@ export default function CletusWalletPage() {
           {/* Owner-only withdraw (operator wallet; box worker only) */}
           <WithdrawPanel />
 
+          <ConnectWallet
+            mode="settings"
+            currentPublicKey={wallet.address}
+            source={wallet.mode === 'external' && wallet.address ? 'connected' : 'paper'}
+            onConnected={() => window.location.reload()}
+            onDisconnected={() => window.location.reload()}
+          />
+
           {/* Fund instructions */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
-            <h2 className="text-sm font-semibold">Do not fund this wallet for the beta</h2>
+            <h2 className="text-sm font-semibold">Beta trading is paper-first</h2>
             <ol className="text-sm text-white/70 space-y-2 list-decimal list-inside">
-              <li>Beta trading is <strong className="text-white">paper only</strong>: simulated fills on live market data. This wallet is not used to trade.</li>
-              <li>Your secret key / recovery phrase stays encrypted in this browser and never reaches the server.</li>
-              <li>Balances above are read live from Solana via Helius, for your information.</li>
+              <li>Connecting is optional and on your own volition. Paper mode uses simulated fills on live market data — no transaction is signed.</li>
+              <li>Cletus never holds your keys. A Sign-In-With-Solana message only proves you control the address.</li>
+              <li>Live swaps are prepared by Cletus and approved one-by-one in your wallet. Balances above are read on-chain when a wallet is connected.</li>
             </ol>
             <p className="text-xs text-white/40">
               Never share seed phrases. Cletus never asks for your private keys in chat or
-              email.
+              email. You can disconnect at any time.
             </p>
           </div>
 

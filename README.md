@@ -62,7 +62,7 @@ Mobile bottom tabs (and a desktop top strip): **Dashboard · Chart · Signals ·
 - **/app/ai:** chat with the same advisory-only Brain (`/api/ai`), with browser voice mode.
 - **/app/community:** chat with profiles (display name, bio), admin moderation (hide/unhide, mute), collective paper PnL, and a dev-wallet audit posted to the feed. Pasted private keys or recovery phrases are rejected.
 - **/app/dev-wallet:** paste any wallet or mint to see SOL balance, holdings (Helius DAS), recent transactions (Helius enhanced API, RPC fallback), top holders and authorities for mints, and a heuristic risk audit.
-- **/app/wallet:** your browser wallet's public address with live balances. The beta does not use it to trade.
+- **/app/wallet:** optionally connect your own Solana wallet (Phantom, Solflare, Backpack). Cletus never holds keys. Live balances are shown when connected; the beta paper-trades without a wallet.
 - **/tax:** an informational tax-responsibility acknowledgment (timestamp only; **no tax IDs/SSNs are collected**), a trade-history CSV export, and the 30-day trial flag.
 - **/app/staking:** a non-transactional "Coming soon" page with no stake or buy actions.
 - `/` stays the full engine console (logs, scanner, weights, preset lab, kill switch).
@@ -79,7 +79,7 @@ Helius is primary and FluxRPC (`BACKUP_RPC_URL`) the backup (`src/lib/rpc-pool.t
 - Without `GEMINI_API_KEY`, a deterministic mock answers from the same live tools.
 
 ## Accounts, onboarding and beta
-Email sign-up (no payments). Every route and API is blocked by middleware until the user has (1) accepted the full Terms after scrolling to the end and ticking "I have read the entire Terms and Conditions", (2) acknowledged the full-page Risk Disclaimer, and (3) set up a browser wallet: created client-side with the phrase shown once and confirmed, encrypted with the user's password (PBKDF2 + AES-GCM) and kept only in localStorage, or imported. Acceptances are recorded with the user id, version and timestamp. Bumping `NEXT_PUBLIC_TERMS_VERSION` forces re-acceptance. **The legal text is a template and needs review by a lawyer.** See BETA_TESTING.md and SECURITY.md.
+Email sign-up (no payments). Public sign-up stays closed in production while `CLETUS_DEMO=1` (APIs return 503). Every route and API is blocked by middleware until the user has (1) accepted the full Terms after scrolling to the end and ticking "I have read the entire Terms and Conditions", (2) acknowledged the full-page Risk Disclaimer, and (3) either connected their own Solana wallet (Sign-In-With-Solana, auth only) or chosen paper / just-watch mode. Connecting is optional and on the user's own volition. Cletus never creates wallets, never stores keys, and never uses delegated or session keys — each live swap is a Jupiter V2 `/order` the user approves in their wallet. Users can disconnect at any time. Acceptances are recorded with the user id, version and timestamp. Bumping `NEXT_PUBLIC_TERMS_VERSION` forces re-acceptance. **The legal text is a template and needs review by a lawyer.** See BETA_TESTING.md and SECURITY.md.
 
 ## Going live (not done; untested with funds)
 Live mode needs `TRADING_MODE=live`, an operator wallet key, `ALLOW_LIVE_IN_BETA=true` if `BETA_MODE` is on, and a private RPC. See SECURITY.md for the list of secrets. Start with tiny size.

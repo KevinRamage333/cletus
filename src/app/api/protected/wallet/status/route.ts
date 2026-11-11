@@ -6,7 +6,7 @@ import { trialInfo } from '@/lib/trial';
 import { getConfig } from '@/lib/config';
 import { getOperatorPublicKey } from '@/lib/wallet';
 export const dynamic = 'force-dynamic';
-/** The user's own browser wallet (public address only) with live on-chain SOL/USDC balances. Admins also see the operator wallet. */
+/** The user's connected wallet (public address only; non-custodial) with live on-chain SOL/USDC balances. Admins also see the operator wallet. */
 export async function GET() {
   try {
     const { u } = await appContext();

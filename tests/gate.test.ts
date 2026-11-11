@@ -79,11 +79,19 @@ describe('onboarding API validation', () => {
     expect(validateRiskAck({ version: V, acknowledged: true }, V, null).ok).toBe(false);
     expect(validateRiskAck({ version: V, acknowledged: false }, V, V).ok).toBe(false);
   });
-  it('wallet step accepts only a valid public key and refuses secrets', () => {
+  it('wallet step accepts paper mode or a connected public key with SIWS fields, and refuses secrets or custody', () => {
     const pk = Keypair.generate().publicKey.toBase58();
-    expect(validateWalletSetup({ publicKey: pk, source: 'created' }, true, true).ok).toBe(true);
-    expect(validateWalletSetup({ publicKey: pk, source: 'created' }, true, false).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: 'not-a-key', source: 'imported' }, true, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: pk, source: 'created', mnemonic: 'abandon ...' }, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ source: 'paper' }, true, true).ok).toBe(true);
+    expect(validateWalletSetup({ source: 'paper' }, true, false).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 'sig', message: 'msg', challenge: 'tok' }, true, true).ok).toBe(true);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected' }, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: 'not-a-key', source: 'connected', signature: 's', message: 'm', challenge: 'c' }, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'created' }, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'imported' }, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 's', message: 'm', challenge: 'c', mnemonic: 'abandon ...' }, true, true).ok).toBe(false);
+  });
+  it('wallet challenge sub-route is allowed at the wallet step', () => {
+    expect(gateDecision('/api/onboarding/wallet/challenge', sess({ tv: V, rv: V }), V)).toEqual({ action: 'next' });
+    expect(gateDecision('/api/onboarding/wallet/challenge', sess({ tv: V }), V)).toMatchObject({ action: 'deny', status: 403 });
   });
 });

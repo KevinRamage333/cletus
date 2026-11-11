@@ -18,20 +18,33 @@ export function validateRiskAck(body: unknown, currentVersion: string, termsAcce
   return { ok: true };
 }
 
-export function validateWalletSetup(body: unknown, termsOk: boolean, riskOk: boolean): Validation & { publicKey?: string; source?: string } {
+export const WALLET_SOURCES = ['connected', 'paper'] as const;
+export type WalletSource = (typeof WALLET_SOURCES)[number];
+
+const SECRET_FIELDS = ['secretKey', 'mnemonic', 'privateKey', 'seed', 'recoveryPhrase', 'secret'];
+
+/** Non-custodial wallet step: connect an existing wallet (SIWS) or continue in paper mode. Secrets are always rejected. */
+export function validateWalletSetup(body: unknown, termsOk: boolean, riskOk: boolean): Validation & { publicKey?: string; source?: WalletSource } {
   if (!termsOk || !riskOk) return { ok: false, error: 'complete the Terms and Risk Disclaimer steps first' };
   const b = (body ?? {}) as Record<string, unknown>;
-  if (b.source !== 'created' && b.source !== 'imported') return { ok: false, error: 'source must be "created" or "imported"' };
+  if (SECRET_FIELDS.some((k) => k in b)) return { ok: false, error: 'only the public key may be sent to the server' };
+  if (b.source === 'created' || b.source === 'imported') {
+    return { ok: false, error: 'Cletus does not create or import wallets. Connect your own wallet or continue in paper mode.' };
+  }
+  if (b.source === 'paper') return { ok: true, source: 'paper' };
+  if (b.source !== 'connected') return { ok: false, error: 'source must be "connected" or "paper"' };
   if (typeof b.publicKey !== 'string') return { ok: false, error: 'publicKey required' };
-  // Reject anything that looks like a secret being sent to the server.
-  if (b.publicKey.length > 44 || 'secretKey' in b || 'mnemonic' in b || 'privateKey' in b) return { ok: false, error: 'only the public key may be sent to the server' };
+  if (b.publicKey.length > 44) return { ok: false, error: 'only the public key may be sent to the server' };
   try {
     const pk = new PublicKey(b.publicKey);
     if (pk.toBase58() !== b.publicKey) throw new Error('non-canonical');
   } catch {
     return { ok: false, error: 'invalid Solana public key' };
   }
-  return { ok: true, publicKey: b.publicKey, source: b.source };
+  if (typeof b.signature !== 'string' || !b.signature) return { ok: false, error: 'Sign-In-With-Solana signature is required' };
+  if (typeof b.message !== 'string' || !b.message) return { ok: false, error: 'Sign-In-With-Solana message is required' };
+  if (typeof b.challenge !== 'string' || !b.challenge) return { ok: false, error: 'Sign-In-With-Solana challenge is required' };
+  return { ok: true, publicKey: b.publicKey, source: 'connected' };
 }
 
 export function validEmail(e: unknown): e is string {

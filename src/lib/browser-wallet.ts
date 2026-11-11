@@ -1,7 +1,8 @@
 /**
- * Browser-side wallet utilities. Everything here runs on the user's device:
- * the recovery phrase and secret key are never sent to the server. Only the
- * public key is posted to /api/onboarding/wallet.
+ * LEGACY (unused in the product UI). The owner chose a non-custodial model:
+ * users connect Phantom / Solflare / Backpack, or continue in paper mode.
+ * Kept so existing localStorage wallets can still be decrypted by the owner if needed.
+ * The recovery phrase and secret key were never sent to the server.
  *
  * Derivation: BIP39 mnemonic -> seed -> SLIP-0010 ed25519 path m/44'/501'/0'/0'
  * (same default path as Phantom/Solflare). Storage: AES-256-GCM with a key

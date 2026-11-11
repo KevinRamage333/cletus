@@ -5,6 +5,7 @@ import { accountEquity, getEngineState, getWeights, mem, periodPnl, ensureOperat
 import { tierFor } from './sizing';
 import { computeScorecard } from './scorecard';
 import { getOperatorPublicKey } from './wallet';
+import { tradeFeeView, solscanTxUrl, solscanAccountUrl } from './approvals';
 
 export async function resolveAccount(user: User, which?: string | null): Promise<Account> {
   if (which === 'operator' && user.isAdmin) return ensureOperatorAccount();
@@ -27,11 +28,16 @@ export async function buildStatus(user: User, account: Account) {
   await getWeights();
   const totalClosed = await prisma.position.count({ where: { accountId: account.id, status: 'closed' } });
   const wins = await prisma.position.count({ where: { accountId: account.id, status: 'closed', pnlUsd: { gt: 0 } } });
-  const open = eq.open.map((p) => ({
-    id: p.id, symbol: p.symbol, mint: p.mint, simulated: p.simulated, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, lastPrice: p.lastPrice,
-    value: p.tokenAmount * p.lastPrice, pnlUsd: p.tokenAmount * p.lastPrice - p.sizeUsd - p.feesUsd, pnlPct: (p.lastPrice / p.entryPrice - 1) * 100,
-    openedAt: p.openedAt, compositeScore: p.compositeScore, tier: p.tier,
-  }));
+  const open = eq.open.map((p) => {
+    const fees = tradeFeeView({ sizeUsd: p.sizeUsd, feesUsd: p.feesUsd, tokenAmount: p.tokenAmount });
+    return {
+      id: p.id, symbol: p.symbol, mint: p.mint, simulated: p.simulated, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, lastPrice: p.lastPrice,
+      value: p.tokenAmount * p.lastPrice, pnlUsd: p.tokenAmount * p.lastPrice - p.sizeUsd - p.feesUsd, pnlPct: (p.lastPrice / p.entryPrice - 1) * 100,
+      openedAt: p.openedAt, compositeScore: p.compositeScore, tier: p.tier, feesUsd: p.feesUsd,
+      operatorFeeUsd: fees.entryOperatorFeeUsd, operatorFeeBps: fees.operatorFeeBps,
+      entryTx: p.entryTx, solscanEntry: solscanTxUrl(p.entryTx), solscanMint: solscanAccountUrl(p.mint),
+    };
+  });
   const allClosed = await prisma.position.findMany({ where: { accountId: account.id, status: 'closed' }, select: { pnlUsd: true, pnlPct: true, closedAt: true }, orderBy: { closedAt: 'desc' }, take: 5000 });
   const scorecard = computeScorecard(allClosed.map((t) => ({ pnlUsd: t.pnlUsd ?? 0, pnlPct: t.pnlPct ?? 0, closedAt: t.closedAt ?? new Date() })), account.startingBalance);
   const unrealized = open.reduce((s, p) => s + p.pnlUsd, 0);
@@ -57,7 +63,10 @@ export async function buildStatus(user: User, account: Account) {
     heliusWs: (await import('./helius')).wsStatus(),
     geminiModelActive: (await import('./brain/gemini')).activeGeminiModel(c.geminiModel),
     open,
-    closed: closed.map((p) => ({ id: p.id, symbol: p.symbol, mint: p.mint, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, exitPrice: p.exitPrice, pnlUsd: p.pnlUsd, pnlPct: p.pnlPct, exitReason: p.exitReason, openedAt: p.openedAt, closedAt: p.closedAt, simulated: p.simulated })),
+    closed: closed.map((p) => {
+      const fees = tradeFeeView({ sizeUsd: p.sizeUsd, feesUsd: p.feesUsd, tokenAmount: p.tokenAmount, exitPrice: p.exitPrice });
+      return { id: p.id, symbol: p.symbol, mint: p.mint, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, exitPrice: p.exitPrice, pnlUsd: p.pnlUsd, pnlPct: p.pnlPct, exitReason: p.exitReason, openedAt: p.openedAt, closedAt: p.closedAt, simulated: p.simulated, feesUsd: p.feesUsd, operatorFeeUsd: fees.operatorFeeUsd, operatorFeeBps: fees.operatorFeeBps, entryTx: p.entryTx, exitTx: p.exitTx, solscanEntry: solscanTxUrl(p.entryTx), solscanExit: solscanTxUrl(p.exitTx), solscanMint: solscanAccountUrl(p.mint) };
+    }),
     weights: weightsRows.map((w) => ({ name: w.name, weight: w.weight, wins: w.wins, trials: w.trials })),
     candidates: mem.candidates.map((x) => ({
       mint: x.mint, symbol: x.symbol, marketCap: x.marketCap, volume24h: x.volume24h, liquidityUsd: x.liquidityUsd, volMcap: x.volMcap, priceChangeH1: x.priceChangeH1,

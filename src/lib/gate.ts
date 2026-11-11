@@ -43,7 +43,7 @@ export function gateDecision(pathname: string, s: SessionClaims | null, currentT
 
   // Onboarding pages/APIs: allowed only up to the step the user has reached.
   const pageStep = (Object.entries(STEP_PAGES) as Array<[Step, string]>).find(([, p]) => pathname === p)?.[0];
-  const apiStep = STEP_APIS.find(([p]) => pathname === p)?.[1];
+  const apiStep = STEP_APIS.find(([p]) => pathname === p || pathname.startsWith(p + '/'))?.[1];
   const onboardingStep = pageStep ?? apiStep;
   if (onboardingStep && onboardingStep !== 'signup') {
     if (!s) return isApi ? { action: 'deny', status: 401, step } : { action: 'redirect', to: STEP_PAGES.signup };

@@ -196,7 +196,7 @@ export default function Dashboard() {
           </div>
           <div className="card">
             <h2>Wallets</h2>
-            <div className="muted">Your browser wallet (public key only):</div>
+            <div className="muted">Your connected wallet (public key only; you stay in control):</div>
             <div className="mono" style={{ wordBreak: 'break-all' }}>{s.user.walletPublicKey ?? '—'}</div>
             {s.user.isAdmin && (<><div className="muted" style={{ marginTop: 8 }}>Operator trading wallet (server):</div><div className="mono" style={{ wordBreak: 'break-all' }}>{s.operatorWallet ?? 'not configured'}</div></>)}
             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>SL {c.stopLossPct}% · TP {c.takeProfitPct}% · trail {c.enableTrailingStop ? `${c.trailingStopPct}%` : 'off'} · hold {c.holdTimeMinutes}m · min score {c.minCompositeScore} · max pos {usd(c.maxPositionSizeUsd, 0)}</div>

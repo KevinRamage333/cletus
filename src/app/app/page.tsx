@@ -12,6 +12,10 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import HeaderCard from '@/components/HeaderCard';
+import ApprovalQueue from '@/components/ApprovalQueue';
+import LivePortfolio, { type PortfolioPosition, type PortfolioTrade } from '@/components/LivePortfolio';
+import ConnectWallet from '@/components/ConnectWallet';
+import type { ApprovalRecord } from '@/lib/approvals';
 
 type UserStats = {
   pnl24h: number;
@@ -29,6 +33,17 @@ type UserStats = {
   maxPositions?: number;
   bestSymbol?: string | null;
   worstSymbol?: string | null;
+  equity?: number;
+  cash?: number;
+  startingBalance?: number;
+  realizedPnl?: number;
+  unrealized?: number;
+  totalPnl?: number;
+  operatorFeeBps?: number;
+  open?: PortfolioPosition[];
+  closed?: PortfolioTrade[];
+  approvals?: ApprovalRecord[];
+  wallet?: { address: string | null; source: string | null; connected: boolean };
 };
 
 const EMPTY_STATS: UserStats = {
@@ -42,6 +57,17 @@ const EMPTY_STATS: UserStats = {
   sharpeRatio: 0,
   trialActive: false,
   daysRemaining: 0,
+  equity: 0,
+  cash: 0,
+  startingBalance: 0,
+  realizedPnl: 0,
+  unrealized: 0,
+  totalPnl: 0,
+  operatorFeeBps: 50,
+  open: [],
+  closed: [],
+  approvals: [],
+  wallet: { address: null, source: 'paper', connected: false },
 };
 
 function formatUsd(n: number, showSign = false) {
@@ -121,6 +147,17 @@ export default function AppDashboardPage() {
           maxPositions: Number(data.maxPositions) || 0,
           bestSymbol: data.bestSymbol ?? null,
           worstSymbol: data.worstSymbol ?? null,
+          equity: Number(data.equity) || 0,
+          cash: Number(data.cash) || 0,
+          startingBalance: Number(data.startingBalance) || 0,
+          realizedPnl: Number(data.realizedPnl) || 0,
+          unrealized: Number(data.unrealized) || 0,
+          totalPnl: Number(data.totalPnl) || Number(data.realizedPnl || 0) + Number(data.unrealized || 0),
+          operatorFeeBps: Number(data.operatorFeeBps) || 50,
+          open: Array.isArray(data.open) ? data.open : [],
+          closed: Array.isArray(data.closed) ? data.closed : [],
+          approvals: Array.isArray(data.approvals) ? data.approvals : [],
+          wallet: data.wallet ?? { address: null, source: 'paper', connected: false },
         });
         if (data.identity) setIdentity(data.identity);
       }
@@ -192,6 +229,31 @@ export default function AppDashboardPage() {
               </Link>
             </div>
           )}
+
+          <ConnectWallet
+            mode="settings"
+            currentPublicKey={stats.wallet?.address ?? null}
+            source={stats.wallet?.source ?? 'paper'}
+            onConnected={() => load()}
+            onDisconnected={() => load()}
+            onPaper={() => load()}
+          />
+
+          <ApprovalQueue approvals={stats.approvals ?? []} onChange={load} />
+
+          <LivePortfolio
+            equity={stats.equity ?? 0}
+            cash={stats.cash}
+            startingBalance={stats.startingBalance || 0}
+            realizedPnl={stats.realizedPnl ?? 0}
+            unrealizedPnl={stats.unrealized ?? 0}
+            totalPnl={stats.totalPnl ?? 0}
+            winRate={stats.winRateKnown ? stats.winRate / 100 : null}
+            closedTrades={stats.totalTrades}
+            open={stats.open ?? []}
+            closed={stats.closed ?? []}
+            operatorFeeBps={stats.operatorFeeBps}
+          />
 
           {/* 24H PERFORMANCE — personal only */}
           <section>

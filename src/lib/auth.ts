@@ -7,7 +7,7 @@ import { TERMS_VERSION, RISK_VERSION } from './legal';
 import { requiredStep } from './gate';
 
 export function claimsForUser(u: User) {
-  return { uid: u.id, email: u.email, adm: u.isAdmin, tv: u.termsVersion, rv: u.riskVersion, w: Boolean(u.walletPublicKey && u.walletSetupAt) };
+  return { uid: u.id, email: u.email, adm: u.isAdmin, tv: u.termsVersion, rv: u.riskVersion, w: Boolean(u.walletSetupAt) };
 }
 
 export async function setSessionCookie(res: NextResponse, u: User) {

@@ -1,6 +1,7 @@
 import { COMPANY_LEGAL } from '@/lib/company';
+import WalletProviders from '@/components/WalletProviders';
 import Link from 'next/link';
-const NAV = [['/demo', 'Home'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/disclaimer', 'Terms & risk'], ['/legal', 'Legal']];
+const NAV = [['/demo', 'Home'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/wallet', 'Wallet'], ['/demo/dashboard', 'Dashboard'], ['/demo/disclaimer', 'Terms & risk'], ['/legal', 'Legal']];
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="tw bg-black text-white min-h-screen">
@@ -16,7 +17,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
+      <main className="max-w-5xl mx-auto px-4 py-6"><WalletProviders>{children}</WalletProviders></main>
       <footer className="max-w-5xl mx-auto px-4 py-8 text-xs text-zinc-500 border-t border-zinc-800">
         Demo mode: simulation only, no accounts, no wallets, no trading. Not financial advice. No guaranteed gains; losses, including total loss, can happen.
         <div className="mt-2 text-zinc-600">© 2026 {COMPANY_LEGAL}</div>

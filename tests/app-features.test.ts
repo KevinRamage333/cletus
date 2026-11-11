@@ -110,7 +110,7 @@ describe('demo gate (public preview, no DB)', () => {
     expect(demoGateDecision('/signup')).toEqual({ action: 'redirect', to: '/demo' });
   });
   it('allows demo pages, legal, demo APIs and assets', () => {
-    for (const p of ['/demo', '/demo/chart', '/legal', '/api/demo/chart', '/api/health', '/cletus-logo.png', '/_next/static/x.js']) expect(demoGateDecision(p)).toEqual({ action: 'next' });
+    for (const p of ['/demo', '/demo/chart', '/demo/wallet', '/demo/dashboard', '/legal', '/api/demo/chart', '/api/health', '/cletus-logo.png', '/_next/static/x.js']) expect(demoGateDecision(p)).toEqual({ action: 'next' });
   });
   it('account pages say coming soon; account APIs answer 503', () => {
     expect(demoGateDecision('/app/config')).toEqual({ action: 'redirect', to: '/demo?soon=%2Fapp%2Fconfig' });

@@ -21,7 +21,7 @@ model User {
   riskVersion     String?
   riskAckAt       DateTime?
   walletPublicKey String?
-  walletSource    String?      // "created" | "imported"
+  walletSource    String?      // "connected" | "paper" (legacy: "created" | "imported")
   walletSetupAt   DateTime?
   acceptances     Acceptance[]
   account         Account?
@@ -68,6 +68,7 @@ model Account {
   createdAt       DateTime   @default(now())
   positions       Position[]
   logs            LogEntry[]
+  approvals       TradeApproval[]
 }
 
 model Position {
@@ -248,4 +249,37 @@ model Withdrawal {
   createdAt       DateTime @default(now())
 
   @@index([createdAt])
+}
+
+/// Non-custodial live-trade suggestions. The user approves each Jupiter swap in their own wallet.
+model TradeApproval {
+  id             String    @id @default(cuid())
+  accountId      String
+  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  mint           String
+  symbol         String
+  side           String    // buy | sell
+  sizeUsd        Float
+  inputMint      String
+  outputMint     String
+  amountRaw      String
+  inAmount       String?
+  outAmount      String?
+  requestId      String?
+  transaction    String?   // unsigned swap (base64) from Jupiter /order; never a signed tx or a key
+  signature      String?   // on-chain signature after the user signs and /execute lands
+  status         String    @default("pending") // pending | rejected | expired | executed | failed
+  expiresAt      DateTime
+  operatorFeeBps Int       @default(50)
+  operatorFeeUsd Float     @default(0)
+  feeUsd         Float     @default(0)
+  priceImpactPct Float?
+  reason         String?
+  score          Float?
+  error          String?
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  @@index([accountId, status])
+  @@index([expiresAt])
 }

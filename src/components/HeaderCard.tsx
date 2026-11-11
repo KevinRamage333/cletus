@@ -32,7 +32,7 @@ export default function HeaderCard() {
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${running ? 'border-emerald-500/50 text-emerald-400' : 'border-amber-500/50 text-amber-400'}`}>● {status}</span>
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${sess?.mode === 'live' ? 'border-red-500/60 text-red-400' : 'border-white/20 text-white/60'}`}>{sess?.mode === 'live' ? 'LIVE' : 'PAPER'}</span>
           </div>
-          <div className="text-xs text-white/50 font-mono mt-0.5" title={wal?.address ?? ''}>{short(wal?.address)} · {wal?.balancesKnown ? `${Number(wal.solBalance).toFixed(4)} SOL · ${Number(wal.usdcBalance).toFixed(2)} USDC` : 'balance unavailable'}</div>
+          <div className="text-xs text-white/50 font-mono mt-0.5" title={wal?.address ?? ''}>{wal?.address ? `${short(wal.address)} · ${wal?.balancesKnown ? `${Number(wal.solBalance).toFixed(4)} SOL · ${Number(wal.usdcBalance).toFixed(2)} USDC` : 'balance unavailable'}` : 'Paper mode'}</div>
           {sess?.pauseReason && !running && <div className="text-[11px] text-amber-400/80 mt-0.5 truncate">{sess.pauseReason}</div>}
         </div>
         {sess && (!sess.running || sess.paused ? (
@@ -41,7 +41,7 @@ export default function HeaderCard() {
           <button disabled={busy} onClick={() => act('/api/protected/trade/pause')} className="shrink-0 px-4 py-2 rounded-full text-xs font-semibold border border-emerald-500/50 text-emerald-400 disabled:opacity-40">❚❚ Pause</button>
         ))}
       </div>
-      <div className="text-[11px] text-white/35">Wallet balance is your on-chain browser wallet. Paper trading uses a simulated balance ({usd(sess?.capital)} equity · {usd(sess?.available)} cash).</div>
+      <div className="text-[11px] text-white/35">{wal?.address ? 'On-chain balance of the wallet you connected (you stay in control).' : 'Paper mode — no wallet connected.'} Paper trading uses a simulated balance ({usd(sess?.capital)} equity · {usd(sess?.available)} cash).</div>
       <div className="grid grid-cols-2 gap-2">
         {sys ? (['rpc', 'ai', 'signals', 'risk'] as const).map((k) => (
           <div key={k} className="rounded-xl border border-white/10 bg-black/40 p-2.5">

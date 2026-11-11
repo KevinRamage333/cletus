@@ -5,7 +5,7 @@ import { COMPANY_LEGAL } from './company';
  *
  * TEMPLATE LANGUAGE — must be reviewed by a qualified lawyer before any public use.
  */
-export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.3';
+export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.4';
 export const RISK_VERSION = TERMS_VERSION;
 
 export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
@@ -25,9 +25,12 @@ export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
     'Only use funds you can afford to lose entirely.' ] },
   { title: '5. No guaranteed gains', body: [
     'There are no guaranteed gains, returns, profits or outcomes of any kind. No statement anywhere about Cletus should be read as a promise or projection of returns. Past performance, backtests and simulated/paper-trading results do not predict future results; live results may be materially worse because of fees, slippage, latency and failed transactions.' ] },
-  { title: '6. Your wallet and your keys', body: [
-    'You are solely responsible for your own wallet(s), private keys, recovery (seed) phrases and passwords. Wallets created in the browser are generated on your device and stored encrypted only in your browser; Cletus never receives your recovery phrase or private key and cannot recover them. If you lose your recovery phrase or password, your funds may be permanently lost. If anyone else obtains them, they can take your funds.',
-    'You are responsible for the security of every device, browser, server and environment you use with Cletus, including any server-side trading wallet you configure.' ] },
+  { title: '6. Your wallet and your keys (non-custodial)', body: [
+    'Cletus is non-custodial. You may optionally connect a Solana wallet you already control (for example Phantom, Solflare or Backpack). Connecting is voluntary and on your own volition. You may skip connecting and use paper (simulation) mode, and you may disconnect your wallet at any time.',
+    'Cletus does not create a wallet for you, does not hold or store private keys or recovery (seed) phrases, and cannot recover them. Only your public address is recorded when you connect. You are solely responsible for your wallet(s), private keys, recovery phrases and the security of every device and browser you use with Cletus.',
+    'Sign-In-With-Solana is a message signature used only to prove you control the address you connected. It is not a transaction and does not grant Cletus permission to move funds, to trade, or to act on your behalf later.',
+    'Each live trade is prepared by Cletus as a Jupiter swap and must be approved by you in your own wallet. Cletus does not use delegated or session keys and does not take custody of your assets. If you lose access to your wallet, or if anyone else obtains your keys, your funds may be permanently lost.',
+    'The operator (Cletus Technologies LLC) may hold a separate server-side trading wallet used only for the operator\'s own trades. That wallet is not used to sign or custody user funds.' ] },
   { title: '7. Assumption of risk', body: [
     'You expressly understand and assume all risks of using Cletus and of trading digital assets, including market, liquidity, counterparty, technology, regulatory, tax and security risks, and the risk of total loss. You use Cletus voluntarily and entirely at your own risk.' ] },
   { title: '8. Beta software', body: [
@@ -58,4 +61,5 @@ export const RISK_POINTS: string[] = [
   'Simulated (paper) results use real market data but do not include every real-world cost or failure, and do not predict live results. Paper fills do include the 0.5% Cletus platform fee described below, plus modelled Jupiter and network fees.',
   'Each swap through Cletus includes a 0.5% (50 basis points) platform fee charged by Cletus Technologies LLC, collected via the Jupiter Referral Program. On a $100 swap that is $0.50. Jupiter retains 20% of that fee (0.1% of the swap); 0.4% of the swap is paid to Cletus Technologies LLC. Network fees and slippage also apply. This fee is not charged on the operator\'s own trades.',
   'Nothing in Cletus is financial advice. You are solely responsible for your decisions, your wallet, and your keys.',
+  'Connecting a wallet is optional and on your own volition. Cletus never holds your keys. A Sign-In-With-Solana message only proves you control the address; each live trade still requires your approval in your wallet. You can disconnect at any time, or just watch in paper mode.',
 ];

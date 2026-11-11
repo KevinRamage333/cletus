@@ -22,6 +22,10 @@ await shoot('/demo/brain', 'brain.png', { wait: 1500, act: async (p) => {
   await p.waitForTimeout(1000);
 } });
 await shoot('/app/config', 'coming-soon.png', { full: false });
+await shoot('/demo/wallet', 'wallet-step.png', { wait: 3000 });
+await shoot('/demo/dashboard', 'dashboard.png', { wait: 3000 });
 await shoot('/', 'landing-mobile.png', { mobile: true });
 await shoot('/demo/chart', 'chart-mobile.png', { mobile: true, wait: 9000 });
+await shoot('/demo/wallet', 'wallet-step-mobile.png', { mobile: true, wait: 2500 });
+await shoot('/demo/dashboard', 'dashboard-mobile.png', { mobile: true, wait: 2500 });
 await b.close();
