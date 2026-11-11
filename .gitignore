@@ -21,3 +21,6 @@ data/backtest/
 logs/
 data/owner-state.json
 data/owner-snapshot.json
+
+# nightly retrain registry (box only)
+data/weight-sets/
