@@ -25,6 +25,9 @@ export OWNER_TP_LADDER=50:50
 export OWNER_BREAK_EVEN_TRIGGER_PCT=50
 export OWNER_TRAILING_ARM_PCT=50
 export OWNER_TRAILING_STOP_PCT=8
+# Self-directed exits: each live trade picks its own SL / partial / trail / final inside hard bounds
+# (src/lib/adaptive-exits.ts). The fixed taper numbers above are the fallback until a plan exists.
+export OWNER_ADAPTIVE_EXITS=on
 export OWNER_MAX_OPEN_POSITIONS=1
 export WHALE_FAST_EXIT=on
 export ENABLE_TRAILING_STOP=false
