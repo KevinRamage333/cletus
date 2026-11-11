@@ -69,3 +69,70 @@ describe('public live feed: recorded trades only, anonymized', () => {
     expect(s.ticker[0].token).toBe('WIF');
   });
 });
+
+import { booksFromMaybeMixed, buildPublicBooks, isLiveBookTrade, LIVE_BOOK_START_ISO, LIVE_EMPTY_MESSAGE } from '@/lib/public-live';
+
+describe('live book isolation from paper / simulation history', () => {
+  const paperCloses = [
+    { id: 's1', symbol: 'BONK', closedAt: '2026-11-10T16:00:00.000Z', pnlUsd: -40.12, pnlPct: -8, simulated: true, isOperator: true },
+    { id: 's2', symbol: 'WIF', closedAt: '2026-11-10T17:00:00.000Z', pnlUsd: 12.40, pnlPct: 5, simulated: true, isOperator: true },
+    { id: 's3', symbol: 'POPCAT', closedAt: '2026-11-10T18:00:00.000Z', pnlUsd: -90.00, pnlPct: -15, simulated: true, isOperator: true },
+    { id: 's4', symbol: 'MEW', closedAt: '2026-11-10T19:00:00.000Z', pnlUsd: -50.11, pnlPct: -10, simulated: true, isOperator: true },
+    { id: 's5', symbol: 'MOODENG', closedAt: '2026-11-10T20:00:00.000Z', pnlUsd: -70.00, pnlPct: -12, simulated: true, isOperator: true },
+    { id: 's6', symbol: 'FARTCOIN', closedAt: '2026-11-11T16:00:00.000Z', pnlUsd: -37.00, pnlPct: -6, simulated: true, isOperator: true },
+  ];
+  const paperPnl = paperCloses.reduce((s, t) => s + t.pnlUsd, 0); // -274.83
+
+  it('treats simulated and pre-cutoff trades as simulation history, not the live book', () => {
+    expect(LIVE_BOOK_START_ISO).toBe('2026-11-11T18:23:00.000Z');
+    expect(isLiveBookTrade({ at: '2026-11-11T18:23:00.000Z', simulated: false })).toBe(true);
+    expect(isLiveBookTrade({ at: '2026-11-11T18:22:59.000Z', simulated: false })).toBe(false);
+    expect(isLiveBookTrade({ at: '2026-11-12T00:00:00.000Z', simulated: true })).toBe(false);
+    expect(isLiveBookTrade({ closedAt: '2026-11-11T12:23:00.000-06:00', simulated: false })).toBe(true);
+  });
+
+  it('defaults /live to an empty live book and parks the −$274.83 paper closes in simulation history', () => {
+    const rows = recordedFromClosedPositions(paperCloses);
+    const books = buildPublicBooks(rows, new Date('2026-11-11T18:30:00.000Z'));
+    expect(books.live.hasData).toBe(false);
+    expect(books.live.totalPnlUsd).toBeNull();
+    expect(books.live.todayPnlUsd).toBeNull();
+    expect(books.live.tradeCount).toBe(0);
+    expect(books.live.ticker).toEqual([]);
+    expect(books.live.emptyMessage).toBe(LIVE_EMPTY_MESSAGE);
+    expect(books.live.book).toBe('live');
+    expect(books.live.hasSimulationHistory).toBe(true);
+    expect(books.simulation.hasData).toBe(true);
+    expect(books.simulation.book).toBe('simulation');
+    expect(books.simulation.allSimulated).toBe(true);
+    expect(books.simulation.tradeCount).toBe(6);
+    expect(books.simulation.totalPnlUsd).toBeCloseTo(-274.83);
+    expect(JSON.stringify(books.live)).not.toMatch(/274/);
+  });
+
+  it('keeps a post-cutoff live close in the live book and does not mix paper totals into it', () => {
+    const rows = mergeRecorded(
+      recordedFromClosedPositions(paperCloses),
+      recordedFromClosedPositions([{ id: 'l1', symbol: 'SOL', closedAt: '2026-11-11T18:40:00.000Z', pnlUsd: 0.35, pnlPct: 3.5, simulated: false, isOperator: true }]),
+    );
+    const books = buildPublicBooks(rows, new Date('2026-11-11T18:45:00.000Z'));
+    expect(books.live.hasData).toBe(true);
+    expect(books.live.tradeCount).toBe(1);
+    expect(books.live.totalPnlUsd).toBeCloseTo(0.35);
+    expect(books.live.emptyMessage).toBeNull();
+    expect(books.simulation.totalPnlUsd).toBeCloseTo(-274.83);
+    expect(books.live.totalPnlUsd).not.toBeCloseTo(-274.83);
+  });
+
+  it('re-splits a stale mixed snapshot so paper totals cannot leak into the live book', () => {
+    const mixed = buildPublicLiveStats(recordedFromClosedPositions(paperCloses), new Date('2026-11-11T18:30:00.000Z'));
+    expect(mixed.hasData).toBe(true);
+    expect(mixed.totalPnlUsd).toBeCloseTo(-274.83);
+    const books = booksFromMaybeMixed(mixed, new Date('2026-11-11T18:30:00.000Z'));
+    expect(books.live.hasData).toBe(false);
+    expect(books.live.totalPnlUsd).toBeNull();
+    expect(books.live.emptyMessage).toBe(LIVE_EMPTY_MESSAGE);
+    expect(books.simulation.totalPnlUsd).toBeCloseTo(-274.83);
+    expect(books.simulation.tradeCount).toBe(6);
+  });
+});

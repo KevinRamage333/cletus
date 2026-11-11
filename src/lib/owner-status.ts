@@ -13,10 +13,10 @@ import { readOnchainWallet } from './owner-onchain';
 import { loadOwnerState, snapshotAgeMs } from './owner-store';
 import { EMPTY_HALT, type HaltState } from './owner-halt';
 import {
-  curveFromClosed, enrichPosition, feedFromLiveEvents, liveWatchFromAccountStatus, mergeFeed, sumTodayPnl, winLoss,
+  curveFromClosed, enrichPosition, feedFromLiveEvents, isolateLiveWatch, liveWatchFromAccountStatus, mergeFeed, sumTodayPnl, winLoss,
   type LiveWatchFeedItem, type LiveWatchModel, type LiveWatchPosition,
 } from './live-watch';
-import { buildPublicLiveStats, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from './public-live';
+import { buildPublicBooks, booksFromMaybeMixed, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from './public-live';
 import { solscanAccountUrl, solscanTxUrl } from './approvals';
 import { resolveOwnerWallet } from './owner-auth';
 
@@ -41,11 +41,50 @@ export interface OwnerExtras {
 
 export interface OwnerStatusPayload {
   watch: LiveWatchModel;
+  simulationWatch: LiveWatchModel;
   owner: OwnerExtras;
   halt: HaltState;
   publicLive: PublicLiveStats;
+  publicLiveSimulation: PublicLiveStats;
   source: 'live' | 'snapshot' | 'onchain' | 'mixed';
   snapshotAgeMs: number | null;
+}
+
+function mergeWatches(a: LiveWatchModel, b?: LiveWatchModel | null): LiveWatchModel {
+  if (!b) return a;
+  const seenF = new Set(a.feed.map((f) => f.id));
+  const seenO = new Set(a.openAll.map((p) => p.id));
+  return {
+    ...a,
+    feed: [...a.feed, ...b.feed.filter((f) => !seenF.has(f.id))],
+    openAll: [...a.openAll, ...b.openAll.filter((p) => !seenO.has(p.id))],
+    open: a.open ?? b.open,
+  };
+}
+
+function withIsolatedBooks(
+  payload: Omit<OwnerStatusPayload, 'watch' | 'simulationWatch' | 'publicLive' | 'publicLiveSimulation'> & {
+    watch: LiveWatchModel;
+    simulationWatch?: LiveWatchModel | null;
+    publicLive?: PublicLiveStats | null;
+    publicLiveSimulation?: PublicLiveStats | null;
+  },
+  recorded: import('./public-live').RecordedPublicTrade[],
+  liveEquity: number | null,
+): OwnerStatusPayload {
+  const books = recorded.length
+    ? buildPublicBooks(recorded)
+    : payload.publicLive && payload.publicLive.book === 'live' && payload.publicLiveSimulation
+      ? { live: payload.publicLive, simulation: payload.publicLiveSimulation }
+      : booksFromMaybeMixed(payload.publicLive ?? null);
+  const isolated = isolateLiveWatch(mergeWatches(payload.watch, payload.simulationWatch), liveEquity);
+  return {
+    ...payload,
+    watch: isolated.live,
+    simulationWatch: isolated.simulation,
+    publicLive: books.live,
+    publicLiveSimulation: books.simulation,
+  };
 }
 
 function canUseDb(): boolean {
@@ -189,9 +228,9 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
   if (db) {
     const watch = applyLogAndChain({ ...db.watch, halted: halt.halted, haltReason: halt.reason }, db.plan, onchain);
     const events = readLiveTrades();
-    const publicLive = buildPublicLiveStats(mergeRecorded(recordedFromClosedPositions(db.recordedPlanClosed), recordedFromLiveEvents(events, true)));
-    return {
-      watch, halt, publicLive, snapshotAgeMs: age,
+    const recorded = mergeRecorded(recordedFromClosedPositions(db.recordedPlanClosed), recordedFromLiveEvents(events, true));
+    return withIsolatedBooks({
+      watch, halt, snapshotAgeMs: age,
       source: onchain ? 'mixed' : 'live',
       owner: {
         tradingWallet: OWNER_TRADING_WALLET,
@@ -201,34 +240,33 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         engine: { ...db.engine, killSwitch: halt.halted || db.engine.killSwitch, killReason: halt.reason ?? db.engine.killReason },
         onchain,
       },
-    };
+    }, recorded, onchain?.equityUsd ?? watch.equityUsd ?? null);
   }
 
   if (stored.snapshot?.payload && (age === null || age < 5 * 60_000)) {
     const snap = stored.snapshot.payload as OwnerStatusPayload;
     // Refresh on-chain balance on top of a recent snapshot so the hero stays live on Vercel.
     const watch = snap.watch ? { ...snap.watch, equityUsd: onchain?.equityUsd ?? snap.watch.equityUsd, sol: onchain?.sol ?? snap.watch.sol, solPriceUsd: onchain?.solPriceUsd ?? snap.watch.solPriceUsd, halted: halt.halted } : applyLogAndChain(emptyWatch(c.mode, onchain), snap.owner?.plan ?? null, onchain);
-    return {
-      watch, halt,
-      publicLive: snap.publicLive ?? buildPublicLiveStats(recordedFromLiveEvents(readLiveTrades(), true)),
+    return withIsolatedBooks({
+      watch, simulationWatch: snap.simulationWatch, halt,
+      publicLive: snap.publicLive, publicLiveSimulation: snap.publicLiveSimulation,
       source: 'snapshot', snapshotAgeMs: age,
       owner: {
         ...(snap.owner ?? emptyOwner(c, onchain)),
         onchain: onchain ?? snap.owner?.onchain ?? null,
       },
-    };
+    }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null);
   }
 
   const plan = fallbackPlan(onchain?.equityUsd ?? 0, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd);
   const events = readLiveTrades();
   const watch = applyLogAndChain(emptyWatch(c.mode, onchain), plan, onchain);
-  return {
+  return withIsolatedBooks({
     watch, halt,
-    publicLive: buildPublicLiveStats(recordedFromLiveEvents(events, true)),
     source: events.length ? 'mixed' : 'onchain',
     snapshotAgeMs: age,
     owner: emptyOwner(c, onchain, plan),
-  };
+  }, recordedFromLiveEvents(events, true), onchain?.equityUsd ?? watch.equityUsd ?? null);
 }
 
 function emptyWatch(mode: 'simulation' | 'live', onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {

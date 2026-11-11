@@ -158,3 +158,77 @@ describe('owner and live routes are reachable in the gate', () => {
     }
   });
 });
+
+import { isolateLiveWatch, type LiveWatchModel } from '@/lib/live-watch';
+import { LIVE_EMPTY_MESSAGE } from '@/lib/live-book';
+
+function mixedWatch(overrides: Partial<LiveWatchModel> = {}): LiveWatchModel {
+  const paper = [
+    { id: 's1', kind: 'sell' as const, at: '2026-11-10T16:00:00.000Z', symbol: 'BONK', pnlUsd: -40.12, pnlPct: -8, win: false, simulated: true },
+    { id: 's2', kind: 'sell' as const, at: '2026-11-10T17:00:00.000Z', symbol: 'WIF', pnlUsd: 12.40, pnlPct: 5, win: true, simulated: true },
+    { id: 's3', kind: 'sell' as const, at: '2026-11-10T18:00:00.000Z', symbol: 'POPCAT', pnlUsd: -90.00, pnlPct: -15, win: false, simulated: true },
+    { id: 's4', kind: 'sell' as const, at: '2026-11-10T19:00:00.000Z', symbol: 'MEW', pnlUsd: -50.11, pnlPct: -10, win: false, simulated: true },
+    { id: 's5', kind: 'sell' as const, at: '2026-11-10T20:00:00.000Z', symbol: 'MOODENG', pnlUsd: -70.00, pnlPct: -12, win: false, simulated: true },
+    { id: 's6', kind: 'sell' as const, at: '2026-11-11T16:00:00.000Z', symbol: 'FARTCOIN', pnlUsd: -37.00, pnlPct: -6, win: false, simulated: true },
+  ];
+  return {
+    asOf: '2026-11-11T18:30:00.000Z',
+    mode: 'simulation',
+    scope: 'owner',
+    label: 'Cletus (house)',
+    equityUsd: 9.86,
+    sol: 0.1174,
+    solPriceUsd: 84,
+    realizedPnl: -274.83,
+    unrealizedPnl: 0,
+    totalPnl: -274.83,
+    todayPnl: -37,
+    winRate: 1 / 6,
+    wins: 1,
+    losses: 5,
+    closedTrades: 6,
+    open: null,
+    openAll: [],
+    feed: paper,
+    equityCurve: [{ t: '2026-11-10T15:00:00.000Z', equityUsd: 10000 }, { t: '2026-11-11T16:00:00.000Z', equityUsd: 9725.17 }],
+    chartApiBase: '/api/owner/chart',
+    simulatedBadge: true,
+    ...overrides,
+  };
+}
+
+describe('owner live book isolation', () => {
+  it('defaults the owner desk to the live $10 wallet and hides the paper −$274.83 book', () => {
+    const { live, simulation } = isolateLiveWatch(mixedWatch(), 9.86);
+    expect(live.book).toBe('live');
+    expect(live.mode).toBe('live');
+    expect(live.simulatedBadge).toBe(false);
+    expect(live.equityUsd).toBeCloseTo(9.86);
+    expect(live.closedTrades).toBe(0);
+    expect(live.feed).toEqual([]);
+    expect(live.totalPnl).toBe(0);
+    expect(live.winRate).toBeNull();
+    expect(live.emptyMessage).toBe(LIVE_EMPTY_MESSAGE);
+    expect(live.equityCurve[0]?.equityUsd).toBeCloseTo(9.86);
+    expect(live.equityCurve.some((p) => p.equityUsd > 100)).toBe(false);
+    expect(simulation.book).toBe('simulation');
+    expect(simulation.simulatedBadge).toBe(true);
+    expect(simulation.closedTrades).toBe(6);
+    expect(simulation.totalPnl).toBeCloseTo(-274.83);
+    expect(simulation.wins).toBe(1);
+    expect(simulation.losses).toBe(5);
+    expect(simulation.equityUsd).toBeCloseTo(9725.17);
+    expect(simulation.equityCurve[0]?.equityUsd).toBeCloseTo(10000);
+  });
+
+  it('keeps a post-cutoff live close in the live book only', () => {
+    const base = mixedWatch();
+    const liveSell = { id: 'l1', kind: 'sell' as const, at: '2026-11-11T18:40:00.000Z', symbol: 'SOL', pnlUsd: 0.35, pnlPct: 3.5, win: true, simulated: false };
+    const { live, simulation } = isolateLiveWatch({ ...base, feed: [...base.feed, liveSell] }, 10.21);
+    expect(live.closedTrades).toBe(1);
+    expect(live.totalPnl).toBeCloseTo(0.35);
+    expect(live.emptyMessage).toBeNull();
+    expect(simulation.closedTrades).toBe(6);
+    expect(simulation.totalPnl).toBeCloseTo(-274.83);
+  });
+});

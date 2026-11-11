@@ -14,6 +14,8 @@
  */
 import { solscanTxUrl } from './approvals';
 import { chicagoDay, sumTodayPnl, winLoss } from './live-watch';
+import { isLiveBookTrade, LIVE_BOOK_START_ISO, LIVE_EMPTY_MESSAGE, type BookKind } from './live-book';
+export { isLiveBookTrade, LIVE_BOOK_START_ISO, LIVE_EMPTY_MESSAGE, type BookKind } from './live-book';
 import type { LiveTradeEvent } from './live-trades';
 
 export const PUBLIC_LIVE_DISCLAIMER =
@@ -66,6 +68,10 @@ export interface PublicLiveStats {
   todayPnlUsd: number | null;
   ticker: PublicLiveTickerItem[];
   disclaimer: string;
+  book?: BookKind;
+  liveBookStart?: string;
+  emptyMessage?: string | null;
+  hasSimulationHistory?: boolean;
 }
 
 export const EMPTY_PUBLIC_LIVE: PublicLiveStats = {
@@ -82,6 +88,10 @@ export const EMPTY_PUBLIC_LIVE: PublicLiveStats = {
   todayPnlUsd: null,
   ticker: [],
   disclaimer: PUBLIC_LIVE_DISCLAIMER,
+  book: 'live',
+  liveBookStart: LIVE_BOOK_START_ISO,
+  emptyMessage: LIVE_EMPTY_MESSAGE,
+  hasSimulationHistory: false,
 };
 
 export function traderLabel(t: Pick<RecordedPublicTrade, 'isHouse' | 'optedInLabel' | 'showWallet' | 'wallet'>): string {
@@ -136,6 +146,65 @@ export function buildPublicLiveStats(trades: RecordedPublicTrade[], now = new Da
     ticker,
     disclaimer: PUBLIC_LIVE_DISCLAIMER,
   };
+}
+
+export function splitRecorded(trades: RecordedPublicTrade[]): { live: RecordedPublicTrade[]; simulation: RecordedPublicTrade[] } {
+  const live: RecordedPublicTrade[] = [];
+  const simulation: RecordedPublicTrade[] = [];
+  for (const r of trades) (isLiveBookTrade(r) ? live : simulation).push(r);
+  return { live, simulation };
+}
+
+export function emptyLiveStats(now = new Date(), hasSimulationHistory = false): PublicLiveStats {
+  return {
+    ...EMPTY_PUBLIC_LIVE,
+    asOf: now.toISOString(),
+    book: 'live',
+    liveBookStart: LIVE_BOOK_START_ISO,
+    emptyMessage: LIVE_EMPTY_MESSAGE,
+    hasSimulationHistory,
+  };
+}
+
+export function buildPublicBooks(trades: RecordedPublicTrade[], now = new Date(), timeZone = 'America/Chicago'): { live: PublicLiveStats; simulation: PublicLiveStats } {
+  const { live, simulation } = splitRecorded(trades);
+  const liveStats = live.length
+    ? { ...buildPublicLiveStats(live, now, timeZone), book: 'live' as const, liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: null, hasSimulationHistory: simulation.length > 0 }
+    : emptyLiveStats(now, simulation.length > 0);
+  const simStats = simulation.length
+    ? { ...buildPublicLiveStats(simulation, now, timeZone), book: 'simulation' as const, liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: null, hasSimulationHistory: true }
+    : { ...EMPTY_PUBLIC_LIVE, asOf: now.toISOString(), book: 'simulation' as const, liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: null, hasSimulationHistory: false };
+  return { live: liveStats, simulation: simStats };
+}
+
+/** Re-split an older mixed payload so a stale snapshot cannot leak paper totals into the live book. */
+export function booksFromMaybeMixed(stats: PublicLiveStats | null | undefined, now = new Date()): { live: PublicLiveStats; simulation: PublicLiveStats } {
+  if (!stats) return buildPublicBooks([], now);
+  if (stats.book === 'live' && !stats.anySimulated) {
+    return {
+      live: { ...stats, book: 'live', liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: stats.hasData ? null : LIVE_EMPTY_MESSAGE },
+      simulation: { ...EMPTY_PUBLIC_LIVE, asOf: now.toISOString(), book: 'simulation', liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: null, hasSimulationHistory: false },
+    };
+  }
+  const rows: RecordedPublicTrade[] = (stats.ticker ?? []).map((item) => ({
+    id: item.id,
+    at: item.at,
+    symbol: item.token,
+    side: item.side,
+    pnlPct: item.pnlPct,
+    pnlUsd: null,
+    signature: item.solscan ? item.solscan.split('/').pop() ?? null : null,
+    simulated: item.simulated,
+    isHouse: item.trader === HOUSE_TRADER_LABEL,
+  }));
+  // A fully simulated (or pre-cutoff) book belongs entirely in simulation history.
+  if (stats.allSimulated || rows.every((r) => !isLiveBookTrade(r))) {
+    return {
+      live: emptyLiveStats(now, stats.hasData || rows.length > 0),
+      simulation: { ...stats, book: 'simulation', liveBookStart: LIVE_BOOK_START_ISO, emptyMessage: null, hasSimulationHistory: true },
+    };
+  }
+  return buildPublicBooks(rows, now);
 }
 
 export function recordedFromLiveEvents(events: LiveTradeEvent[], house = true): RecordedPublicTrade[] {

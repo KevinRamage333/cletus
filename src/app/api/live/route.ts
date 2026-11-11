@@ -1,37 +1,47 @@
 import { NextResponse } from 'next/server';
-import { buildPublicLiveStats, EMPTY_PUBLIC_LIVE, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents } from '@/lib/public-live';
+import { booksFromMaybeMixed, buildPublicBooks, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from '@/lib/public-live';
 import { readLiveTrades } from '@/lib/live-trades';
 import { loadOwnerState, snapshotAgeMs } from '@/lib/owner-store';
 import { isDemo } from '@/lib/demo';
 
 export const dynamic = 'force-dynamic';
 
+export type PublicLiveResponse = PublicLiveStats & { simulation: PublicLiveStats };
+
+function pack(books: { live: PublicLiveStats; simulation: PublicLiveStats }): PublicLiveResponse {
+  return { ...books.live, hasSimulationHistory: books.simulation.hasData, simulation: books.simulation };
+}
+
 /**
- * Public anonymized performance feed. Only recorded trades. Never fabricates
- * demo/illustrative numbers. Empty book → hasData=false.
+ * Public anonymized performance feed. Defaults to the LIVE book only
+ * (non-simulated trades from 2026-11-11 12:23 PM America/Chicago onward).
+ * Paper/sim history is attached as `simulation`. Never fabricates numbers.
  */
 export async function GET() {
   try {
-    const fromSnap = publicFromSnapshot();
-    const fromBox = await publicFromBoxRecords().catch(() => null);
-    // Prefer a fresh box computation when we can actually read records; otherwise a pushed snapshot.
-    const stats = fromBox?.hasData ? fromBox : (fromSnap?.hasData ? fromSnap : (fromBox ?? fromSnap ?? { ...EMPTY_PUBLIC_LIVE, asOf: new Date().toISOString() }));
-    return NextResponse.json(stats, { headers: { 'cache-control': 'public, s-maxage=5, stale-while-revalidate=15' } });
+    const fromSnap = publicBooksFromSnapshot();
+    const fromBox = await publicBooksFromBoxRecords().catch(() => null);
+    const books = fromBox ?? fromSnap ?? booksFromMaybeMixed(null);
+    return NextResponse.json(pack(books), { headers: { 'cache-control': 'public, s-maxage=5, stale-while-revalidate=15' } });
   } catch (e) {
     console.error('[cletus] public live', (e as Error)?.message);
-    return NextResponse.json({ ...EMPTY_PUBLIC_LIVE, asOf: new Date().toISOString() }, { headers: { 'cache-control': 'no-store' } });
+    const empty = pack(booksFromMaybeMixed(null));
+    return NextResponse.json(empty, { headers: { 'cache-control': 'no-store' } });
   }
 }
 
-function publicFromSnapshot() {
+function publicBooksFromSnapshot(): { live: PublicLiveStats; simulation: PublicLiveStats } | null {
   const s = loadOwnerState();
   const age = snapshotAgeMs(s);
-  const payload = s.snapshot?.payload as { publicLive?: ReturnType<typeof buildPublicLiveStats> } | null;
-  if (payload?.publicLive && (age === null || age < 10 * 60_000)) return payload.publicLive;
-  return null;
+  const payload = s.snapshot?.payload as { publicLive?: PublicLiveStats; publicLiveSimulation?: PublicLiveStats } | null;
+  if (!payload?.publicLive || (age !== null && age >= 10 * 60_000)) return null;
+  if (payload.publicLive.book === 'live' && payload.publicLiveSimulation) {
+    return { live: payload.publicLive, simulation: payload.publicLiveSimulation };
+  }
+  return booksFromMaybeMixed(payload.publicLive);
 }
 
-async function publicFromBoxRecords() {
+async function publicBooksFromBoxRecords(): Promise<{ live: PublicLiveStats; simulation: PublicLiveStats } | null> {
   if (isDemo()) return null;
   const events = readLiveTrades();
   const fromLog = recordedFromLiveEvents(events, true);
@@ -54,5 +64,7 @@ async function publicFromBoxRecords() {
       })));
     } catch { /* no db */ }
   }
-  return buildPublicLiveStats(mergeRecorded(fromDb, fromLog));
+  const recorded = mergeRecorded(fromDb, fromLog);
+  if (!recorded.length && !events.length) return null;
+  return buildPublicBooks(recorded);
 }

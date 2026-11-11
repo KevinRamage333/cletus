@@ -10,7 +10,8 @@ const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/u
 
 const shoot = async (path, file, { wait = 2500, mobile = false, full = true, act } = {}) => {
   const page = await b.newPage(mobile ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 900 } });
-  await page.goto(BASE + path, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForSelector('body', { timeout: 15000 });
   await page.waitForTimeout(wait);
   if (act) await act(page);
   await page.screenshot({ path: `${OUT}/${file}`, fullPage: full });

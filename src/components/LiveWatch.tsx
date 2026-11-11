@@ -32,7 +32,8 @@ export type LiveWatchActions = {
 
 export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatchModel; actions?: LiveWatchActions; footer?: ReactNode }) {
   const open = watch.open;
-  const pnl = open ? open.pnlUsd : watch.totalPnl;
+  const emptyBook = !open && watch.closedTrades === 0;
+  const pnl = open ? open.pnlUsd : (emptyBook ? null : watch.totalPnl);
   const pnlPct = open ? open.pnlPct : null;
   return (
     <div className="space-y-5" data-testid="live-watch" data-scope={watch.scope}>
@@ -79,8 +80,10 @@ export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatch
         ) : (
           <div>
             <div className="text-[11px] uppercase tracking-wider text-white/45">No open trade</div>
-            <div className={`text-4xl sm:text-5xl font-extrabold font-mono leading-tight ${cls(watch.totalPnl)}`}>{usd(watch.totalPnl)}</div>
-            <div className="text-sm text-white/50 mt-1">Total recorded P&amp;L · waiting for the next entry</div>
+            <div className={`text-4xl sm:text-5xl font-extrabold font-mono leading-tight ${cls(pnl)}`}>{usd(pnl)}</div>
+            <div className="text-sm text-white/50 mt-1" data-testid="live-watch-empty">
+              {watch.emptyMessage ?? (emptyBook ? 'No recorded trades yet.' : 'Total recorded P&L · waiting for the next entry')}
+            </div>
           </div>
         )}
       </section>
@@ -88,8 +91,8 @@ export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatch
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           ['Equity', usd(watch.equityUsd), watch.sol != null ? `${watch.sol.toFixed(3)} SOL` : ''],
-          ['Total gains', usd(watch.totalPnl), `realized ${usd(watch.realizedPnl)}`],
-          ["Today's P&L", usd(watch.todayPnl), 'America/Chicago day'],
+          ['Total gains', emptyBook ? '—' : usd(watch.totalPnl), emptyBook ? 'no live closes yet' : `realized ${usd(watch.realizedPnl)}`],
+          ["Today's P&L", emptyBook ? '—' : usd(watch.todayPnl), 'America/Chicago day'],
           ['Win rate', watch.winRate == null ? '—' : `${(watch.winRate * 100).toFixed(0)}%`, `${watch.wins}W / ${watch.losses}L · ${watch.closedTrades} closed`],
         ].map(([l, v, s], i) => (
           <div key={l} className="rounded-2xl border border-white/10 bg-[#121212] p-4">
@@ -117,7 +120,7 @@ export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatch
       <section className="rounded-2xl border border-white/10 bg-[#121212] p-4">
         <h3 className="text-sm font-semibold mb-3">Trade feed</h3>
         {watch.feed.length === 0 ? (
-          <p className="text-sm text-white/40">No recorded trades yet.</p>
+          <p className="text-sm text-white/40">{watch.emptyMessage ?? 'No recorded trades yet.'}</p>
         ) : (
           <ul className="divide-y divide-white/10" data-testid="trade-feed">
             {watch.feed.map((t) => (

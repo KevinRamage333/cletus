@@ -8,6 +8,7 @@
  * pure helpers so each surface can map its own source without inventing numbers.
  */
 import { solscanAccountUrl, solscanTxUrl } from './approvals';
+import { isLiveBookTrade, LIVE_BOOK_START_ISO, LIVE_EMPTY_MESSAGE } from './live-book';
 import { todayPnl as todayPnlFromEvents, equityCurveFromEvents, realizedPnl, type LiveTradeEvent } from './live-trades';
 import { DEFAULT_OWNER_STOP_LOSS_PCT, DEFAULT_OWNER_TAKE_PROFIT_PCT } from './owner-plan';
 
@@ -79,6 +80,8 @@ export interface LiveWatchModel {
   haltReason?: string | null;
   chartApiBase: string;
   simulatedBadge: boolean;
+  book?: 'live' | 'simulation';
+  emptyMessage?: string | null;
 }
 
 export function stopTakeLevels(entryPrice: number, stopLossPct = DEFAULT_OWNER_STOP_LOSS_PCT, takeProfitPct = DEFAULT_OWNER_TAKE_PROFIT_PCT): { stopLoss: number; takeProfit: number } {
@@ -250,3 +253,76 @@ export function liveWatchFromAccountStatus(s: {
 }
 
 export { todayPnlFromEvents, equityCurveFromEvents, realizedPnl };
+
+
+/** Split a mixed watch model into the live book (default) and simulation history. */
+export function isolateLiveWatch(watch: LiveWatchModel, liveEquityUsd: number | null): { live: LiveWatchModel; simulation: LiveWatchModel } {
+  const liveFeed = watch.feed.filter((f) => isLiveBookTrade({ at: f.at, simulated: f.simulated }));
+  const simFeed = watch.feed.filter((f) => !isLiveBookTrade({ at: f.at, simulated: f.simulated }));
+  const liveOpenAll = watch.openAll.filter((p) => isLiveBookTrade({ openedAt: p.openedAt, at: p.openedAt, simulated: p.simulated }));
+  const simOpenAll = watch.openAll.filter((p) => !isLiveBookTrade({ openedAt: p.openedAt, at: p.openedAt, simulated: p.simulated }));
+  const liveOpen = liveOpenAll[0] ?? null;
+  const simOpen = simOpenAll[0] ?? null;
+  const liveSells = liveFeed.filter((f) => f.kind === 'sell');
+  const simSells = simFeed.filter((f) => f.kind === 'sell');
+  const liveWl = winLoss(liveSells);
+  const simWl = winLoss(simSells);
+  const liveRealized = liveSells.reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
+  const simRealized = simSells.reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
+  const liveUnreal = liveOpenAll.reduce((s, p) => s + p.pnlUsd, 0);
+  const simUnreal = simOpenAll.reduce((s, p) => s + p.pnlUsd, 0);
+  const liveEq = liveEquityUsd;
+  // Start the live curve at current live equity minus live realized and open PnL (the wallet at live start).
+  const liveStartEq = liveEq == null ? 0 : Math.round((liveEq - liveRealized - liveUnreal) * 100) / 100;
+  const liveClosedTrades = liveSells.length;
+  const live: LiveWatchModel = {
+    ...watch,
+    mode: 'live',
+    label: watch.scope === 'owner' ? 'Cletus (house)' : watch.label,
+    book: 'live',
+    simulatedBadge: false,
+    equityUsd: liveEq,
+    realizedPnl: Math.round(liveRealized * 100) / 100,
+    unrealizedPnl: Math.round(liveUnreal * 100) / 100,
+    totalPnl: Math.round((liveRealized + liveUnreal) * 100) / 100,
+    todayPnl: sumTodayPnl(liveSells.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
+    winRate: liveWl.winRate,
+    wins: liveWl.wins,
+    losses: liveWl.losses,
+    closedTrades: liveClosedTrades,
+    open: liveOpen,
+    openAll: liveOpenAll,
+    feed: liveFeed,
+    equityCurve: liveClosedTrades ? curveFromClosed(liveStartEq, liveSells.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd })), liveEq) : (liveEq != null ? [{ t: LIVE_BOOK_START_ISO, equityUsd: liveStartEq }, { t: watch.asOf, equityUsd: liveEq }] : []),
+    emptyMessage: liveClosedTrades || liveOpen ? null : LIVE_EMPTY_MESSAGE,
+  };
+  const inferredSimStart = (watch.equityUsd ?? 0) - watch.totalPnl + simRealized + simUnreal;
+  const curveStart = watch.equityCurve[0]?.equityUsd;
+  // Prefer the original paper starting equity when the mixed curve still has it
+  // (e.g. ~$10k) so the simulation book is not pinned to the $10 live wallet.
+  const simStartEq = curveStart != null && curveStart > inferredSimStart + 50 ? curveStart : inferredSimStart;
+  const simTotal = Math.round((simRealized + simUnreal) * 100) / 100;
+  const simEquity = Math.round((simStartEq + simRealized + simUnreal) * 100) / 100;
+  const simulation: LiveWatchModel = {
+    ...watch,
+    mode: 'simulation',
+    label: 'Simulation history',
+    book: 'simulation',
+    simulatedBadge: true,
+    equityUsd: simSells.length || simOpen ? simEquity : null,
+    realizedPnl: Math.round(simRealized * 100) / 100,
+    unrealizedPnl: Math.round(simUnreal * 100) / 100,
+    totalPnl: simTotal,
+    todayPnl: sumTodayPnl(simSells.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
+    winRate: simWl.winRate,
+    wins: simWl.wins,
+    losses: simWl.losses,
+    closedTrades: simSells.length,
+    open: simOpen,
+    openAll: simOpenAll,
+    feed: simFeed,
+    equityCurve: curveFromClosed(simStartEq, simSells.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd }))),
+    emptyMessage: simSells.length || simOpen ? null : 'No simulation history.',
+  };
+  return { live, simulation };
+}
