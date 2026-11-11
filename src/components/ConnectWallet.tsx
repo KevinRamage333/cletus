@@ -3,7 +3,11 @@ import { Buffer } from 'buffer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWallet, type Wallet } from '@solana/wallet-adapter-react';
 import { WalletReadyState, type WalletName } from '@solana/wallet-adapter-base';
-import { SUPPORTED_WALLETS, WALLET_CONNECT_COPY, isMobileUserAgent, inWalletBrowser, type SupportedWallet } from '@/lib/connect-wallets';
+import {
+  SUPPORTED_WALLETS, WALLET_CONNECT_COPY, JUPITER_MOBILE_STEPS,
+  isMobileUserAgent, inWalletBrowser, findSupportedAdapter, extraDetectedWallets,
+  type SupportedWallet,
+} from '@/lib/connect-wallets';
 
 export type ConnectMode = 'onboarding' | 'demo' | 'settings' | 'owner';
 
@@ -21,12 +25,36 @@ function currentPageUrl() {
   return window.location.href;
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.setAttribute('readonly', '');
+      el.style.position = 'fixed';
+      el.style.left = '-9999px';
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export default function ConnectWallet({ mode, currentPublicKey, source, onPaper, onConnected, onDisconnected }: Props) {
   const { wallets, select, connect, disconnect, publicKey, signMessage, connected, wallet, connecting } = useWallet();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [insideWallet, setInsideWallet] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showJupiterHint, setShowJupiterHint] = useState(false);
   const pendingSelect = useRef<WalletName | null>(null);
   const siwsStarted = useRef(false);
 
@@ -36,11 +64,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
     setInsideWallet(inWalletBrowser(ua));
   }, []);
 
-  const byName = useMemo(() => {
-    const m = new Map<string, Wallet>();
-    for (const w of wallets) m.set(w.adapter.name, w);
-    return m;
-  }, [wallets]);
+  const extras = useMemo(() => extraDetectedWallets(wallets), [wallets]);
 
   const finishConnected = useCallback(async (pk: string) => {
     if (mode === 'demo') {
@@ -92,24 +116,46 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
     }
   }, [connected, publicKey, mode, currentPublicKey, finishConnected]);
 
+  function beginConnect(found: Wallet) {
+    pendingSelect.current = found.adapter.name as WalletName;
+    select(found.adapter.name);
+  }
+
   function startConnect(w: SupportedWallet) {
     setErr(null);
-    const found = byName.get(w.adapterName);
+    setShowJupiterHint(false);
+    const found = findSupportedAdapter(wallets, w);
     if (!found || found.readyState === WalletReadyState.Unsupported) {
       if (mobile && !insideWallet) {
-        window.location.href = w.browseDeepLink(currentPageUrl());
+        if (w.browseDeepLink) {
+          window.location.href = w.browseDeepLink(currentPageUrl());
+          return;
+        }
+        setShowJupiterHint(true);
         return;
       }
       window.open(w.download, '_blank', 'noopener,noreferrer');
-      setErr(`${w.name} is not installed in this browser. Install it, or open this page in the ${w.name} app.`);
+      setErr(w.id === 'jupiter'
+        ? 'Jupiter Wallet is not installed in this browser. Install the official extension from jup.ag/wallet, then reload this page, or open this URL in Jupiter Mobile’s dApp browser.'
+        : `${w.name} is not installed in this browser. Install it, or open this page in the ${w.name} app.`);
+      if (w.id === 'jupiter') setShowJupiterHint(true);
       return;
     }
     if (found.readyState === WalletReadyState.NotDetected && mobile && !insideWallet) {
-      window.location.href = w.browseDeepLink(currentPageUrl());
+      if (w.browseDeepLink) {
+        window.location.href = w.browseDeepLink(currentPageUrl());
+        return;
+      }
+      setShowJupiterHint(true);
       return;
     }
-    pendingSelect.current = found.adapter.name as WalletName;
-    select(found.adapter.name);
+    beginConnect(found);
+  }
+
+  async function copyPageUrl() {
+    const ok = await copyText(currentPageUrl());
+    setCopied(ok);
+    if (ok) setTimeout(() => setCopied(false), 2000);
   }
 
   async function choosePaper() {
@@ -147,6 +193,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
 
   const shownKey = currentPublicKey || (connected && publicKey ? publicKey.toBase58() : null);
   const paper = !shownKey && (source === 'paper' || source === 'disconnected');
+  const showMobileHint = mobile && !insideWallet;
 
   return (
     <div className="space-y-5">
@@ -172,8 +219,9 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
             <div className="text-xs uppercase tracking-wider text-white/40 mb-2">{mode === 'owner' ? 'Connect your owner wallet' : 'Connect a wallet (optional)'}</div>
             <div className="grid gap-2">
               {SUPPORTED_WALLETS.map((w) => {
-                const found = byName.get(w.adapterName);
+                const found = findSupportedAdapter(wallets, w);
                 const ready = found && found.readyState === WalletReadyState.Installed;
+                const label = ready ? 'Detected' : showMobileHint ? (w.browseDeepLink ? 'Open app' : 'How to open') : 'Install / connect';
                 return (
                   <button
                     key={w.id}
@@ -187,13 +235,61 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
                       <span className="w-2.5 h-2.5 rounded-full" style={{ background: w.color }} />
                       <span className="font-semibold">{w.name}</span>
                     </span>
-                    <span className="text-xs text-white/40">{ready ? 'Detected' : mobile ? 'Open app' : 'Install / connect'}</span>
+                    <span className="text-xs text-white/40">{label}</span>
                   </button>
                 );
               })}
             </div>
-            {mobile && !insideWallet && (
-              <p className="text-xs text-white/45 mt-2">On a phone, these buttons open this page inside Phantom, Solflare or Backpack so you can connect there.</p>
+
+            {extras.length > 0 && (
+              <div className="mt-4">
+                <div className="text-xs uppercase tracking-wider text-white/40 mb-2">Select wallet</div>
+                <div className="grid gap-2">
+                  {extras.map((w) => {
+                    const ready = w.readyState === WalletReadyState.Installed;
+                    const name = w.adapter.name;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={busy || connecting}
+                        onClick={() => { setErr(null); beginConnect(w); }}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-left hover:border-amber-400/60 transition-colors disabled:opacity-50"
+                        data-testid={`connect-standard-${name}`}
+                      >
+                        <span className="font-semibold">{name}</span>
+                        <span className="text-xs text-white/40">{ready ? 'Detected' : 'Connect'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {showMobileHint && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 mt-3 space-y-2" data-testid="mobile-wallet-hint">
+                <div className="font-semibold text-sm">On a phone</div>
+                <p className="text-xs text-white/60 leading-relaxed">
+                  Phantom and Solflare buttons open this page inside those apps. Jupiter Mobile does not publish a verified browse deep link, so open this page in its in-app browser:
+                </p>
+                <ol className="text-xs text-white/70 list-decimal pl-4 space-y-1 leading-relaxed">
+                  {JUPITER_MOBILE_STEPS.map((step) => <li key={step}>{step}</li>)}
+                </ol>
+                <button type="button" className="btn small" onClick={copyPageUrl} data-testid="copy-page-url">
+                  {copied ? 'URL copied' : 'Copy page URL'}
+                </button>
+              </div>
+            )}
+
+            {(showJupiterHint && !showMobileHint) && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 mt-3 space-y-2" data-testid="jupiter-install-hint">
+                <p className="text-xs text-white/70 leading-relaxed">
+                  Install the official Jupiter Wallet extension from jup.ag/wallet (Chrome Web Store, publisher extension@jup.ag). Then reload this page and tap Jupiter. On a phone, open this URL in Jupiter Mobile’s dApp browser (globe icon, top right).
+                </p>
+                <button type="button" className="btn small" onClick={copyPageUrl} data-testid="copy-page-url-desktop">
+                  {copied ? 'URL copied' : 'Copy page URL'}
+                </button>
+              </div>
             )}
           </div>
 

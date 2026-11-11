@@ -62,7 +62,7 @@ Mobile bottom tabs (and a desktop top strip): **Dashboard · Chart · Signals ·
 - **/app/ai:** chat with the same advisory-only Brain (`/api/ai`), with browser voice mode.
 - **/app/community:** chat with profiles (display name, bio), admin moderation (hide/unhide, mute), collective paper PnL, and a dev-wallet audit posted to the feed. Pasted private keys or recovery phrases are rejected.
 - **/app/dev-wallet:** paste any wallet or mint to see SOL balance, holdings (Helius DAS), recent transactions (Helius enhanced API, RPC fallback), top holders and authorities for mints, and a heuristic risk audit.
-- **/app/wallet:** optionally connect your own Solana wallet (Phantom, Solflare, Backpack). Cletus never holds keys. Live balances are shown when connected; the beta paper-trades without a wallet.
+- **/app/wallet:** optionally connect your own Solana wallet (Jupiter, Phantom, Solflare, Backpack). Cletus never holds keys. Live balances are shown when connected; the beta paper-trades without a wallet.
 - **/tax:** an informational tax-responsibility acknowledgment (timestamp only; **no tax IDs/SSNs are collected**), a trade-history CSV export, and the 30-day trial flag.
 - **/app/staking:** a non-transactional "Coming soon" page with no stake or buy actions.
 - `/` stays the full engine console (logs, scanner, weights, preset lab, kill switch).

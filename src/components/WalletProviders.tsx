@@ -8,6 +8,14 @@ import { Buffer } from 'buffer';
 
 const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
+/**
+ * Legacy adapters are fallbacks for wallets that are not (yet) Wallet Standard.
+ * WalletProvider already:
+ *   - auto-detects Wallet Standard wallets (Jupiter registers as "Jupiter")
+ *   - prepends Solana Mobile Wallet Adapter on Android mobile web
+ * Do not register a legacy adapter named "Jupiter": that would shadow the
+ * Standard wallet of the same name.
+ */
 export default function WalletProviders({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined' && !(window as unknown as { Buffer?: typeof Buffer }).Buffer) {

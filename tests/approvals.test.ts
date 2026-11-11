@@ -5,7 +5,7 @@ import {
   APPROVAL_TTL_MS, canApprove, canReject, effectiveStatus, expiresAtFrom,
   formatTimer, operatorFeeUsd, remainingMs, solscanAccountUrl, solscanTxUrl, tradeFeeView,
 } from '@/lib/approvals';
-import { SUPPORTED_WALLETS, isMobileUserAgent, inWalletBrowser, WALLET_CONNECT_COPY } from '@/lib/connect-wallets';
+import { SUPPORTED_WALLETS, isMobileUserAgent, inWalletBrowser, WALLET_CONNECT_COPY, findSupportedAdapter, extraDetectedWallets, JUPITER_MOBILE_STEPS } from '@/lib/connect-wallets';
 import { demoPortfolio } from '@/lib/demo-dashboard';
 import { TERMS_VERSION, TERMS_SECTIONS, RISK_POINTS } from '@/lib/legal';
 import { validateWalletSetup } from '@/lib/onboarding';
@@ -74,18 +74,39 @@ describe('no custody in user-swap and onboarding wallet UI', () => {
 });
 
 describe('supported wallets and copy', () => {
-  it('lists Phantom, Solflare and Backpack with mobile browse deep links', () => {
-    expect(SUPPORTED_WALLETS.map((w) => w.id)).toEqual(['phantom', 'solflare', 'backpack']);
+  it('lists Jupiter first, then Phantom, Solflare and Backpack, with mobile fallbacks', () => {
+    expect(SUPPORTED_WALLETS.map((w) => w.id)).toEqual(['jupiter', 'phantom', 'solflare', 'backpack']);
     const url = 'https://cletus-autonomous-trader.vercel.app/demo/wallet';
-    expect(SUPPORTED_WALLETS[0].browseDeepLink(url)).toContain('phantom.app/ul/browse/');
-    expect(SUPPORTED_WALLETS[1].browseDeepLink(url)).toContain('solflare.com/ul/v1/browse/');
-    expect(SUPPORTED_WALLETS[2].browseDeepLink(url)).toContain('backpack.app');
+    const jupiter = SUPPORTED_WALLETS[0];
+    expect(jupiter.adapterNames).toContain('Jupiter');
+    expect(jupiter.browseDeepLink).toBeUndefined();
+    expect(jupiter.mobileOpenHint).toMatch(/globe icon/i);
+    expect(SUPPORTED_WALLETS[1].browseDeepLink!(url)).toContain('phantom.app/ul/browse/');
+    expect(SUPPORTED_WALLETS[2].browseDeepLink!(url)).toContain('solflare.com/ul/v1/browse/');
+    expect(SUPPORTED_WALLETS[3].browseDeepLink!(url)).toContain('backpack.app');
     expect(isMobileUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)')).toBe(true);
     expect(isMobileUserAgent('Mozilla/5.0 (Macintosh)')).toBe(false);
     expect(inWalletBrowser('Phantom/1.0')).toBe(true);
+    expect(inWalletBrowser('Mozilla/5.0 JupiterMobile/2.0')).toBe(true);
     expect(WALLET_CONNECT_COPY.headline.toLowerCase()).toContain('control');
     expect(WALLET_CONNECT_COPY.body).toMatch(/never stores or sees your private keys/i);
     expect(WALLET_CONNECT_COPY.body).toMatch(/own volition/i);
+  });
+});
+
+describe('wallet standard matching', () => {
+  it('matches Jupiter under either Standard name and lists leftover wallets', () => {
+    const jup = SUPPORTED_WALLETS[0];
+    const wallets = [
+      { adapter: { name: 'Jupiter' }, readyState: 'Installed' },
+      { adapter: { name: 'Mobile Wallet Adapter' }, readyState: 'Installed' },
+      { adapter: { name: 'Phantom' }, readyState: 'Installed' },
+      { adapter: { name: 'Weird Wallet' }, readyState: 'Unsupported' },
+    ];
+    expect(findSupportedAdapter(wallets, jup)?.adapter.name).toBe('Jupiter');
+    expect(findSupportedAdapter([{ adapter: { name: 'Jupiter Wallet' } }], jup)?.adapter.name).toBe('Jupiter Wallet');
+    expect(extraDetectedWallets(wallets).map((w) => w.adapter.name)).toEqual(['Mobile Wallet Adapter']);
+    expect(JUPITER_MOBILE_STEPS.length).toBeGreaterThanOrEqual(4);
   });
 });
 
