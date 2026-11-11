@@ -46,6 +46,11 @@ async function main() {
     try { rt.applyActiveWeightSet(rlog); } catch (e) { rlog('warn', `retrained weights: load failed (${(e as Error).message}); using the hand-built set`); }
   }
   rlog('info', `retrain flags: RETRAINED_WEIGHTS=${rf.load ? 'on' : 'off'} WEIGHTS_HOT_RELOAD=${rf.hotReload ? 'on' : 'off'} RETRAIN_SCHEDULE=${rf.schedule ? 'on' : 'off'}`);
+  try {
+    const { pumpAgeFromEnv, describePumpAge } = await import('../src/lib/pump-age');
+    const pa = pumpAgeFromEnv(process.env);
+    rlog('info', pa ? describePumpAge(pa) : 'pump-age filter: off');
+  } catch (e) { rlog('warn', `pump-age flags: failed to read (${(e as Error).message})`); }
   const { startEngine } = await import('../src/lib/engine');
   const { startCollector } = await import('../src/lib/market-data');
   const { startFlowCollectors } = await import('../src/lib/flow-collector');

@@ -386,7 +386,9 @@ async function scanTickInner(gen: number): Promise<string> {
 
     stage('rank');
     const weights = await getWeights();
-    const ranked = rankCandidates([...pairs.values()], c, weights);
+    const { pumpAgeFromEnv } = await import('./pump-age');
+    const paScan = pumpAgeFromEnv(process.env);
+    const ranked = rankCandidates([...pairs.values()], paScan?.waiveMinTokenAge ? { ...c, minTokenAgeHours: 0 } : c, weights);
     for (const r of ranked) { setPrice(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
     for (const [m, p] of pairs) { if (p.priceChange) mem.pairChange.set(m, p.priceChange); notePairFlow(m, p); }
     const eligible = ranked.filter((r) => !r.rejected);
@@ -399,6 +401,14 @@ async function scanTickInner(gen: number): Promise<string> {
     let minScore = c.minCompositeScore;
     for (const a of accounts) minScore = Math.min(minScore, effectiveConfig(c, await accountSettings(a.id, c, a.settings)).minCompositeScore);
     const qualified = eligible.filter((r) => r.composite >= minScore).sort((a, b) => b.composite - a.composite);
+    if (paScan) {
+      const impulse = paScan.impulseHours;
+      qualified.sort((a, b) => {
+        const ia = a.ageHours != null && a.ageHours >= 0 && a.ageHours <= impulse ? 1 : 0;
+        const ib = b.ageHours != null && b.ageHours >= 0 && b.ageHours <= impulse ? 1 : 0;
+        return ib - ia || b.composite - a.composite;
+      });
+    }
     const topScore = eligible.reduce((m, r) => Math.max(m, r.composite), 0);
     let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore} (top ${topScore.toFixed(3)})`;
 
@@ -489,6 +499,26 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       const ban = reentryBan(last, Date.now(), hours);
       if (ban) { if (feedbackLogged(`reentry:${cand.mint}`)) await log('info', `re-entry cooldown: skipped ${cand.symbol} (last live close ${ban.why}; ${Math.floor(ban.minutesLeft / 60)}h${ban.minutesLeft % 60}m left)`, a.id); return false; }
     }
+  }
+  const { pumpAgeFromEnv, resolvePumpAge } = await import('./pump-age');
+  const paCfg = pumpAgeFromEnv(process.env);
+  let pumpHours: number | null = null;
+  if (paCfg) {
+    const ev = await resolvePumpAge({
+      mint: cand.mint,
+      pairAddress: cand.pairAddress,
+      pairCreatedAtMs: cand.ageHours != null ? Date.now() - cand.ageHours * 3_600_000 : null,
+      price: cand.priceUsd,
+    });
+    if (ev?.block) {
+      if (feedbackLogged(`pumpage:${cand.mint}`)) await log('info', `pump-age: skipped ${cand.symbol} (${ev.reason})`, a.id);
+      return false;
+    }
+    if (ev?.downWeight && cand.composite < c.minCompositeScore + ev.scoreBump) {
+      if (feedbackLogged(`pumpage:${cand.mint}`)) await log('info', `pump-age: down-weighted ${cand.symbol} score ${cand.composite.toFixed(3)} < ${(c.minCompositeScore + ev.scoreBump).toFixed(3)} (${ev.reason})`, a.id);
+      return false;
+    }
+    pumpHours = ev?.hoursSincePump ?? null;
   }
   const { equity, exposure, open } = await accountEquity(a);
   const narrative = narrativeOf(cand.symbol, cand.name);
@@ -739,12 +769,19 @@ async function journalExitHook(p: Position, observed: number, reason: string, ex
 async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra: { composite?: number; liquidityUsd?: number | null; currentPrice?: number } = {}) {
   const store = await import('./exit-plan-store');
   const currentPnlPct = source === 'recomputed' && extra.currentPrice ? (extra.currentPrice / p.entryPrice - 1) * 100 : undefined;
-  const plan = computeExitPlan({
+  let plan = computeExitPlan({
     priceChange: mem.pairChange.get(p.mint) ?? null,
     composite: extra.composite ?? p.compositeScore,
     liquidityUsd: extra.liquidityUsd ?? mem.liquidity.get(p.mint) ?? null,
     regime: mem.regime, history: store.pastTrades(), currentPnlPct,
   });
+  const { pumpAgeFromEnv, peekPumpAge, applyImpulseExitBias } = await import('./pump-age');
+  const pa = pumpAgeFromEnv(process.env);
+  if (pa) {
+    const ev = peekPumpAge(p.mint);
+    const hoursAtEntry = ev?.pumpStartMs != null ? (p.openedAt.getTime() - ev.pumpStartMs) / 3_600_000 : ev?.hoursSincePump ?? null;
+    plan = applyImpulseExitBias(plan, hoursAtEntry, pa);
+  }
   if (!planWithinBounds(plan)) throw new Error(`plan outside hard bounds: ${describePlan(plan)}`);
   const lowSeen = mem.lowest.get(p.id);
   planAnnounced.add(p.id);
@@ -1197,6 +1234,11 @@ export async function startEngine() {
   const plan = c.ownerPlan;
   await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s; owner plan ${plan.enabled ? `on (${plan.maxOpenPositions} pos, SL ${plan.stopLossPct}% / TP ${plan.takeProfitPct}%${plan.tpLadder.length ? `, partials ${plan.tpLadder.map((r) => `${r.sellPct}%@+${r.gainPct}%`).join(' ')}` : ''}${plan.breakEvenTriggerPct !== null ? `, BE after +${plan.breakEvenTriggerPct}%` : ''}${plan.trailingStopPct !== null ? `, trail ${plan.trailingStopPct}% armed +${plan.trailingArmPct ?? 0}%` : ''}, sweep ${plan.sweepArmed ? 'armed' : 'paused'})` : 'off'}`);
   if (adaptiveExitsOn(c, true)) await log('info', `adaptive exits ON for live owner trades: per-trade plan from volatility, score, liquidity, regime and past trades; hard bounds SL ${HARD_BOUNDS.minStopPct}-${HARD_BOUNDS.maxStopPct}%, partial +${HARD_BOUNDS.minPartialPct}-${HARD_BOUNDS.maxPartialPct}% selling ${HARD_BOUNDS.minPartialSellPct}-${HARD_BOUNDS.maxPartialSellPct}%, trail ${HARD_BOUNDS.minTrailPct}-${HARD_BOUNDS.maxTrailPct}%, final <= +${HARD_BOUNDS.maxFinalPct}%, daily loss stop ${plan.maxDailyLossPct}%; fixed owner exits are the fallback`);
+  {
+    const { pumpAgeFromEnv, describePumpAge } = await import('./pump-age');
+    const pa = pumpAgeFromEnv(process.env);
+    await log('info', pa ? describePumpAge(pa) : 'pump-age filter: off');
+  }
   if (process.env.ENGINE_DISABLED === 'true') { mem.lastScanSummary = 'engine disabled (ENGINE_DISABLED=true)'; return; }
   mem.timers.push(setInterval(() => void scanTick(), c.tradeFrequencySeconds * 1000));
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));

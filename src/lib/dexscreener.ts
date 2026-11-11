@@ -39,6 +39,8 @@ export async function discoverSolanaMints(): Promise<string[]> {
   }
   // Broaden the universe with DexScreener pair search (30 pairs per query), Solana only.
   const queries = (process.env.SCAN_SEARCH_QUERIES ?? 'pump,pumpswap,raydium,meteora,solana').split(',').map((q) => q.trim()).filter(Boolean);
+  // When the pump-age filter is on, also search pump.fun so graduations show up even if they missed the profile feeds.
+  if (['on', 'true', '1', 'yes'].includes((process.env.PUMP_AGE_FILTER ?? '').trim().toLowerCase()) && !queries.includes('pump.fun')) queries.push('pump.fun');
   const searches = await Promise.allSettled(queries.map((q) => getJson<{ pairs?: DexPair[] }>(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`)));
   for (const r of searches) {
     if (r.status !== 'fulfilled') continue;
@@ -46,6 +48,16 @@ export async function discoverSolanaMints(): Promise<string[]> {
     for (const p of r.value.pairs ?? []) if (p.chainId === 'solana' && p.baseToken?.address) mints.add(p.baseToken.address);
   }
   if (ok === 0) throw new Error('All DexScreener discovery feeds failed');
+  // Fresh GeckoTerminal new_pools (listings + pump.fun graduations) when PUMP_AGE_FILTER is on.
+  try {
+    const { pumpAgeFromEnv, mergeMints } = await import('./pump-age');
+    const pa = pumpAgeFromEnv(process.env);
+    if (pa?.discoverFreshPools) {
+      const { fetchNewSolanaPools } = await import('./gecko');
+      const fresh = await fetchNewSolanaPools(2);
+      if (fresh.length) return mergeMints([...mints], fresh.map((x) => x.mint));
+    }
+  } catch { /* discovery must still return the DexScreener set */ }
   return [...mints];
 }
 

@@ -51,6 +51,8 @@ export TRADE_REVIEW_SCHEDULE=on  # writes logs/reviews/YYYY-MM-DD.md + flags.jso
 # export JOURNAL_FEEDBACK=on     # trade less of flagged setups: +0.025 score bar per flagged entry-time setup, max +0.05
 # Holder-sell exit: creator or a top-10 non-pool holder sells >= 20% of its bag (>= 0.1% of supply) or >= 1% of supply -> exit now.
 export HOLDER_SELL_EXIT=on       # 3-4 RPC calls per open position every HOLDER_WATCH_SEC (120 s); baseline in logs/holder-baselines.json
+
+export PUMP_AGE_FILTER=on         # impulse 0-6h favored; block late+below-anchor; fresh new_pools; waived min token age
 # Re-entry cooldown is on by default in code: REENTRY_COOLDOWN_HOURS=24 after a losing live close (0 disables).
 export CLETUS_DEMO=0
 export NEXT_RUNTIME=nodejs

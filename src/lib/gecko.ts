@@ -68,3 +68,57 @@ export async function minuteCandles(pool: string, limit = 100): Promise<Candle[]
   });
   return r.limited ? null : r.v;
 }
+
+/** 5-minute candles for pump-age (up to ~25h at limit=300). Null when rate-limited. */
+export async function fiveMinuteCandles(pool: string, limit = 300): Promise<Candle[] | null> {
+  const r = await cached(`ohlcv5m:${pool}:${limit}`, 60_000, async () => {
+    const res = await fetch(`${GT}/networks/solana/pools/${pool}/ohlcv/minute?aggregate=5&limit=${limit}&currency=usd`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+    if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
+    return parseOhlcv(await res.json());
+  });
+  return r.limited ? null : r.v;
+}
+
+export interface FreshPool { mint: string; pool: string; createdAt: string | null; symbol?: string }
+
+/** Parse GeckoTerminal /networks/{network}/new_pools JSON (data + included tokens). */
+export function parseNewPools(json: unknown): FreshPool[] {
+  const root = json as { data?: Array<{ type?: string; id?: string; attributes?: { address?: string; pool_created_at?: string }; relationships?: { base_token?: { data?: { id?: string } } } }>; included?: Array<{ id?: string; type?: string; attributes?: { address?: string; symbol?: string } }> };
+  const included = new Map<string, { address?: string; symbol?: string }>();
+  for (const inc of root.included ?? []) {
+    if (inc?.id) included.set(inc.id, inc.attributes ?? {});
+  }
+  const out: FreshPool[] = [];
+  const seen = new Set<string>();
+  for (const d of root.data ?? []) {
+    if (d?.type && d.type !== 'pool') continue;
+    const pool = d.attributes?.address ?? String(d.id ?? '').replace(/^solana[_/]/, '');
+    const baseId = d.relationships?.base_token?.data?.id;
+    const inc = baseId ? included.get(baseId) : undefined;
+    const mint = inc?.address ?? (baseId ? String(baseId).replace(/^solana[_/]/, '') : '');
+    if (!mint || !pool || seen.has(mint)) continue;
+    seen.add(mint);
+    out.push({ mint, pool, createdAt: d.attributes?.pool_created_at ?? null, symbol: inc?.symbol });
+  }
+  return out;
+}
+
+/** Recent Solana pools from GeckoTerminal (new listings / pump.fun graduations appear here). */
+export async function fetchNewSolanaPools(pages = 1): Promise<FreshPool[]> {
+  const n = Math.max(1, Math.min(3, pages));
+  const out: FreshPool[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= n; page++) {
+    const r = await cached(`new_pools:${page}`, 60_000, async () => {
+      const res = await fetch(`${GT}/networks/solana/new_pools?page=${page}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+      if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
+      return parseNewPools(await res.json());
+    });
+    for (const p of r.v ?? []) {
+      if (seen.has(p.mint)) continue;
+      seen.add(p.mint);
+      out.push(p);
+    }
+  }
+  return out;
+}
