@@ -82,7 +82,7 @@ export async function fastPriceFromSignature(sig: string, mint: string, solUsd: 
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const tx = await rpc<{ meta?: TxMetaLike } | null>('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 0 }], { timeoutMs: p.txTimeoutMs });
+      const tx = await rpc<{ meta?: TxMetaLike } | null>('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 1 }], { timeoutMs: p.txTimeoutMs });
       if (tx?.meta) return priceFromSwapMeta(tx.meta, mint, solUsd)?.priceUsd ?? null;
     } catch { /* fall through to retry / null */ }
     if (attempt === 0) await sleep(p.retryDelayMs);
