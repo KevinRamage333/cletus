@@ -154,6 +154,8 @@ export interface ScanCandidate {
   /** Expected Jupiter fee per side (bps): 50 for tokens < 24 h old, else 10. Already netted out of `composite`. */
   estFeeBps?: number;
   rejected?: string;
+  /** The 6 liquidity-score inputs at scan time (journaled at entry so retraining can use real trades). */
+  terms?: Record<LiquidityTerm, number>;
 }
 
 export interface ScanFilters {
@@ -177,6 +179,7 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
       priceUsd: price, marketCap: mcap, volume24h: v24, liquidityUsd: p.liquidity?.usd ?? null, ageHours,
       priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: scoreFor(f.signalWeightSet, signals, p, weights),
     };
+    try { c.terms = liquidityTerms(signals, p); } catch { /* journal-only field */ }
     // Fee-aware score: expectedFeeBps includes Jupiter's age-based platform fee and the 0.5% operator fee (50 bps,
     // which replaces the platform fee when the referral program is active). feePenalty nets the extra round-trip cost.
     c.estFeeBps = expectedFeeBps(ageHours);

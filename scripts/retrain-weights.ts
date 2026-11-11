@@ -93,6 +93,12 @@ async function run(apply: boolean, cfg: ReturnType<typeof baseCfg>) {
     await app.end();
     for (const r of rows) { try { const s = JSON.parse(r.signals); if (Number.isFinite(s.liquidityBuild) && Number.isFinite(s.velocitySurge)) closed.push({ liquidityBuild: s.liquidityBuild, velocitySurge: s.velocitySurge, momentum: s.momentum ?? 0, pnlPct: Number(r.pnlPct) }); } catch { /* */ } }
   } catch (e) { console.log(`closed trades unavailable (${(e as Error).message.slice(0, 80)}); IC veto skipped`); }
+  // Journaled trades (TRADE_JOURNAL=on) carry all 6 terms at entry: once there are enough, use them alone (full-score IC).
+  try {
+    const { readJournalTrades } = await import('../src/lib/trade-journal');
+    const full: ClosedTrade[] = readJournalTrades().filter((t) => t.exit && t.entry.terms).map((t) => ({ liquidityBuild: t.entry.terms!.liquidityBuild, velocitySurge: t.entry.terms!.velocitySurge, momentum: t.entry.signals.momentum ?? 0, pnlPct: t.exit!.pnlPct, terms: t.entry.terms as ClosedTrade['terms'] }));
+    if (full.length >= 20) { closed.length = 0; closed.push(...full); console.log(`IC veto: ${full.length} journaled trades with all 6 terms`); }
+  } catch { /* journal optional */ }
 
   const byPool = new Map<string, Bar[]>();
   for (const r of bars) { const a = byPool.get(r.pool) ?? []; a.push({ t: Number(r.t), o: Number(r.open), h: Number(r.high), l: Number(r.low), c: Number(r.close), v: Number(r.volume_usd) }); byPool.set(r.pool, a); }

@@ -180,7 +180,11 @@ export function trainFitness(decisions: Decision[], c: Candidate, split: Split, 
   return { fitness: r4(mean - 0.5 * sd), trades, folds };
 }
 
-export interface ClosedTrade { liquidityBuild: number; velocitySurge: number; momentum: number; pnlPct: number }
+export interface ClosedTrade {
+  liquidityBuild: number; velocitySurge: number; momentum: number; pnlPct: number;
+  /** All 6 liquidity terms at entry, from the trade journal (TRADE_JOURNAL=on). */
+  terms?: Partial<Record<keyof TermWeights, number>> | null;
+}
 /**
  * Diagnostic on real closed trades (live + paper). Their entry snapshot only stores the classic 8 signals, so this
  * uses the 3 liquidity terms that can be rebuilt (liquidityBuild, velocitySurge, antiChase = 1 - momentum) and
@@ -188,6 +192,11 @@ export interface ClosedTrade { liquidityBuild: number; velocitySurge: number; mo
  */
 export function closedTradeIc(w: TermWeights, trades: ClosedTrade[]): number | null {
   if (trades.length < 3) return null;
+  // Full 6-term score when every trade carries journaled terms; otherwise the 3-term partial below.
+  const keys = Object.keys(w) as Array<keyof TermWeights>;
+  if (trades.every((t) => t.terms && keys.every((k) => Number.isFinite(t.terms![k])))) {
+    return spearman(trades.map((t) => keys.reduce((a, k) => a + w[k] * clamp(t.terms![k] as number, 0, 1), 0)), trades.map((t) => t.pnlPct));
+  }
   const s = trades.map((t) => w.liquidityBuild * t.liquidityBuild + w.velocitySurge * t.velocitySurge + w.antiChase * (1 - clamp(t.momentum, 0, 1)));
   return spearman(s, trades.map((t) => t.pnlPct));
 }
