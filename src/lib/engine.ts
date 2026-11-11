@@ -28,6 +28,7 @@ import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
 import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, memoizeFor, type TickFence } from './watchdog';
 import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
+import { fastPriceOn, fastPriceParams, fastPriceFromSignature, acceptFastPrice, TrailingDebounce } from './fast-price';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
 interface EngineMemory {
@@ -733,19 +734,46 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
 }
 
 const fastChecks = new Map<string, number>();
-/** Called from the Helius WebSocket when a position's pool account changes: re-price that token now. */
-async function onPoolChange(mint: string) {
+/** Called from the Helius WebSocket when a position's pool changes: re-price that token now. */
+function onPoolChange(mint: string, signature?: string) {
+  if (fastPriceOn()) {
+    // Logs mode: keep the latest swap per mint (trailing debounce) so a burst of swaps still ends with a check.
+    fastDebounce ??= new TrailingDebounce<string | undefined>(Number(process.env.WS_EXIT_DEBOUNCE_MS ?? 1000), (m, sig) => void fastRecheck(m, sig));
+    fastDebounce.push(mint, signature);
+    return;
+  }
   const now = Date.now();
   if (now - (fastChecks.get(mint) ?? 0) < Number(process.env.WS_EXIT_DEBOUNCE_MS ?? 1000)) return;
   fastChecks.set(mint, now);
+  void fastRecheck(mint);
+}
+let fastDebounce: TrailingDebounce<string | undefined> | null = null;
+const fastStats = { onchain: 0, rejected: 0, fallback: 0 };
+export const fastPriceStats = () => ({ ...fastStats });
+/** Heartbeat suffix when FAST_PRICE_WS=on: WebSocket health and how often the on-chain price was used. */
+async function fastHb(): Promise<string> {
+  if (!fastPriceOn()) return '';
+  const w = (await import('./helius')).wsStatus();
+  return `; fast price: ws ${w.connected ? 'up' : 'down'} (${w.subscriptions} subs, ${w.events} events, last msg ${w.lastMessageAgoSec ?? '-'}s ago, ${w.staleReconnects} stale reconnects), on-chain ${fastStats.onchain} / rejected ${fastStats.rejected} / fallback ${fastStats.fallback}`;
+}
+
+async function fastRecheck(mint: string, signature?: string) {
   try {
     const c = getConfig();
-    const st = await getEngineState();
-    const px = (await fetchFastPrices([mint])).get(mint);
+    let px: number | undefined;
+    if (signature && fastPriceOn()) {
+      // On-chain price from the swap itself (bounded by a deadline); Jupiter Price is the fallback.
+      const fp = fastPriceParams();
+      const onchain = await withDeadline(fastPriceFromSignature(signature, mint, mem.solPrice), fp.txTimeoutMs * 2 + fp.retryDelayMs + 1000, 'fast price').catch(() => null);
+      if (onchain && acceptFastPrice(onchain, mem.prices.get(mint), fp.maxJumpPct)) { px = onchain; fastStats.onchain++; }
+      else if (onchain) fastStats.rejected++;
+    }
+    if (!px) { px = (await fetchFastPrices([mint])).get(mint); if (px && signature) fastStats.fallback++; }
     if (!px) return;
     setPrice(mint, px);
+    const st = await getEngineState();
     const open = await prisma.position.findMany({ where: { status: 'open', mint } });
-    await mapLimit(open, 4, (p) => evaluatePosition(p, px, st.killSwitch, c));
+    await mapLimit(open, 4, (p) => evaluatePosition(p, px!, st.killSwitch, c));
   } catch { /* polling is the backstop */ }
 }
 
@@ -777,7 +805,7 @@ async function monitorTickInner(gen: number): Promise<void> {
     const open = await prisma.position.findMany({ where: { status: 'open' } });
     // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
     const { syncPoolSubscriptions } = await import('./helius');
-    syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m) => void onPoolChange(m));
+    syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m, sig) => onPoolChange(m, sig));
     if (!open.length) {
       void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
       return;
@@ -1089,7 +1117,7 @@ export async function startEngine() {
   // Heartbeat: proves both loops are alive (a silent log used to be the only symptom of a hang).
   const hbMin = envNum('HEARTBEAT_MINUTES', 5);
   const liveHb = async () => (c.mode === 'live' ? `; ${(await import('./live-drawdown')).describeLive((await import('./live-drawdown')).loadState())}` : '');
-  if (hbMin > 0) mem.timers.push(setInterval(() => void liveHb().catch(() => '').then((extra) => log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})${extra}`)).catch(() => undefined), hbMin * 60_000));
+  if (hbMin > 0) mem.timers.push(setInterval(() => void liveHb().catch(() => '').then(async (extra) => log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})${extra}${await fastHb()}`)).catch(() => undefined), hbMin * 60_000));
   // Suspend detector: the box can be paused while idle; the process then sees a wall-clock jump that its
   // monotonic clock (and ps start time) never sees. Log it so a silent gap isn't mistaken for a hang or restart.
   {
