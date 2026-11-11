@@ -1,3 +1,5 @@
+import { cleanClaims } from './brain/claims-filter';
+import { CLAIMS_POLICY } from './brain/persona';
 /**
  * Self-reflection journal: Cletus writes an entry after each closed trade and once a day.
  * Entries are shown in the UI and fed back to the Brain.
@@ -48,8 +50,8 @@ async function polish(draft: string, instruction: string): Promise<{ text: strin
   const key = geminiKey();
   if (!key) return { text: draft, source: 'heuristic' };
   try {
-    const r = await generate({ apiKey: key, model: getConfig().geminiModel, temperature: 0.6, maxOutputTokens: 400, system: `${SYSTEM_PROMPT}\n\nYou are writing in your private self-reflection journal, first person, <= 150 words, honest about mistakes, no hype, no promises.`, contents: [{ role: 'user', parts: [{ text: `${instruction}\n\nFacts (do not invent others):\n${draft}` }] }] });
-    return r.text ? { text: r.text, source: 'gemini' } : { text: draft, source: 'heuristic' };
+    const r = await generate({ apiKey: key, model: getConfig().geminiModel, temperature: 0.6, maxOutputTokens: 400, system: `${SYSTEM_PROMPT}\n\n${CLAIMS_POLICY}\n\nYou are writing in your private self-reflection journal, first person, <= 150 words, honest about mistakes, no hype, no promises.`, contents: [{ role: 'user', parts: [{ text: `${instruction}\n\nFacts (do not invent others):\n${draft}` }] }] });
+    return r.text ? { text: cleanClaims(r.text), source: 'gemini' } : { text: draft, source: 'heuristic' };
   } catch {
     return { text: draft, source: 'heuristic' };
   }

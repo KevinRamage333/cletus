@@ -1,3 +1,5 @@
+import { log } from '../logger';
+import { filterClaims } from './claims-filter';
 import { prisma } from '../db';
 import { getConfig } from '../config';
 import { TOOL_DECLARATIONS, runTool, selfSnapshot, type ToolContext, type ToolDecl } from './tools';
@@ -74,7 +76,10 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
     const m = await mockBrainAnswer(opts.message, (n, a) => runTool(n, a, ctx), history);
     return { answer: m.text, source: 'mock', tools: m.tools, sources: [] };
   });
-  const reply: Omit<BrainReply, 'conversationId'> = { ...result, provider };
+  // Output filter: strip/rewrite regulatory-compliance, licensing/approval and return-promise claims.
+  const filtered = filterClaims(result.answer ?? '');
+  const reply: Omit<BrainReply, 'conversationId'> = { ...result, answer: filtered.text, provider };
+  if (filtered.changed) await log('warn', `Brain claims filter rewrote a reply (${filtered.hits.join(', ')})`, opts.accountId).catch(() => {});
   if (errors.length) reply.error = errors.map((e) => `${e.provider}: ${e.error}`).join('; ');
   if (refused) reply.refused = refused;
   await prisma.chatMessage.create({ data: { conversationId: conv.id, role: 'model', content: reply.answer, meta: JSON.stringify({ source: reply.source, model: reply.model, tools: reply.tools, sources: reply.sources, refused: reply.refused, error: reply.error }) } });

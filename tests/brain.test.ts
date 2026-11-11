@@ -101,7 +101,7 @@ describe('brain: persona & context', () => {
     expect(SYSTEM_PROMPT).toMatch(/You are Cletus, an AI with master's-degree-level expertise/);
     expect(SYSTEM_PROMPT).not.toMatch(/staking|CLETUS token/i);
     const s = buildSystemInstruction({ snapshot: '{"mode":"simulation"}', briefing: 'BRIEFING-X', journal: 'JOURNAL-Y' });
-    expect(s).toMatch(/REGULATORY COMPLIANCE/);
+    expect(s).toMatch(/INTERNAL RISK LIMITS/); expect(s).toMatch(/CLAIMS POLICY/); expect(s).not.toMatch(/REGULATORY COMPLIANCE|operate under a strict regulatory/);
     expect(s).toMatch(/ADVISORY ONLY/);
     expect(s).toContain('BRIEFING-X');
     expect(s).toContain('JOURNAL-Y');

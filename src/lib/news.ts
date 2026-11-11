@@ -1,3 +1,4 @@
+import { cleanClaims } from './brain/claims-filter';
 /**
  * World-events module: public RSS feeds + Solana market context on a schedule,
  * stored in the DB, condensed into a rolling "world briefing" for the Brain.
@@ -156,7 +157,7 @@ export async function refreshNewsAndBriefing(): Promise<{ newItems: number; feed
           const { xaiWebSearch } = await import('./xai');
           const headlines = recent.slice(0, 30).map((i) => `- [${i.category}] ${i.title} (${i.source})`).join('\n');
           const r = await xaiWebSearch(`Write my world briefing for today. RSS headlines for reference:\n${headlines}`, `${SYSTEM_PROMPT}\n\nYou are writing your own internal "world briefing": a concise (<= 250 words) markdown digest of what matters for Solana micro-cap trading risk today. Sections: Tone, Crypto, Fed & macro, World, What it means for me. Use web search for the latest facts. No price predictions, no advice.`);
-          content = r.text; source = 'xai-web'; sources = r.sources.slice(0, 8);
+          content = cleanClaims(r.text); source = 'xai-web'; sources = r.sources.slice(0, 8);
         } catch (e) { await log('warn', `briefing: xAI failed (${(e as Error).message})`); }
         continue;
       }
@@ -168,7 +169,7 @@ export async function refreshNewsAndBriefing(): Promise<{ newItems: number; feed
           system: `${SYSTEM_PROMPT}\n\nYou are writing your own internal "world briefing": a concise (<= 250 words) markdown digest of what matters for Solana micro-cap trading risk today. Sections: Tone, Crypto, Fed & macro, World, What it means for me. No price predictions, no advice.`,
           contents: [{ role: 'user', parts: [{ text: `Market: SOL ${market.solPriceUsd ?? 'n/a'} USD (${market.solChange24h ?? 'n/a'}% 24h). Trending on DexScreener: ${market.trending.map((t) => t.symbol).join(', ')}.\n\nHeadlines:\n${headlines}\n\nUse Google Search to verify and fill in anything major that is missing.` }] }],
         });
-        if (r.text) { content = r.text; source = r.grounding.length ? 'gemini-grounded' : 'gemini'; sources = r.grounding.slice(0, 8); }
+        if (r.text) { content = cleanClaims(r.text); source = r.grounding.length ? 'gemini-grounded' : 'gemini'; sources = r.grounding.slice(0, 8); }
       } catch (e) {
         await log('warn', `briefing: Gemini failed, using heuristic (${(e as Error).message})`);
       }

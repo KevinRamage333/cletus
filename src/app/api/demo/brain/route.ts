@@ -1,3 +1,4 @@
+import { filterClaims } from '@/lib/brain/claims-filter';
 import { NextResponse } from 'next/server';
 import { generate, toContents } from '@/lib/brain/gemini';
 import { SYSTEM_PROMPT, secComplianceContext } from '@/lib/brain/persona';
@@ -34,7 +35,8 @@ export async function POST(req: Request) {
       contents: toContents([...history, { role: 'user', content: message }]),
       temperature: 0.6, maxOutputTokens: 2048, timeoutMs: 25_000,
     });
-    return NextResponse.json({ answer: r.text || '(no answer)', source: 'gemini', model: r.model });
+    const f = filterClaims(r.text || '(no answer)');
+    return NextResponse.json({ answer: f.text, source: 'gemini', model: r.model, filtered: f.changed || undefined });
   } catch {
     return NextResponse.json({ error: 'The Brain is busy right now. Try again in a minute.' }, { status: 503 });
   }
