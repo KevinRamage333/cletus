@@ -15,3 +15,4 @@ dev.log
 screenshot-error.png
 prisma/sqlite/
 .vercel
+data/backtest/

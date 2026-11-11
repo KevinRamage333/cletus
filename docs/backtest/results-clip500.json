@@ -1,0 +1,3734 @@
+{
+  "generatedAt": "2026-11-11T17:16:55.033Z",
+  "datasetHash": "d6c54ef5b488",
+  "pools": 60,
+  "candles": 46789,
+  "start": "2026-10-29T13:15:00.000Z",
+  "end": "2026-11-11T17:15:00.000Z",
+  "discoveredVia": {
+    "collector": 19,
+    "topvol": 10,
+    "trending24h": 31
+  },
+  "sizeUsd": 500,
+  "presets": {
+    "DEGEN": {
+      "label": "Degen $10k-$500k",
+      "snapshots": 42943,
+      "eligible": 1861,
+      "eligiblePools": 13,
+      "rejects": {
+        "mcap outside $X": 35498,
+        "Nh move > N%": 44,
+        "pool liquidity < $X": 5079,
+        "Nh volume < $X": 143,
+        "Nh volume < N% of mcap": 316,
+        "younger than Nh": 2
+      },
+      "liveThreshold": 0.75,
+      "exits": {
+        "stopLossPct": 5,
+        "takeProfitPct": 15,
+        "breakEvenTriggerPct": 5,
+        "enableTrailingStop": true,
+        "trailingStopPct": 5,
+        "holdTimeMinutes": 6,
+        "stalePositionMinutes": 45,
+        "staleBandPct": 2
+      },
+      "ladder": [
+        {
+          "gainPct": 10,
+          "sellPct": 33
+        },
+        {
+          "gainPct": 18,
+          "sellPct": 50
+        }
+      ],
+      "split": {
+        "trainFrom": "2026-11-08T03:00:00.000Z",
+        "testFrom": "2026-11-10T06:15:00.000Z",
+        "testTo": "2026-11-11T16:25:00.000Z"
+      },
+      "ic": {
+        "volumeSpike": {
+          "train": 0.03199280309289957,
+          "trainFwd60": 0.07079001851662851,
+          "test": -0.2551882015893266,
+          "testFwd60": -0.08497787596943493
+        },
+        "momentum": {
+          "train": -0.09989371093664448,
+          "trainFwd60": -0.0978577844859292,
+          "test": -0.14451080556916557,
+          "testFwd60": -0.08620819531440799
+        },
+        "breakout": {
+          "train": -0.04019887050550702,
+          "trainFwd60": -0.06485608961622935,
+          "test": -0.15847534644158848,
+          "testFwd60": -0.06904697257300406
+        },
+        "velocitySurge": {
+          "train": 0.035994945382581106,
+          "trainFwd60": 0.06284403467527913,
+          "test": 0.026891580424824153,
+          "testFwd60": 0.05857352428000073
+        },
+        "microCapHeat": {
+          "train": -0.07984944248377138,
+          "trainFwd60": -0.04260353314144547,
+          "test": -0.1383946465086438,
+          "testFwd60": -0.029739022172572138
+        },
+        "nanoCapSpike": {
+          "train": null,
+          "trainFwd60": null,
+          "test": null,
+          "testFwd60": null
+        },
+        "liquidityBuild": {
+          "train": 0.07325049782186438,
+          "trainFwd60": 0.03181771324512078,
+          "test": 0.19631813534019546,
+          "testFwd60": 0.1043732034459998
+        },
+        "volMcapRatio": {
+          "train": -0.08692664514582323,
+          "trainFwd60": 0.0928493646755216,
+          "test": -0.3001969910706913,
+          "testFwd60": -0.15377340872532871
+        },
+        "volumePersistence": {
+          "train": 0.014001769695926853,
+          "trainFwd60": 0.0347195819037589,
+          "test": -0.003858971514179455,
+          "testFwd60": -0.005735259713034272
+        },
+        "trendAlignment": {
+          "train": -0.02368214828262122,
+          "trainFwd60": -0.08695147359897108,
+          "test": -0.1032346372700119,
+          "testFwd60": -0.12637095698823353
+        },
+        "freshness": {
+          "train": -0.08114330620415504,
+          "trainFwd60": 0.03266947402143794,
+          "test": -0.019469035719705687,
+          "testFwd60": 0.08757589232224601
+        },
+        "dipInUptrend": {
+          "train": 0.04974748711140475,
+          "trainFwd60": -0.00462989382100236,
+          "test": -0.06520406438261282,
+          "testFwd60": -0.09978012603883968
+        },
+        "higherLows": {
+          "train": -0.1279423540628664,
+          "trainFwd60": -0.06734126912806737,
+          "test": -0.01130339908002855,
+          "testFwd60": 0.023107410744273502
+        },
+        "liveComposite": {
+          "train": -0.038054630977005406,
+          "trainFwd60": -0.0009501618382492309,
+          "test": -0.22641684215778612,
+          "testFwd60": -0.11972511373193749
+        }
+      },
+      "chosen": {
+        "name": "icAll",
+        "thr": 0.525,
+        "ek": "E0",
+        "obj": -2.2915332292041906,
+        "n": 15
+      },
+      "joint": {
+        "name": "icAll",
+        "thr": 0.525,
+        "ek": "hold60_sl5_tp15",
+        "obj": -0.04907076733435112,
+        "n": 13
+      },
+      "weights": {
+        "live": {
+          "volumeSpike": 0.1325,
+          "momentum": 0.1811,
+          "breakout": 0.094,
+          "velocitySurge": 0.1331,
+          "microCapHeat": 0.1322,
+          "nanoCapSpike": 0.1188,
+          "liquidityBuild": 0.1102,
+          "volMcapRatio": 0.098
+        },
+        "defaults": {
+          "volumeSpike": 0.15,
+          "momentum": 0.15,
+          "breakout": 0.12,
+          "velocitySurge": 0.12,
+          "microCapHeat": 0.15,
+          "nanoCapSpike": 0.12,
+          "liquidityBuild": 0.1,
+          "volMcapRatio": 0.09
+        },
+        "icBase": {
+          "volumeSpike": 0.2265,
+          "velocitySurge": 0.2549,
+          "liquidityBuild": 0.5186
+        },
+        "icAll": {
+          "volumeSpike": 0.1561,
+          "velocitySurge": 0.1756,
+          "liquidityBuild": 0.3573,
+          "volumePersistence": 0.0683,
+          "dipInUptrend": 0.2427
+        },
+        "icShippable": {
+          "volumeSpike": 0.1561,
+          "velocitySurge": 0.1756,
+          "liquidityBuild": 0.3573,
+          "volumePersistence": 0.0683,
+          "dipInUptrend": 0.2427
+        }
+      },
+      "results": {
+        "baseline": {
+          "train": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "test": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "testCustomer": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          }
+        },
+        "chosen": {
+          "train": {
+            "n": 15,
+            "hitRate": 0.26666666666666666,
+            "avgWinPct": 5.726582346364776,
+            "avgLossPct": -3.4453258763039116,
+            "expectancyPct": -0.9994836835922618,
+            "profitFactor": 0.604411209638677,
+            "sharpePerTrade": -0.19973349961723194,
+            "totalPnlUsd": -74.96127626942325,
+            "maxDrawdownPct": 0.7700166017625256,
+            "reasons": {
+              "time_exit": 14,
+              "take_profit": 1
+            }
+          },
+          "test": {
+            "n": 57,
+            "hitRate": 0.14035087719298245,
+            "avgWinPct": 5.719568274807968,
+            "avgLossPct": -6.367996554682592,
+            "expectancyPct": -4.671496227736549,
+            "profitFactor": 0.14664063607071395,
+            "sharpePerTrade": -0.9261968115488322,
+            "totalPnlUsd": -1331.3764249049218,
+            "maxDrawdownPct": 13.313764249049218,
+            "reasons": {
+              "stop_loss": 28,
+              "time_exit": 26,
+              "break_even": 1,
+              "trailing_stop": 1,
+              "take_profit": 1
+            }
+          },
+          "testCustomer": {
+            "n": 57,
+            "hitRate": 0.14035087719298245,
+            "avgWinPct": 5.100392288954902,
+            "avgLossPct": -6.844020113388957,
+            "expectancyPct": -5.16761135516526,
+            "profitFactor": 0.12167075704113664,
+            "sharpePerTrade": -1.0422252525092728,
+            "totalPnlUsd": -1472.769236222106,
+            "maxDrawdownPct": 14.72769236222106,
+            "reasons": {
+              "stop_loss": 28,
+              "time_exit": 26,
+              "break_even": 1,
+              "trailing_stop": 1,
+              "take_profit": 1
+            }
+          }
+        },
+        "joint": {
+          "train": {
+            "n": 13,
+            "hitRate": 0.38461538461538464,
+            "avgWinPct": 12.088431849031537,
+            "avgLossPct": -3.8818083089808075,
+            "expectancyPct": 2.260591751793171,
+            "profitFactor": 1.9463274083279998,
+            "sharpePerTrade": 0.27145755666037474,
+            "totalPnlUsd": 146.93846386655787,
+            "maxDrawdownPct": 1.174283396719358,
+            "reasons": {
+              "stale_exit": 4,
+              "take_profit": 5,
+              "trailing_stop": 1,
+              "stop_loss": 2,
+              "break_even": 1
+            }
+          },
+          "test": {
+            "n": 56,
+            "hitRate": 0.125,
+            "avgWinPct": 7.869582356064931,
+            "avgLossPct": -7.60995064377178,
+            "expectancyPct": -5.675009018792193,
+            "profitFactor": 0.1477310568086956,
+            "sharpePerTrade": -1.0042057105807771,
+            "totalPnlUsd": -1589.0025252618234,
+            "maxDrawdownPct": 15.890025252618234,
+            "reasons": {
+              "stop_loss": 44,
+              "trailing_stop": 7,
+              "take_profit": 3,
+              "break_even": 2
+            }
+          },
+          "testCustomer": {
+            "n": 56,
+            "hitRate": 0.125,
+            "avgWinPct": 7.03725132990022,
+            "avgLossPct": -8.050116868272553,
+            "expectancyPct": -6.1641958435009565,
+            "profitFactor": 0.12488286008857695,
+            "sharpePerTrade": -1.1121798543875918,
+            "totalPnlUsd": -1725.9748361802722,
+            "maxDrawdownPct": 17.25974836180272,
+            "reasons": {
+              "stop_loss": 44,
+              "trailing_stop": 7,
+              "take_profit": 3,
+              "break_even": 2
+            }
+          }
+        }
+      },
+      "matchedTest": {
+        "live": [
+          {
+            "q": 0.02,
+            "n": 23,
+            "meanNetPct": -5.609028722617597,
+            "winRate": 0.13043478260869565
+          },
+          {
+            "q": 0.05,
+            "n": 56,
+            "meanNetPct": -4.93989261128944,
+            "winRate": 0.16071428571428573
+          },
+          {
+            "q": 0.1,
+            "n": 113,
+            "meanNetPct": -5.193652973094119,
+            "winRate": 0.11504424778761062
+          },
+          {
+            "q": 0.25,
+            "n": 282,
+            "meanNetPct": -5.209297372990716,
+            "winRate": 0.08865248226950355
+          },
+          {
+            "q": 1,
+            "n": 1127,
+            "meanNetPct": -4.551703711220342,
+            "winRate": 0.07275953859804792
+          }
+        ],
+        "defaults": [
+          {
+            "q": 0.02,
+            "n": 23,
+            "meanNetPct": -5.815964220001095,
+            "winRate": 0.08695652173913043
+          },
+          {
+            "q": 0.05,
+            "n": 56,
+            "meanNetPct": -4.989081232718165,
+            "winRate": 0.16071428571428573
+          },
+          {
+            "q": 0.1,
+            "n": 113,
+            "meanNetPct": -5.190892003266718,
+            "winRate": 0.11504424778761062
+          },
+          {
+            "q": 0.25,
+            "n": 282,
+            "meanNetPct": -5.134674050801701,
+            "winRate": 0.08865248226950355
+          },
+          {
+            "q": 1,
+            "n": 1127,
+            "meanNetPct": -4.551703711220342,
+            "winRate": 0.07275953859804792
+          }
+        ],
+        "icBase": [
+          {
+            "q": 0.02,
+            "n": 23,
+            "meanNetPct": -4.535735050387494,
+            "winRate": 0.043478260869565216
+          },
+          {
+            "q": 0.05,
+            "n": 56,
+            "meanNetPct": -4.118351800387028,
+            "winRate": 0.08928571428571429
+          },
+          {
+            "q": 0.1,
+            "n": 113,
+            "meanNetPct": -4.676277549162047,
+            "winRate": 0.07079646017699115
+          },
+          {
+            "q": 0.25,
+            "n": 282,
+            "meanNetPct": -4.448305004949887,
+            "winRate": 0.08156028368794327
+          },
+          {
+            "q": 1,
+            "n": 1127,
+            "meanNetPct": -4.5517037112203385,
+            "winRate": 0.07275953859804792
+          }
+        ],
+        "icAll": [
+          {
+            "q": 0.02,
+            "n": 23,
+            "meanNetPct": -4.928928682786427,
+            "winRate": 0.13043478260869565
+          },
+          {
+            "q": 0.05,
+            "n": 56,
+            "meanNetPct": -4.686986495769467,
+            "winRate": 0.14285714285714285
+          },
+          {
+            "q": 0.1,
+            "n": 113,
+            "meanNetPct": -4.713706474808201,
+            "winRate": 0.11504424778761062
+          },
+          {
+            "q": 0.25,
+            "n": 282,
+            "meanNetPct": -4.575720727346887,
+            "winRate": 0.09574468085106383
+          },
+          {
+            "q": 1,
+            "n": 1127,
+            "meanNetPct": -4.5517037112203385,
+            "winRate": 0.07275953859804792
+          }
+        ],
+        "icShippable": [
+          {
+            "q": 0.02,
+            "n": 23,
+            "meanNetPct": -4.928928682786427,
+            "winRate": 0.13043478260869565
+          },
+          {
+            "q": 0.05,
+            "n": 56,
+            "meanNetPct": -4.686986495769467,
+            "winRate": 0.14285714285714285
+          },
+          {
+            "q": 0.1,
+            "n": 113,
+            "meanNetPct": -4.713706474808201,
+            "winRate": 0.11504424778761062
+          },
+          {
+            "q": 0.25,
+            "n": 282,
+            "meanNetPct": -4.575720727346887,
+            "winRate": 0.09574468085106383
+          },
+          {
+            "q": 1,
+            "n": 1127,
+            "meanNetPct": -4.5517037112203385,
+            "winRate": 0.07275953859804792
+          }
+        ]
+      },
+      "atLiveThresholdTest": {
+        "live": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "defaults": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "icBase": {
+          "n": 8,
+          "hitRate": 0.125,
+          "avgWinPct": 2.42865370020686,
+          "avgLossPct": -5.690700478512489,
+          "expectancyPct": -4.675781206172569,
+          "profitFactor": 0.06096798274852635,
+          "sharpePerTrade": -1.1955191846386108,
+          "totalPnlUsd": -187.0312482469053,
+          "maxDrawdownPct": 1.870312482469053
+        },
+        "icAll": {
+          "n": 1,
+          "hitRate": 0,
+          "avgWinPct": null,
+          "avgLossPct": -2.879750178615581,
+          "expectancyPct": -2.879750178615581,
+          "profitFactor": 0,
+          "sharpePerTrade": null,
+          "totalPnlUsd": -14.398750893078613,
+          "maxDrawdownPct": 0.14398750893078613
+        },
+        "icShippable": {
+          "n": 1,
+          "hitRate": 0,
+          "avgWinPct": null,
+          "avgLossPct": -2.879750178615581,
+          "expectancyPct": -2.879750178615581,
+          "profitFactor": 0,
+          "sharpePerTrade": null,
+          "totalPnlUsd": -14.398750893078613,
+          "maxDrawdownPct": 0.14398750893078613
+        }
+      },
+      "liveThresholdSweepTest": [
+        {
+          "thr": 0.3,
+          "n": 216,
+          "hit": 0.10648148148148148,
+          "exp": -5.040110857882693
+        },
+        {
+          "thr": 0.4,
+          "n": 94,
+          "hit": 0.1276595744680851,
+          "exp": -5.085801962131727
+        },
+        {
+          "thr": 0.5,
+          "n": 39,
+          "hit": 0.1794871794871795,
+          "exp": -5.049986151672022
+        },
+        {
+          "thr": 0.55,
+          "n": 27,
+          "hit": 0.14814814814814814,
+          "exp": -5.146496232868602
+        },
+        {
+          "thr": 0.6,
+          "n": 11,
+          "hit": 0,
+          "exp": -7.46228399312288
+        },
+        {
+          "thr": 0.65,
+          "n": 6,
+          "hit": 0,
+          "exp": -8.398399738888436
+        },
+        {
+          "thr": 0.7,
+          "n": 2,
+          "hit": 0,
+          "exp": -8.476674058934606
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "liveThresholdSweepTrain": [
+        {
+          "thr": 0.3,
+          "n": 63,
+          "hit": 0.14285714285714285,
+          "exp": -2.5536926575163674
+        },
+        {
+          "thr": 0.4,
+          "n": 21,
+          "hit": 0.14285714285714285,
+          "exp": -2.682097494924953
+        },
+        {
+          "thr": 0.5,
+          "n": 8,
+          "hit": 0.375,
+          "exp": -0.5060032907100234
+        },
+        {
+          "thr": 0.55,
+          "n": 4,
+          "hit": 0.5,
+          "exp": 1.3530846376161247
+        },
+        {
+          "thr": 0.6,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.65,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.7,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "walkForward": {
+        "picks": [
+          {
+            "fold": 1,
+            "name": "defaults",
+            "thr": 0.325,
+            "ek": "E0",
+            "obj": -3.006548686540023,
+            "n": 26
+          },
+          {
+            "fold": 1,
+            "joint": true,
+            "name": "icAll",
+            "thr": 0.45,
+            "ek": "hold60_sl10_tp15",
+            "obj": -0.07517457728610788,
+            "n": 12
+          },
+          {
+            "fold": 2,
+            "name": "live",
+            "thr": 0.325,
+            "ek": "E0",
+            "obj": -2.9376822255786252,
+            "n": 40
+          },
+          {
+            "fold": 2,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.675,
+            "ek": "hold30_sl10_tp15",
+            "obj": -1.1995394123836889,
+            "n": 14
+          },
+          {
+            "fold": 3,
+            "name": "icBase",
+            "thr": 0.675,
+            "ek": "E0",
+            "obj": -2.904194036963386,
+            "n": 35
+          },
+          {
+            "fold": 3,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.65,
+            "ek": "hold30_sl10_tp15",
+            "obj": -1.422912874970963,
+            "n": 40
+          }
+        ],
+        "baseline": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0,
+          "reasons": {}
+        },
+        "chosen": {
+          "n": 97,
+          "hitRate": 0.09278350515463918,
+          "avgWinPct": 6.271383690164418,
+          "avgLossPct": -5.250748292881048,
+          "expectancyPct": -4.181684500639717,
+          "profitFactor": 0.12215240152273403,
+          "sharpePerTrade": -0.9326573736881992,
+          "totalPnlUsd": -2028.1169828102575,
+          "maxDrawdownPct": 20.281169828102573,
+          "reasons": {
+            "time_exit": 56,
+            "stop_loss": 38,
+            "take_profit": 3
+          }
+        },
+        "joint": {
+          "n": 66,
+          "hitRate": 0.19696969696969696,
+          "avgWinPct": 6.760033508256284,
+          "avgLossPct": -7.666015051189575,
+          "expectancyPct": -4.8245206379653895,
+          "profitFactor": 0.21629509144990902,
+          "sharpePerTrade": -0.6411496053111183,
+          "totalPnlUsd": -1592.0918105285873,
+          "maxDrawdownPct": 15.930821400549528,
+          "reasons": {
+            "stale_exit": 3,
+            "time_exit": 29,
+            "take_profit": 4,
+            "stop_loss": 23,
+            "break_even": 3,
+            "trailing_stop": 4
+          }
+        }
+      },
+      "calibration": {
+        "live": {
+          "trainN": 729,
+          "testN": 1127,
+          "baseWinRateTrain": 0.0877914951989026,
+          "brierModel": 0.07459263461219423,
+          "brierBase": 0.06769154786029818,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 567,
+              "winRate": 0.06878306878306878,
+              "meanRetPct": -4.052848749206417,
+              "wilsonLo": 0.0507214309831395,
+              "wilsonHi": 0.09264863875249293
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 309,
+              "winRate": 0.061488673139158574,
+              "meanRetPct": -4.974782093744638,
+              "wilsonLo": 0.03971410713869394,
+              "wilsonHi": 0.09403281142968059
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 144,
+              "winRate": 0.0763888888888889,
+              "meanRetPct": -5.171622741551369,
+              "wilsonLo": 0.043186883373293565,
+              "wilsonHi": 0.13160559722756573
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 64,
+              "winRate": 0.078125,
+              "meanRetPct": -5.300875723264443,
+              "wilsonLo": 0.03383067809543546,
+              "wilsonHi": 0.1701975287864777
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 32,
+              "winRate": 0.25,
+              "meanRetPct": -4.0169478056724355,
+              "wilsonLo": 0.13252243982621553,
+              "wilsonHi": 0.42106891770246624
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 9,
+              "winRate": 0,
+              "meanRetPct": -7.236863978498052,
+              "wilsonLo": 0,
+              "wilsonHi": 0.2991527535509594
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 2,
+              "winRate": 0,
+              "meanRetPct": -8.476674058934606,
+              "wilsonLo": 0,
+              "wilsonHi": 0.6576280471103807
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 440,
+              "winRate": 0.07272727272727272,
+              "meanRetPct": -3.4461410410287594,
+              "wilsonLo": 0.05198419544785601,
+              "wilsonHi": 0.10086673154952322
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 218,
+              "winRate": 0.0871559633027523,
+              "meanRetPct": -3.671933691709483,
+              "wilsonLo": 0.056505172223514165,
+              "wilsonHi": 0.13210507941549313
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 48,
+              "winRate": 0.16666666666666666,
+              "meanRetPct": -2.3471167386462106,
+              "wilsonLo": 0.08695410039453222,
+              "wilsonHi": 0.29578100037396254
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 15,
+              "winRate": 0.13333333333333333,
+              "meanRetPct": -3.087560909925542,
+              "wilsonLo": 0.037360469891359285,
+              "wilsonHi": 0.3788249920651624
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 8,
+              "winRate": 0.375,
+              "meanRetPct": -0.5060032907100234,
+              "wilsonLo": 0.13684175946152105,
+              "wilsonHi": 0.6942621454161982
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "iso": [
+            {
+              "x": 0.0459,
+              "y": 0,
+              "n": 8
+            },
+            {
+              "x": 0.0515,
+              "y": 0.0476,
+              "n": 21
+            },
+            {
+              "x": 0.0594,
+              "y": 0.0526,
+              "n": 57
+            },
+            {
+              "x": 0.1714,
+              "y": 0.0764,
+              "n": 288
+            },
+            {
+              "x": 0.2114,
+              "y": 0.0787,
+              "n": 127
+            },
+            {
+              "x": 0.3263,
+              "y": 0.0872,
+              "n": 172
+            },
+            {
+              "x": 0.3777,
+              "y": 0.1852,
+              "n": 27
+            },
+            {
+              "x": 0.4827,
+              "y": 0.2222,
+              "n": 18
+            },
+            {
+              "x": 0.5522,
+              "y": 0.25,
+              "n": 8
+            },
+            {
+              "x": 0.5736,
+              "y": 0.6667,
+              "n": 3
+            }
+          ]
+        },
+        "chosen": {
+          "trainN": 729,
+          "testN": 1127,
+          "baseWinRateTrain": 0.0877914951989026,
+          "brierModel": 0.06927337530901204,
+          "brierBase": 0.06769154786029818,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 146,
+              "winRate": 0.0410958904109589,
+              "meanRetPct": -5.227453338979992,
+              "wilsonLo": 0.018968259650858584,
+              "wilsonHi": 0.08675404977456132
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 596,
+              "winRate": 0.0738255033557047,
+              "meanRetPct": -4.37149944402748,
+              "wilsonLo": 0.055451575733714654,
+              "wilsonHi": 0.09765817857475612
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 205,
+              "winRate": 0.07804878048780488,
+              "meanRetPct": -4.304624517957638,
+              "wilsonLo": 0.04860992484636982,
+              "wilsonHi": 0.12301105488180696
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 103,
+              "winRate": 0.05825242718446602,
+              "meanRetPct": -4.905492625159794,
+              "wilsonLo": 0.02696812975798207,
+              "wilsonHi": 0.12130370443394317
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 54,
+              "winRate": 0.12962962962962962,
+              "meanRetPct": -4.816094446981562,
+              "wilsonLo": 0.06423639229487982,
+              "wilsonHi": 0.2442198053206771
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 17,
+              "winRate": 0.058823529411764705,
+              "meanRetPct": -5.989442220673476,
+              "wilsonLo": 0.010460130645164236,
+              "wilsonHi": 0.26982545203562797
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 6,
+              "winRate": 0.3333333333333333,
+              "meanRetPct": -1.9241403254397895,
+              "wilsonLo": 0.09676933255921684,
+              "wilsonHi": 0.7000116786584712
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 45,
+              "winRate": 0.08888888888888889,
+              "meanRetPct": -3.5423824374479578,
+              "wilsonLo": 0.035110548134203154,
+              "wilsonHi": 0.207338511683657
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 444,
+              "winRate": 0.07882882882882883,
+              "meanRetPct": -3.6160454925563084,
+              "wilsonLo": 0.057223699077109676,
+              "wilsonHi": 0.10765959894611996
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 144,
+              "winRate": 0.06944444444444445,
+              "meanRetPct": -3.2245111609604162,
+              "wilsonLo": 0.03815472872177902,
+              "wilsonHi": 0.12310975975778289
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 74,
+              "winRate": 0.14864864864864866,
+              "meanRetPct": -2.6480938689165203,
+              "wilsonLo": 0.08507972301585125,
+              "wilsonHi": 0.24689700921986849
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 16,
+              "winRate": 0.0625,
+              "meanRetPct": -3.7297364420551276,
+              "wilsonLo": 0.011119057308331216,
+              "wilsonHi": 0.2832926836802987
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 4,
+              "winRate": 0.25,
+              "meanRetPct": -0.02004829580449441,
+              "wilsonLo": 0.045586062644636216,
+              "wilsonHi": 0.6993639475573634
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 2,
+              "winRate": 1,
+              "meanRetPct": 2.584645919739624,
+              "wilsonLo": 0.3423719528896193,
+              "wilsonHi": 1
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "iso": [
+            {
+              "x": 0.3456,
+              "y": 0.0739,
+              "n": 595
+            },
+            {
+              "x": 0.4163,
+              "y": 0.0984,
+              "n": 61
+            },
+            {
+              "x": 0.5714,
+              "y": 0.1515,
+              "n": 66
+            },
+            {
+              "x": 0.6795,
+              "y": 0.4,
+              "n": 5
+            },
+            {
+              "x": 0.7114,
+              "y": 1,
+              "n": 2
+            }
+          ]
+        }
+      },
+      "brainCalibration": {
+        "n": 1856,
+        "pools": 13,
+        "baseWinRate": 0.07866379310344827,
+        "baseCi": [
+          0.06726787286918627,
+          0.0918002972373432
+        ],
+        "meanNetPct": -4.099987461648836,
+        "scorePredictive": false,
+        "testIcLive": -0.22641684215778612,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 1534,
+            "winRate": 0.0710560625814863,
+            "meanRetPct": -4.010401897400562,
+            "wilsonLo": 0.05924205123820005,
+            "wilsonHi": 0.08501311782472555
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 271,
+            "winRate": 0.0959409594095941,
+            "meanRetPct": -4.5865119489897515,
+            "wilsonLo": 0.06631471299503656,
+            "wilsonHi": 0.13686268082016467
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 40,
+            "winRate": 0.275,
+            "meanRetPct": -3.3147589026799538,
+            "wilsonLo": 0.1610785343314309,
+            "wilsonHi": 0.4283525083312458
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 9,
+            "winRate": 0,
+            "meanRetPct": -7.236863978498052,
+            "wilsonLo": 0,
+            "wilsonHi": 0.2991527535509594
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0,
+            "meanRetPct": -8.476674058934606,
+            "wilsonLo": 0,
+            "wilsonHi": 0.6576280471103807
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ]
+      },
+      "exitSensitivity": [
+        {
+          "k": "hold60_sl5_tp15",
+          "trainN": 13,
+          "trainExp": 2.260591751793171,
+          "testN": 56,
+          "testExp": -5.675009018792193,
+          "testHit": 0.125,
+          "testPF": 0.1477310568086956
+        },
+        {
+          "k": "hold120_sl5_tp15",
+          "trainN": 13,
+          "trainExp": 2.260591751793171,
+          "testN": 56,
+          "testExp": -5.675009018792193,
+          "testHit": 0.125,
+          "testPF": 0.1477310568086956
+        },
+        {
+          "k": "hold60_sl5_tp25",
+          "trainN": 13,
+          "trainExp": 1.556088184936547,
+          "testN": 56,
+          "testExp": -5.838663581407292,
+          "testHit": 0.125,
+          "testPF": 0.12315352738688502
+        },
+        {
+          "k": "hold120_sl5_tp25",
+          "trainN": 13,
+          "trainExp": 1.4501718848205791,
+          "testN": 56,
+          "testExp": -5.838663581407292,
+          "testHit": 0.125,
+          "testPF": 0.12315352738688502
+        },
+        {
+          "k": "hold60_sl10_tp15",
+          "trainN": 13,
+          "trainExp": 1.5203922879461953,
+          "testN": 55,
+          "testExp": -4.803094818981006,
+          "testHit": 0.2727272727272727,
+          "testPF": 0.33295331503940834
+        },
+        {
+          "k": "hold120_sl10_tp15",
+          "trainN": 13,
+          "trainExp": 1.5203922879461953,
+          "testN": 55,
+          "testExp": -4.88773623839322,
+          "testHit": 0.2727272727272727,
+          "testPF": 0.3290849625079605
+        }
+      ],
+      "exitCurrent": {
+        "k": "hold6_sl5_tp15"
+      }
+    },
+    "BALANCED": {
+      "label": "Balanced $250k-$5M",
+      "snapshots": 42943,
+      "eligible": 8207,
+      "eligiblePools": 28,
+      "rejects": {
+        "younger than Nh": 7,
+        "Nh move > N%": 136,
+        "pool liquidity < $X": 1479,
+        "mcap outside $X": 25258,
+        "Nh volume < N% of mcap": 7849,
+        "Nh volume < $X": 7
+      },
+      "liveThreshold": 0.75,
+      "exits": {
+        "stopLossPct": 5,
+        "takeProfitPct": 15,
+        "breakEvenTriggerPct": 5,
+        "enableTrailingStop": true,
+        "trailingStopPct": 5,
+        "holdTimeMinutes": 6,
+        "stalePositionMinutes": 45,
+        "staleBandPct": 2
+      },
+      "ladder": [
+        {
+          "gainPct": 10,
+          "sellPct": 33
+        },
+        {
+          "gainPct": 18,
+          "sellPct": 50
+        }
+      ],
+      "split": {
+        "trainFrom": "2026-11-08T02:40:00.000Z",
+        "testFrom": "2026-11-10T06:37:00.000Z",
+        "testTo": "2026-11-11T17:15:00.000Z"
+      },
+      "ic": {
+        "volumeSpike": {
+          "train": -0.009102237315222004,
+          "trainFwd60": 0.014607634321080021,
+          "test": -0.16534093736008784,
+          "testFwd60": 0.0012834291772383178
+        },
+        "momentum": {
+          "train": -0.1584675229242035,
+          "trainFwd60": -0.12809792361166736,
+          "test": -0.18707230765189667,
+          "testFwd60": -0.08669785752686687
+        },
+        "breakout": {
+          "train": -0.11726202146800092,
+          "trainFwd60": -0.09890476843229257,
+          "test": -0.13716871155185925,
+          "testFwd60": -0.061935138279952826
+        },
+        "velocitySurge": {
+          "train": 0.01412260612655012,
+          "trainFwd60": 0.024644665697167268,
+          "test": 0.021140328750439055,
+          "testFwd60": 0.028416538448155997
+        },
+        "microCapHeat": {
+          "train": -0.09818635091495931,
+          "trainFwd60": -0.06390630517361202,
+          "test": -0.12054973967794597,
+          "testFwd60": -0.0602390813838154
+        },
+        "nanoCapSpike": {
+          "train": null,
+          "trainFwd60": null,
+          "test": null,
+          "testFwd60": null
+        },
+        "liquidityBuild": {
+          "train": 0.10508373435440899,
+          "trainFwd60": 0.10616302526124623,
+          "test": 0.15978922759858033,
+          "testFwd60": 0.0876916548650959
+        },
+        "volMcapRatio": {
+          "train": -0.030396912519088597,
+          "trainFwd60": 0.06699241261889997,
+          "test": -0.20058875407417667,
+          "testFwd60": -0.023439516801565495
+        },
+        "volumePersistence": {
+          "train": -0.003152165892059277,
+          "trainFwd60": 0.009909870952599409,
+          "test": 0.02325688520954657,
+          "testFwd60": 0.021739612439390175
+        },
+        "trendAlignment": {
+          "train": 0.000813803864687517,
+          "trainFwd60": -0.11322445115030125,
+          "test": -0.019119143547613748,
+          "testFwd60": -0.08972335122007741
+        },
+        "freshness": {
+          "train": -0.06635304523015963,
+          "trainFwd60": 0.021397805708292746,
+          "test": -0.0306013746808172,
+          "testFwd60": 0.11781360650498429
+        },
+        "dipInUptrend": {
+          "train": -0.009667959668487658,
+          "trainFwd60": 0.00719975413819525,
+          "test": -0.09693589722908015,
+          "testFwd60": -0.06794888151724059
+        },
+        "higherLows": {
+          "train": -0.07185972453226966,
+          "trainFwd60": -0.06791370059453557,
+          "test": -0.04372867582485233,
+          "testFwd60": 0.026243842076090918
+        },
+        "liveComposite": {
+          "train": -0.09704037418300451,
+          "trainFwd60": -0.049164535246748006,
+          "test": -0.15660916524047366,
+          "testFwd60": -0.03961645081672368
+        }
+      },
+      "chosen": {
+        "name": "icBase",
+        "thr": 0.75,
+        "ek": "E0",
+        "obj": -1.843931677273858,
+        "n": 322
+      },
+      "joint": {
+        "name": "icBase",
+        "thr": 0.75,
+        "ek": "hold30_sl10_tp15",
+        "obj": -1.6904598966350712,
+        "n": 126
+      },
+      "weights": {
+        "live": {
+          "volumeSpike": 0.1325,
+          "momentum": 0.1811,
+          "breakout": 0.094,
+          "velocitySurge": 0.1331,
+          "microCapHeat": 0.1322,
+          "nanoCapSpike": 0.1188,
+          "liquidityBuild": 0.1102,
+          "volMcapRatio": 0.098
+        },
+        "defaults": {
+          "volumeSpike": 0.15,
+          "momentum": 0.15,
+          "breakout": 0.12,
+          "velocitySurge": 0.12,
+          "microCapHeat": 0.15,
+          "nanoCapSpike": 0.12,
+          "liquidityBuild": 0.1,
+          "volMcapRatio": 0.09
+        },
+        "icBase": {
+          "velocitySurge": 0.1185,
+          "liquidityBuild": 0.8815
+        },
+        "icAll": {
+          "velocitySurge": 0.1185,
+          "liquidityBuild": 0.8815
+        },
+        "icShippable": {
+          "velocitySurge": 0.1185,
+          "liquidityBuild": 0.8815
+        }
+      },
+      "results": {
+        "baseline": {
+          "train": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "test": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "testCustomer": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          }
+        },
+        "chosen": {
+          "train": {
+            "n": 322,
+            "hitRate": 0.037267080745341616,
+            "avgWinPct": 3.528207740265906,
+            "avgLossPct": -1.940264180371951,
+            "expectancyPct": -1.7364701957519064,
+            "profitFactor": 0.07039030296790948,
+            "sharpePerTrade": -0.9005059237726202,
+            "totalPnlUsd": -2795.717015160567,
+            "maxDrawdownPct": 27.95717015160567,
+            "reasons": {
+              "time_exit": 314,
+              "stop_loss": 7,
+              "take_profit": 1
+            }
+          },
+          "test": {
+            "n": 617,
+            "hitRate": 0.059967585089141004,
+            "avgWinPct": 2.688647068335466,
+            "avgLossPct": -2.412923617063288,
+            "expectancyPct": -2.1069947428983724,
+            "profitFactor": 0.0710827062047565,
+            "sharpePerTrade": -0.8381456031054682,
+            "totalPnlUsd": -6500.078781841456,
+            "maxDrawdownPct": 65.00078781841455,
+            "reasons": {
+              "time_exit": 562,
+              "stop_loss": 53,
+              "take_profit": 2
+            }
+          },
+          "testCustomer": {
+            "n": 617,
+            "hitRate": 0.03889789303079417,
+            "avgWinPct": 3.1601707916450597,
+            "avgLossPct": -3.1380891678260667,
+            "expectancyPct": -2.893100125642425,
+            "profitFactor": 0.040756963766266516,
+            "sharpePerTrade": -1.1602097935582973,
+            "totalPnlUsd": -8925.213887606877,
+            "maxDrawdownPct": 89.25213887606877,
+            "reasons": {
+              "time_exit": 562,
+              "stop_loss": 53,
+              "take_profit": 2
+            }
+          }
+        },
+        "joint": {
+          "train": {
+            "n": 126,
+            "hitRate": 0.10317460317460317,
+            "avgWinPct": 8.162371303468975,
+            "avgLossPct": -2.389073931463202,
+            "expectancyPct": -1.300432756430518,
+            "profitFactor": 0.3930534984305195,
+            "sharpePerTrade": -0.2970351185688762,
+            "totalPnlUsd": -819.2726365512262,
+            "maxDrawdownPct": 8.326512963099667,
+            "reasons": {
+              "time_exit": 112,
+              "trailing_stop": 3,
+              "stop_loss": 5,
+              "take_profit": 5,
+              "break_even": 1
+            }
+          },
+          "test": {
+            "n": 255,
+            "hitRate": 0.1843137254901961,
+            "avgWinPct": 4.708269732992408,
+            "avgLossPct": -3.97644847201144,
+            "expectancyPct": -2.375735704814653,
+            "profitFactor": 0.26754725475436775,
+            "sharpePerTrade": -0.4474888799069888,
+            "totalPnlUsd": -3029.063023638687,
+            "maxDrawdownPct": 30.290630236386868,
+            "reasons": {
+              "time_exit": 202,
+              "trailing_stop": 5,
+              "stop_loss": 30,
+              "take_profit": 8,
+              "break_even": 10
+            }
+          },
+          "testCustomer": {
+            "n": 255,
+            "hitRate": 0.14901960784313725,
+            "avgWinPct": 4.936391803202654,
+            "avgLossPct": -4.571508581394,
+            "expectancyPct": -3.1546449946697925,
+            "profitFactor": 0.1890923442234813,
+            "sharpePerTrade": -0.5964543451535466,
+            "totalPnlUsd": -4022.172368203993,
+            "maxDrawdownPct": 40.22172368203993,
+            "reasons": {
+              "time_exit": 202,
+              "trailing_stop": 5,
+              "stop_loss": 30,
+              "take_profit": 8,
+              "break_even": 10
+            }
+          }
+        }
+      },
+      "matchedTest": {
+        "live": [
+          {
+            "q": 0.02,
+            "n": 105,
+            "meanNetPct": -3.9733928310123576,
+            "winRate": 0.17142857142857143
+          },
+          {
+            "q": 0.05,
+            "n": 262,
+            "meanNetPct": -3.807053734541367,
+            "winRate": 0.1450381679389313
+          },
+          {
+            "q": 0.1,
+            "n": 524,
+            "meanNetPct": -3.7378438373722136,
+            "winRate": 0.12404580152671756
+          },
+          {
+            "q": 0.25,
+            "n": 1309,
+            "meanNetPct": -3.5202145521032495,
+            "winRate": 0.09472880061115355
+          },
+          {
+            "q": 1,
+            "n": 5235,
+            "meanNetPct": -2.9955466015721477,
+            "winRate": 0.0830945558739255
+          }
+        ],
+        "defaults": [
+          {
+            "q": 0.02,
+            "n": 105,
+            "meanNetPct": -4.0638912614960745,
+            "winRate": 0.1619047619047619
+          },
+          {
+            "q": 0.05,
+            "n": 262,
+            "meanNetPct": -3.825131056994247,
+            "winRate": 0.14122137404580154
+          },
+          {
+            "q": 0.1,
+            "n": 524,
+            "meanNetPct": -3.8189875650140324,
+            "winRate": 0.1183206106870229
+          },
+          {
+            "q": 0.25,
+            "n": 1309,
+            "meanNetPct": -3.5288467789396836,
+            "winRate": 0.09396485867074103
+          },
+          {
+            "q": 1,
+            "n": 5235,
+            "meanNetPct": -2.9955466015721495,
+            "winRate": 0.0830945558739255
+          }
+        ],
+        "icBase": [
+          {
+            "q": 0.02,
+            "n": 105,
+            "meanNetPct": -1.1949105138431626,
+            "winRate": 0.08571428571428572
+          },
+          {
+            "q": 0.05,
+            "n": 262,
+            "meanNetPct": -1.5479875903967437,
+            "winRate": 0.07251908396946564
+          },
+          {
+            "q": 0.1,
+            "n": 524,
+            "meanNetPct": -1.6153465434395908,
+            "winRate": 0.06679389312977099
+          },
+          {
+            "q": 0.25,
+            "n": 1309,
+            "meanNetPct": -2.2154573152240653,
+            "winRate": 0.05500381970970206
+          },
+          {
+            "q": 1,
+            "n": 5235,
+            "meanNetPct": -2.995546601572158,
+            "winRate": 0.0830945558739255
+          }
+        ],
+        "icAll": [
+          {
+            "q": 0.02,
+            "n": 105,
+            "meanNetPct": -1.1949105138431626,
+            "winRate": 0.08571428571428572
+          },
+          {
+            "q": 0.05,
+            "n": 262,
+            "meanNetPct": -1.5479875903967437,
+            "winRate": 0.07251908396946564
+          },
+          {
+            "q": 0.1,
+            "n": 524,
+            "meanNetPct": -1.6153465434395908,
+            "winRate": 0.06679389312977099
+          },
+          {
+            "q": 0.25,
+            "n": 1309,
+            "meanNetPct": -2.2154573152240653,
+            "winRate": 0.05500381970970206
+          },
+          {
+            "q": 1,
+            "n": 5235,
+            "meanNetPct": -2.995546601572158,
+            "winRate": 0.0830945558739255
+          }
+        ],
+        "icShippable": [
+          {
+            "q": 0.02,
+            "n": 105,
+            "meanNetPct": -1.1949105138431626,
+            "winRate": 0.08571428571428572
+          },
+          {
+            "q": 0.05,
+            "n": 262,
+            "meanNetPct": -1.5479875903967437,
+            "winRate": 0.07251908396946564
+          },
+          {
+            "q": 0.1,
+            "n": 524,
+            "meanNetPct": -1.6153465434395908,
+            "winRate": 0.06679389312977099
+          },
+          {
+            "q": 0.25,
+            "n": 1309,
+            "meanNetPct": -2.2154573152240653,
+            "winRate": 0.05500381970970206
+          },
+          {
+            "q": 1,
+            "n": 5235,
+            "meanNetPct": -2.995546601572158,
+            "winRate": 0.0830945558739255
+          }
+        ]
+      },
+      "atLiveThresholdTest": {
+        "live": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "defaults": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "icBase": {
+          "n": 617,
+          "hitRate": 0.059967585089141004,
+          "avgWinPct": 2.688647068335466,
+          "avgLossPct": -2.412923617063288,
+          "expectancyPct": -2.1069947428983724,
+          "profitFactor": 0.0710827062047565,
+          "sharpePerTrade": -0.8381456031054682,
+          "totalPnlUsd": -6500.078781841456,
+          "maxDrawdownPct": 65.00078781841455
+        },
+        "icAll": {
+          "n": 617,
+          "hitRate": 0.059967585089141004,
+          "avgWinPct": 2.688647068335466,
+          "avgLossPct": -2.412923617063288,
+          "expectancyPct": -2.1069947428983724,
+          "profitFactor": 0.0710827062047565,
+          "sharpePerTrade": -0.8381456031054682,
+          "totalPnlUsd": -6500.078781841456,
+          "maxDrawdownPct": 65.00078781841455
+        },
+        "icShippable": {
+          "n": 617,
+          "hitRate": 0.059967585089141004,
+          "avgWinPct": 2.688647068335466,
+          "avgLossPct": -2.412923617063288,
+          "expectancyPct": -2.1069947428983724,
+          "profitFactor": 0.0710827062047565,
+          "sharpePerTrade": -0.8381456031054682,
+          "totalPnlUsd": -6500.078781841456,
+          "maxDrawdownPct": 65.00078781841455
+        }
+      },
+      "liveThresholdSweepTest": [
+        {
+          "thr": 0.3,
+          "n": 603,
+          "hit": 0.12106135986733002,
+          "exp": -3.673500256842658
+        },
+        {
+          "thr": 0.4,
+          "n": 243,
+          "hit": 0.13580246913580246,
+          "exp": -3.8504364223061125
+        },
+        {
+          "thr": 0.5,
+          "n": 78,
+          "hit": 0.1794871794871795,
+          "exp": -4.204607959905394
+        },
+        {
+          "thr": 0.55,
+          "n": 37,
+          "hit": 0.13513513513513514,
+          "exp": -5.257819514778797
+        },
+        {
+          "thr": 0.6,
+          "n": 15,
+          "hit": 0,
+          "exp": -6.904010438838561
+        },
+        {
+          "thr": 0.65,
+          "n": 6,
+          "hit": 0,
+          "exp": -8.398399738888436
+        },
+        {
+          "thr": 0.7,
+          "n": 2,
+          "hit": 0,
+          "exp": -8.476674058934606
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "liveThresholdSweepTrain": [
+        {
+          "thr": 0.3,
+          "n": 238,
+          "hit": 0.13445378151260504,
+          "exp": -2.825194224991156
+        },
+        {
+          "thr": 0.4,
+          "n": 91,
+          "hit": 0.18681318681318682,
+          "exp": -2.843997730915222
+        },
+        {
+          "thr": 0.5,
+          "n": 28,
+          "hit": 0.21428571428571427,
+          "exp": -2.2316895219175232
+        },
+        {
+          "thr": 0.55,
+          "n": 13,
+          "hit": 0.15384615384615385,
+          "exp": -4.405705026134806
+        },
+        {
+          "thr": 0.6,
+          "n": 1,
+          "hit": 0,
+          "exp": -7.65605873300733
+        },
+        {
+          "thr": 0.65,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.7,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "walkForward": {
+        "picks": [
+          {
+            "fold": 1,
+            "name": "icBase",
+            "thr": 0.65,
+            "ek": "E0",
+            "obj": -2.7788295688608238,
+            "n": 108
+          },
+          {
+            "fold": 1,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.625,
+            "ek": "hold60_sl10_tp15",
+            "obj": -2.221628485050395,
+            "n": 48
+          },
+          {
+            "fold": 2,
+            "name": "icBase",
+            "thr": 0.775,
+            "ek": "E0",
+            "obj": -1.8992958764993442,
+            "n": 223
+          },
+          {
+            "fold": 2,
+            "joint": true,
+            "name": "defaults",
+            "thr": 0.525,
+            "ek": "hold30_sl10_tp25",
+            "obj": -1.601914235342493,
+            "n": 14
+          },
+          {
+            "fold": 3,
+            "name": "icBase",
+            "thr": 0.775,
+            "ek": "E0",
+            "obj": -1.8438122408776407,
+            "n": 423
+          },
+          {
+            "fold": 3,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.75,
+            "ek": "hold30_sl10_tp15",
+            "obj": -1.7624395295994606,
+            "n": 181
+          }
+        ],
+        "baseline": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0,
+          "reasons": {}
+        },
+        "chosen": {
+          "n": 905,
+          "hitRate": 0.056353591160221,
+          "avgWinPct": 2.5426389481808376,
+          "avgLossPct": -2.2895322085884997,
+          "expectancyPct": -2.0172220108037084,
+          "profitFactor": 0.06632087435427267,
+          "sharpePerTrade": -0.8657745701049566,
+          "totalPnlUsd": -9127.929598886767,
+          "maxDrawdownPct": 91.27929598886767,
+          "reasons": {
+            "time_exit": 844,
+            "stop_loss": 58,
+            "take_profit": 3
+          }
+        },
+        "joint": {
+          "n": 307,
+          "hitRate": 0.1791530944625407,
+          "avgWinPct": 5.31651107029566,
+          "avgLossPct": -4.518970679217994,
+          "expectancyPct": -2.75691368826278,
+          "profitFactor": 0.2567729956059325,
+          "sharpePerTrade": -0.46765252956119585,
+          "totalPnlUsd": -4231.862511483366,
+          "maxDrawdownPct": 42.31862511483366,
+          "reasons": {
+            "break_even": 16,
+            "stale_exit": 53,
+            "trailing_stop": 11,
+            "stop_loss": 52,
+            "time_exit": 164,
+            "take_profit": 11
+          }
+        }
+      },
+      "calibration": {
+        "live": {
+          "trainN": 2937,
+          "testN": 5235,
+          "baseWinRateTrain": 0.09431392577459993,
+          "brierModel": 0.07680828394943298,
+          "brierBase": 0.07631572491900313,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 3340,
+              "winRate": 0.08323353293413174,
+              "meanRetPct": -2.74139846304486,
+              "wilsonLo": 0.07433717446095447,
+              "wilsonHi": 0.0930875025931261
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 1161,
+              "winRate": 0.059431524547803614,
+              "meanRetPct": -3.3394423010658514,
+              "wilsonLo": 0.047229277484998736,
+              "wilsonHi": 0.07453972527039737
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 454,
+              "winRate": 0.10572687224669604,
+              "meanRetPct": -3.5470963843537766,
+              "wilsonLo": 0.08067540528527199,
+              "wilsonHi": 0.13739477444501028
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 196,
+              "winRate": 0.12755102040816327,
+              "meanRetPct": -3.5357358145186217,
+              "wilsonLo": 0.08790839260179242,
+              "wilsonHi": 0.18151298913254116
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 69,
+              "winRate": 0.21739130434782608,
+              "meanRetPct": -3.4982166144655493,
+              "wilsonLo": 0.13640646957336042,
+              "wilsonHi": 0.328185192334121
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 13,
+              "winRate": 0,
+              "meanRetPct": -6.662062189593015,
+              "wilsonLo": 0,
+              "wilsonHi": 0.22810184305529166
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 2,
+              "winRate": 0,
+              "meanRetPct": -8.476674058934606,
+              "wilsonLo": 0,
+              "wilsonHi": 0.6576280471103807
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 1991,
+              "winRate": 0.09090909090909091,
+              "meanRetPct": -2.510668430419984,
+              "wilsonLo": 0.07905669330918844,
+              "wilsonHi": 0.10433711600379159
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 662,
+              "winRate": 0.08006042296072508,
+              "meanRetPct": -2.791810466230235,
+              "wilsonLo": 0.06172752961474721,
+              "wilsonHi": 0.1032390330031487
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 181,
+              "winRate": 0.1270718232044199,
+              "meanRetPct": -2.625006201079508,
+              "wilsonLo": 0.08618667391414771,
+              "wilsonHi": 0.18345825450023523
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 74,
+              "winRate": 0.17567567567567569,
+              "meanRetPct": -3.2619368966357745,
+              "wilsonLo": 0.10564108955494536,
+              "wilsonHi": 0.27772204789341126
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 28,
+              "winRate": 0.25,
+              "meanRetPct": -1.7481412570143564,
+              "wilsonLo": 0.12676334942200781,
+              "wilsonHi": 0.43356025240704604
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 1,
+              "winRate": 0,
+              "meanRetPct": -7.65605873300733,
+              "wilsonLo": 0,
+              "wilsonHi": 0.7934567085261071
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "iso": [
+            {
+              "x": 0.0188,
+              "y": 0.0476,
+              "n": 21
+            },
+            {
+              "x": 0.2901,
+              "y": 0.0881,
+              "n": 2610
+            },
+            {
+              "x": 0.3777,
+              "y": 0.1067,
+              "n": 178
+            },
+            {
+              "x": 0.4877,
+              "y": 0.1957,
+              "n": 92
+            },
+            {
+              "x": 0.6085,
+              "y": 0.25,
+              "n": 36
+            }
+          ]
+        },
+        "chosen": {
+          "trainN": 2937,
+          "testN": 5235,
+          "baseWinRateTrain": 0.09431392577459993,
+          "brierModel": 0.08300028727309486,
+          "brierBase": 0.07631572491900313,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 86,
+              "winRate": 0.23255813953488372,
+              "meanRetPct": -3.374123799607952,
+              "wilsonLo": 0.1558899158392809,
+              "wilsonHi": 0.3320978314848985
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 346,
+              "winRate": 0.1676300578034682,
+              "meanRetPct": -2.8401884466909277,
+              "wilsonLo": 0.1319669827226178,
+              "wilsonHi": 0.21059262139536017
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 694,
+              "winRate": 0.09077809798270893,
+              "meanRetPct": -2.725078716869882,
+              "wilsonLo": 0.07159627074752269,
+              "wilsonHi": 0.11446543723893153
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 1094,
+              "winRate": 0.0886654478976234,
+              "meanRetPct": -3.5727880196019894,
+              "wilsonLo": 0.07322809901359599,
+              "wilsonHi": 0.10698150499485111
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 759,
+              "winRate": 0.07905138339920949,
+              "meanRetPct": -3.338927246111013,
+              "wilsonLo": 0.061906785366317635,
+              "wilsonHi": 0.10043569831574689
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 837,
+              "winRate": 0.06810035842293907,
+              "meanRetPct": -3.24385022504803,
+              "wilsonLo": 0.05293186176456389,
+              "wilsonHi": 0.08721534313110256
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 828,
+              "winRate": 0.04710144927536232,
+              "meanRetPct": -2.8651653756085094,
+              "wilsonLo": 0.03464474461622522,
+              "wilsonHi": 0.06374129426425396
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 591,
+              "winRate": 0.06937394247038917,
+              "meanRetPct": -1.6705017559886806,
+              "wilsonLo": 0.051547173834262335,
+              "wilsonHi": 0.09276284079820452
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 450,
+              "winRate": 0.18666666666666668,
+              "meanRetPct": -2.141078567759314,
+              "wilsonLo": 0.1533723874137422,
+              "wilsonHi": 0.22526544569807483
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 519,
+              "winRate": 0.1252408477842004,
+              "meanRetPct": -2.703527098989222,
+              "wilsonLo": 0.09948921058362854,
+              "wilsonHi": 0.1564996013242227
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 709,
+              "winRate": 0.08321579689703808,
+              "meanRetPct": -2.9242152282528324,
+              "wilsonLo": 0.06506123811874177,
+              "wilsonHi": 0.10586256879712844
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 534,
+              "winRate": 0.08052434456928839,
+              "meanRetPct": -3.351685892840513,
+              "wilsonLo": 0.06032959699867339,
+              "wilsonHi": 0.10671140540798316
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 453,
+              "winRate": 0.03532008830022075,
+              "meanRetPct": -1.9331728656249656,
+              "wilsonLo": 0.021855600707036255,
+              "wilsonHi": 0.056599601271067314
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 272,
+              "winRate": 0.03676470588235294,
+              "meanRetPct": -1.8919880466292165,
+              "wilsonLo": 0.020090095538158444,
+              "wilsonHi": 0.0663421177320662
+            }
+          ],
+          "iso": [
+            {
+              "x": 0.3006,
+              "y": 0,
+              "n": 4
+            },
+            {
+              "x": 0.9344,
+              "y": 0.0941,
+              "n": 2922
+            },
+            {
+              "x": 0.96,
+              "y": 0.1818,
+              "n": 11
+            }
+          ]
+        }
+      },
+      "brainCalibration": {
+        "n": 8172,
+        "pools": 28,
+        "baseWinRate": 0.08712677435144396,
+        "baseCi": [
+          0.0812044624117203,
+          0.0934370815242581
+        ],
+        "meanNetPct": -2.8514096059124694,
+        "scorePredictive": false,
+        "testIcLive": -0.15660916524047366,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 7154,
+            "winRate": 0.0812133072407045,
+            "meanRetPct": -2.7789044942295,
+            "wilsonLo": 0.07510579486009335,
+            "wilsonHi": 0.0877703436674762
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 905,
+            "winRate": 0.12044198895027625,
+            "meanRetPct": -3.3369010286063023,
+            "wilsonLo": 0.10082476460496237,
+            "wilsonHi": 0.14326793537708074
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 97,
+            "winRate": 0.2268041237113402,
+            "meanRetPct": -2.9930402226239674,
+            "wilsonLo": 0.15481698841986685,
+            "wilsonHi": 0.319606265475351
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 14,
+            "winRate": 0,
+            "meanRetPct": -6.733061942694037,
+            "wilsonLo": 0,
+            "wilsonHi": 0.21531701192718142
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0,
+            "meanRetPct": -8.476674058934606,
+            "wilsonLo": 0,
+            "wilsonHi": 0.6576280471103807
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ]
+      },
+      "exitSensitivity": [
+        {
+          "k": "hold30_sl10_tp15",
+          "trainN": 126,
+          "trainExp": -1.300432756430518,
+          "testN": 255,
+          "testExp": -2.375735704814653,
+          "testHit": 0.1843137254901961,
+          "testPF": 0.26754725475436775
+        },
+        {
+          "k": "hold15_sl10_tp25",
+          "trainN": 222,
+          "trainExp": -1.5501661567565457,
+          "testN": 427,
+          "testExp": -2.2328075160888217,
+          "testHit": 0.11241217798594848,
+          "testPF": 0.14376533792024906
+        },
+        {
+          "k": "hold6_sl10_tp25",
+          "trainN": 320,
+          "trainExp": -1.6934090584912027,
+          "testN": 597,
+          "testExp": -2.0587911870176523,
+          "testHit": 0.05360134003350084,
+          "testPF": 0.05671220991259465
+        },
+        {
+          "k": "hold30_sl10_tp25",
+          "trainN": 125,
+          "trainExp": -1.4002013279552412,
+          "testN": 253,
+          "testExp": -2.4056322690478096,
+          "testHit": 0.1857707509881423,
+          "testPF": 0.24955288733062386
+        },
+        {
+          "k": "hold15_sl10_tp15",
+          "trainN": 222,
+          "trainExp": -1.6047653199751448,
+          "testN": 428,
+          "testExp": -2.1996994218213466,
+          "testHit": 0.11214953271028037,
+          "testPF": 0.1569483711123776
+        },
+        {
+          "k": "hold6_sl10_tp15",
+          "trainN": 320,
+          "trainExp": -1.7105887982980774,
+          "testN": 598,
+          "testExp": -2.0505973446055052,
+          "testHit": 0.05518394648829431,
+          "testPF": 0.05889267011210599
+        }
+      ],
+      "exitCurrent": {
+        "k": "hold6_sl5_tp15"
+      }
+    },
+    "SAFER": {
+      "label": "Safer $5M-$50M",
+      "snapshots": 42943,
+      "eligible": 2879,
+      "eligiblePools": 10,
+      "rejects": {
+        "mcap outside $X": 27849,
+        "Nh volume < N% of mcap": 12155,
+        "Nh move > N%": 34,
+        "pool liquidity < $X": 24,
+        "younger than Nh": 2
+      },
+      "liveThreshold": 0.75,
+      "exits": {
+        "stopLossPct": 5,
+        "takeProfitPct": 15,
+        "breakEvenTriggerPct": 5,
+        "enableTrailingStop": true,
+        "trailingStopPct": 5,
+        "holdTimeMinutes": 6,
+        "stalePositionMinutes": 45,
+        "staleBandPct": 2
+      },
+      "ladder": [
+        {
+          "gainPct": 10,
+          "sellPct": 33
+        },
+        {
+          "gainPct": 18,
+          "sellPct": 50
+        }
+      ],
+      "split": {
+        "trainFrom": "2026-11-08T08:00:00.000Z",
+        "testFrom": "2026-11-10T08:45:00.000Z",
+        "testTo": "2026-11-11T17:15:00.000Z"
+      },
+      "ic": {
+        "volumeSpike": {
+          "train": -0.039138429524360925,
+          "trainFwd60": -0.008252186992302448,
+          "test": -0.019111969364310845,
+          "testFwd60": -0.007855027849062913
+        },
+        "momentum": {
+          "train": -0.1267638918718916,
+          "trainFwd60": -0.08516746891097979,
+          "test": -0.11953167973653286,
+          "testFwd60": -0.04663418027503249
+        },
+        "breakout": {
+          "train": -0.13452633434589797,
+          "trainFwd60": -0.05011169226070214,
+          "test": -0.0927232177515099,
+          "testFwd60": -0.03883129584590391
+        },
+        "velocitySurge": {
+          "train": 0.028174439539885944,
+          "trainFwd60": 0.03443572657339385,
+          "test": 0.05981301683409474,
+          "testFwd60": 0.012223110873217438
+        },
+        "microCapHeat": {
+          "train": -0.1368639642318173,
+          "trainFwd60": -0.049673557642536205,
+          "test": -0.07324853427271887,
+          "testFwd60": -0.010980138609579596
+        },
+        "nanoCapSpike": {
+          "train": null,
+          "trainFwd60": null,
+          "test": null,
+          "testFwd60": null
+        },
+        "liquidityBuild": {
+          "train": 0.1212558863995945,
+          "trainFwd60": 0.15678150124156184,
+          "test": 0.26963303923173426,
+          "testFwd60": 0.03506080900731664
+        },
+        "volMcapRatio": {
+          "train": -0.08249705609885666,
+          "trainFwd60": -0.09030851175003402,
+          "test": -0.04148625475887739,
+          "testFwd60": 0.15440093345805414
+        },
+        "volumePersistence": {
+          "train": 0.03400498979249925,
+          "trainFwd60": 0.04008592913367625,
+          "test": 0.03656723094309444,
+          "testFwd60": -0.06823909274704368
+        },
+        "trendAlignment": {
+          "train": -0.04894923548740425,
+          "trainFwd60": -0.05901142911964715,
+          "test": 0.016520913811829865,
+          "testFwd60": -0.07366738902477739
+        },
+        "freshness": {
+          "train": -0.07030869485908452,
+          "trainFwd60": -0.05780598657626734,
+          "test": -0.17194283923584977,
+          "testFwd60": 0.04903217231697523
+        },
+        "dipInUptrend": {
+          "train": 0.026386978878803705,
+          "trainFwd60": -0.013251501755254018,
+          "test": -0.07503325884300066,
+          "testFwd60": -0.01261881229331134
+        },
+        "higherLows": {
+          "train": -0.017470347247838684,
+          "trainFwd60": -0.1021889709800966,
+          "test": -0.029796557608634335,
+          "testFwd60": -0.05709984234118324
+        },
+        "liveComposite": {
+          "train": -0.09558797895562401,
+          "trainFwd60": -0.03513988248868523,
+          "test": 0.03714749060674996,
+          "testFwd60": 0.002156114179803036
+        }
+      },
+      "chosen": {
+        "name": "icBase",
+        "thr": 0.8,
+        "ek": "E0",
+        "obj": -0.8092646379010786,
+        "n": 50
+      },
+      "joint": {
+        "name": "icBase",
+        "thr": 0.375,
+        "ek": "hold120_sl10_tp15",
+        "obj": -0.298336272969494,
+        "n": 67
+      },
+      "weights": {
+        "live": {
+          "volumeSpike": 0.1325,
+          "momentum": 0.1811,
+          "breakout": 0.094,
+          "velocitySurge": 0.1331,
+          "microCapHeat": 0.1322,
+          "nanoCapSpike": 0.1188,
+          "liquidityBuild": 0.1102,
+          "volMcapRatio": 0.098
+        },
+        "defaults": {
+          "volumeSpike": 0.15,
+          "momentum": 0.15,
+          "breakout": 0.12,
+          "velocitySurge": 0.12,
+          "microCapHeat": 0.15,
+          "nanoCapSpike": 0.12,
+          "liquidityBuild": 0.1,
+          "volMcapRatio": 0.09
+        },
+        "icBase": {
+          "velocitySurge": 0.1885,
+          "liquidityBuild": 0.8115
+        },
+        "icAll": {
+          "velocitySurge": 0.1343,
+          "liquidityBuild": 0.5779,
+          "volumePersistence": 0.1621,
+          "dipInUptrend": 0.1258
+        },
+        "icShippable": {
+          "velocitySurge": 0.1343,
+          "liquidityBuild": 0.5779,
+          "volumePersistence": 0.1621,
+          "dipInUptrend": 0.1258
+        }
+      },
+      "results": {
+        "baseline": {
+          "train": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "test": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          },
+          "testCustomer": {
+            "n": 0,
+            "hitRate": null,
+            "avgWinPct": null,
+            "avgLossPct": null,
+            "expectancyPct": null,
+            "profitFactor": null,
+            "sharpePerTrade": null,
+            "totalPnlUsd": 0,
+            "maxDrawdownPct": 0,
+            "reasons": {}
+          }
+        },
+        "chosen": {
+          "train": {
+            "n": 50,
+            "hitRate": 0.04,
+            "avgWinPct": 0.5687946506304458,
+            "avgLossPct": -0.7934357060481663,
+            "expectancyPct": -0.7389464917810217,
+            "profitFactor": 0.029869814187771376,
+            "sharpePerTrade": -1.4861429207199541,
+            "totalPnlUsd": -184.73662294525639,
+            "maxDrawdownPct": 1.847366229452564,
+            "reasons": {
+              "time_exit": 50
+            }
+          },
+          "test": {
+            "n": 73,
+            "hitRate": 0.0273972602739726,
+            "avgWinPct": 0.1827276636406427,
+            "avgLossPct": -0.9405463648064798,
+            "expectancyPct": -0.9097717338901203,
+            "profitFactor": 0.005472625617750799,
+            "sharpePerTrade": -2.1194680139163067,
+            "totalPnlUsd": -332.06668286989407,
+            "maxDrawdownPct": 3.3206668286989407,
+            "reasons": {
+              "time_exit": 73
+            }
+          },
+          "testCustomer": {
+            "n": 73,
+            "hitRate": 0,
+            "avgWinPct": null,
+            "avgLossPct": -1.7069456608815514,
+            "expectancyPct": -1.7069456608815514,
+            "profitFactor": 0,
+            "sharpePerTrade": -3.992606696025993,
+            "totalPnlUsd": -623.0351662217654,
+            "maxDrawdownPct": 6.230351662217655,
+            "reasons": {
+              "time_exit": 73
+            }
+          }
+        },
+        "joint": {
+          "train": {
+            "n": 67,
+            "hitRate": 0.31343283582089554,
+            "avgWinPct": 4.761496821456229,
+            "avgLossPct": -1.7408124787931298,
+            "expectancyPct": 0.2972247645686101,
+            "profitFactor": 1.2486852181242618,
+            "sharpePerTrade": 0.06097071844455153,
+            "totalPnlUsd": 99.5702961304869,
+            "maxDrawdownPct": 1.9896353958440256,
+            "reasons": {
+              "stale_exit": 50,
+              "trailing_stop": 4,
+              "break_even": 3,
+              "take_profit": 5,
+              "stop_loss": 3,
+              "time_exit": 2
+            }
+          },
+          "test": {
+            "n": 54,
+            "hitRate": 0.2222222222222222,
+            "avgWinPct": 0.953176724100989,
+            "avgLossPct": -1.722237706881641,
+            "expectancyPct": -1.1277011666632781,
+            "profitFactor": 0.15812927901752935,
+            "sharpePerTrade": -0.4498932128047797,
+            "totalPnlUsd": -304.47931499909464,
+            "maxDrawdownPct": 3.0587391634448795,
+            "reasons": {
+              "stale_exit": 49,
+              "break_even": 1,
+              "trailing_stop": 2,
+              "stop_loss": 2
+            }
+          },
+          "testCustomer": {
+            "n": 54,
+            "hitRate": 0.05555555555555555,
+            "avgWinPct": 2.496153183018189,
+            "avgLossPct": -2.184011816803538,
+            "expectancyPct": -1.9240026501467755,
+            "profitFactor": 0.06723065280500208,
+            "sharpePerTrade": -0.7706613396829067,
+            "totalPnlUsd": -519.4807155396265,
+            "maxDrawdownPct": 5.194807155396266,
+            "reasons": {
+              "stale_exit": 49,
+              "break_even": 1,
+              "trailing_stop": 2,
+              "stop_loss": 2
+            }
+          }
+        }
+      },
+      "matchedTest": {
+        "live": [
+          {
+            "q": 0.02,
+            "n": 31,
+            "meanNetPct": 0.5025697073940418,
+            "winRate": 0.41935483870967744
+          },
+          {
+            "q": 0.05,
+            "n": 77,
+            "meanNetPct": -0.8711745889855993,
+            "winRate": 0.2597402597402597
+          },
+          {
+            "q": 0.1,
+            "n": 155,
+            "meanNetPct": -1.401499038366248,
+            "winRate": 0.1935483870967742
+          },
+          {
+            "q": 0.25,
+            "n": 387,
+            "meanNetPct": -1.3161735815767968,
+            "winRate": 0.15503875968992248
+          },
+          {
+            "q": 1,
+            "n": 1546,
+            "meanNetPct": -1.5773416495019401,
+            "winRate": 0.1520051746442432
+          }
+        ],
+        "defaults": [
+          {
+            "q": 0.02,
+            "n": 31,
+            "meanNetPct": 0.5005531723709636,
+            "winRate": 0.4838709677419355
+          },
+          {
+            "q": 0.05,
+            "n": 77,
+            "meanNetPct": -1.0081922775005796,
+            "winRate": 0.24675324675324675
+          },
+          {
+            "q": 0.1,
+            "n": 155,
+            "meanNetPct": -1.4686748722233203,
+            "winRate": 0.1935483870967742
+          },
+          {
+            "q": 0.25,
+            "n": 387,
+            "meanNetPct": -1.4328224694251388,
+            "winRate": 0.1524547803617571
+          },
+          {
+            "q": 1,
+            "n": 1546,
+            "meanNetPct": -1.5773416495019394,
+            "winRate": 0.1520051746442432
+          }
+        ],
+        "icBase": [
+          {
+            "q": 0.02,
+            "n": 31,
+            "meanNetPct": -0.9043766195148984,
+            "winRate": 0
+          },
+          {
+            "q": 0.05,
+            "n": 77,
+            "meanNetPct": -0.9453840389877984,
+            "winRate": 0.012987012987012988
+          },
+          {
+            "q": 0.1,
+            "n": 155,
+            "meanNetPct": -0.919282398378891,
+            "winRate": 0.012903225806451613
+          },
+          {
+            "q": 0.25,
+            "n": 387,
+            "meanNetPct": -0.8670011654690999,
+            "winRate": 0.023255813953488372
+          },
+          {
+            "q": 1,
+            "n": 1546,
+            "meanNetPct": -1.577341649501939,
+            "winRate": 0.1520051746442432
+          }
+        ],
+        "icAll": [
+          {
+            "q": 0.02,
+            "n": 31,
+            "meanNetPct": -1.1014994075806623,
+            "winRate": 0.03225806451612903
+          },
+          {
+            "q": 0.05,
+            "n": 77,
+            "meanNetPct": -0.9677330233741029,
+            "winRate": 0.012987012987012988
+          },
+          {
+            "q": 0.1,
+            "n": 155,
+            "meanNetPct": -0.919282398378891,
+            "winRate": 0.012903225806451613
+          },
+          {
+            "q": 0.25,
+            "n": 387,
+            "meanNetPct": -0.8670011654690999,
+            "winRate": 0.023255813953488372
+          },
+          {
+            "q": 1,
+            "n": 1546,
+            "meanNetPct": -1.577341649501939,
+            "winRate": 0.1520051746442432
+          }
+        ],
+        "icShippable": [
+          {
+            "q": 0.02,
+            "n": 31,
+            "meanNetPct": -1.1014994075806623,
+            "winRate": 0.03225806451612903
+          },
+          {
+            "q": 0.05,
+            "n": 77,
+            "meanNetPct": -0.9677330233741029,
+            "winRate": 0.012987012987012988
+          },
+          {
+            "q": 0.1,
+            "n": 155,
+            "meanNetPct": -0.919282398378891,
+            "winRate": 0.012903225806451613
+          },
+          {
+            "q": 0.25,
+            "n": 387,
+            "meanNetPct": -0.8670011654690999,
+            "winRate": 0.023255813953488372
+          },
+          {
+            "q": 1,
+            "n": 1546,
+            "meanNetPct": -1.577341649501939,
+            "winRate": 0.1520051746442432
+          }
+        ]
+      },
+      "atLiveThresholdTest": {
+        "live": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "defaults": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0
+        },
+        "icBase": {
+          "n": 194,
+          "hitRate": 0.015463917525773196,
+          "avgWinPct": 0.14405141589505713,
+          "avgLossPct": -0.9422985822314986,
+          "expectancyPct": -0.9254993554563454,
+          "profitFactor": 0.002401136674595672,
+          "sharpePerTrade": -2.1794709102693632,
+          "totalPnlUsd": -897.7343747926534,
+          "maxDrawdownPct": 8.977343747926533
+        },
+        "icAll": {
+          "n": 10,
+          "hitRate": 0,
+          "avgWinPct": null,
+          "avgLossPct": -1.122585242859716,
+          "expectancyPct": -1.122585242859716,
+          "profitFactor": 0,
+          "sharpePerTrade": -4.264644612974227,
+          "totalPnlUsd": -56.12926214298568,
+          "maxDrawdownPct": 0.5612926214298568
+        },
+        "icShippable": {
+          "n": 10,
+          "hitRate": 0,
+          "avgWinPct": null,
+          "avgLossPct": -1.122585242859716,
+          "expectancyPct": -1.122585242859716,
+          "profitFactor": 0,
+          "sharpePerTrade": -4.264644612974227,
+          "totalPnlUsd": -56.12926214298568,
+          "maxDrawdownPct": 0.5612926214298568
+        }
+      },
+      "liveThresholdSweepTest": [
+        {
+          "thr": 0.3,
+          "n": 80,
+          "hit": 0.225,
+          "exp": -1.2845079131492503
+        },
+        {
+          "thr": 0.4,
+          "n": 13,
+          "hit": 0.6153846153846154,
+          "exp": 2.1545040372701303
+        },
+        {
+          "thr": 0.5,
+          "n": 5,
+          "hit": 0.4,
+          "exp": -0.39382998571189753
+        },
+        {
+          "thr": 0.55,
+          "n": 2,
+          "hit": 0.5,
+          "exp": 2.695145446010383
+        },
+        {
+          "thr": 0.6,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.65,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.7,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "liveThresholdSweepTrain": [
+        {
+          "thr": 0.3,
+          "n": 42,
+          "hit": 0.2857142857142857,
+          "exp": -1.422199807951385
+        },
+        {
+          "thr": 0.4,
+          "n": 13,
+          "hit": 0.15384615384615385,
+          "exp": -2.144662871344534
+        },
+        {
+          "thr": 0.5,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.55,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.6,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.65,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.7,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        },
+        {
+          "thr": 0.75,
+          "n": 0,
+          "hit": null,
+          "exp": null
+        }
+      ],
+      "walkForward": {
+        "picks": [
+          {
+            "fold": 1,
+            "name": "icBase",
+            "thr": 0.25,
+            "ek": "E0",
+            "obj": -1.1103620313217168,
+            "n": 87
+          },
+          {
+            "fold": 1,
+            "joint": true,
+            "name": "icAll",
+            "thr": 0.275,
+            "ek": "hold30_sl10_tp25",
+            "obj": -0.6080052460108252,
+            "n": 20
+          },
+          {
+            "fold": 2,
+            "name": "icBase",
+            "thr": 0.8,
+            "ek": "E0",
+            "obj": -0.7557829274625324,
+            "n": 29
+          },
+          {
+            "fold": 2,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.425,
+            "ek": "hold120_sl10_tp25",
+            "obj": -0.17884159398396382,
+            "n": 29
+          },
+          {
+            "fold": 3,
+            "name": "icBase",
+            "thr": 0.8,
+            "ek": "E0",
+            "obj": -0.8202125205901206,
+            "n": 78
+          },
+          {
+            "fold": 3,
+            "joint": true,
+            "name": "icBase",
+            "thr": 0.425,
+            "ek": "hold60_sl10_tp25",
+            "obj": -0.38315837233360545,
+            "n": 58
+          }
+        ],
+        "baseline": {
+          "n": 0,
+          "hitRate": null,
+          "avgWinPct": null,
+          "avgLossPct": null,
+          "expectancyPct": null,
+          "profitFactor": null,
+          "sharpePerTrade": null,
+          "totalPnlUsd": 0,
+          "maxDrawdownPct": 0,
+          "reasons": {}
+        },
+        "chosen": {
+          "n": 274,
+          "hitRate": 0.10218978102189781,
+          "avgWinPct": 1.3232914543720546,
+          "avgLossPct": -1.2427544493045524,
+          "expectancyPct": -0.9805307803157015,
+          "profitFactor": 0.12119734482246984,
+          "sharpePerTrade": -0.7613229355420973,
+          "totalPnlUsd": -1343.3271690325255,
+          "maxDrawdownPct": 13.433271690325254,
+          "reasons": {
+            "time_exit": 271,
+            "stop_loss": 3
+          }
+        },
+        "joint": {
+          "n": 105,
+          "hitRate": 0.1523809523809524,
+          "avgWinPct": 2.320750171217605,
+          "avgLossPct": -1.3132422386751583,
+          "expectancyPct": -0.7594910143105463,
+          "profitFactor": 0.3176973003454862,
+          "sharpePerTrade": -0.37146506456736283,
+          "totalPnlUsd": -398.73278251305237,
+          "maxDrawdownPct": 4.128496127121782,
+          "reasons": {
+            "time_exit": 49,
+            "trailing_stop": 4,
+            "break_even": 1,
+            "stale_exit": 51
+          }
+        }
+      },
+      "calibration": {
+        "live": {
+          "trainN": 1326,
+          "testN": 1546,
+          "baseWinRateTrain": 0.17496229260935142,
+          "brierModel": 0.1278592374708886,
+          "brierBase": 0.12942663079087613,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 1224,
+              "winRate": 0.1568627450980392,
+              "meanRetPct": -1.6267676592766724,
+              "wilsonLo": 0.13756600873080166,
+              "wilsonHi": 0.17830665758055317
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 229,
+              "winRate": 0.09170305676855896,
+              "meanRetPct": -1.5035693131005086,
+              "wilsonLo": 0.06076159460057257,
+              "wilsonHi": 0.13611731363575633
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 76,
+              "winRate": 0.15789473684210525,
+              "meanRetPct": -1.721738844938207,
+              "wilsonLo": 0.09269405994267452,
+              "wilsonHi": 0.25601638674176064
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 11,
+              "winRate": 0.6363636363636364,
+              "meanRetPct": 1.8099833348182266,
+              "wilsonLo": 0.35379677689163724,
+              "wilsonHi": 0.8483377638586862
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 6,
+              "winRate": 0.5,
+              "meanRetPct": 1.3088555094948375,
+              "wilsonLo": 0.1876128068994087,
+              "wilsonHi": 0.8123871931005913
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 1080,
+              "winRate": 0.18055555555555555,
+              "meanRetPct": -1.042178050229943,
+              "wilsonLo": 0.15875967898346593,
+              "wilsonHi": 0.20461592866990333
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 197,
+              "winRate": 0.116751269035533,
+              "meanRetPct": -1.306504294607358,
+              "wilsonLo": 0.07906881606867719,
+              "wilsonHi": 0.16909491096795268
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 36,
+              "winRate": 0.3333333333333333,
+              "meanRetPct": -1.131037640880935,
+              "wilsonLo": 0.20214424774586046,
+              "wilsonHi": 0.4966630290703315
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 13,
+              "winRate": 0.15384615384615385,
+              "meanRetPct": -2.144662871344534,
+              "wilsonLo": 0.04325726318273798,
+              "wilsonHi": 0.4223517050863101
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            }
+          ],
+          "iso": [
+            {
+              "x": 0,
+              "y": 0.1026,
+              "n": 39
+            },
+            {
+              "x": 0,
+              "y": 0.1579,
+              "n": 19
+            },
+            {
+              "x": 0.2391,
+              "y": 0.1697,
+              "n": 1161
+            },
+            {
+              "x": 0.3045,
+              "y": 0.2295,
+              "n": 61
+            },
+            {
+              "x": 0.4531,
+              "y": 0.2927,
+              "n": 41
+            },
+            {
+              "x": 0.4602,
+              "y": 0.3333,
+              "n": 3
+            },
+            {
+              "x": 0.4767,
+              "y": 0.5,
+              "n": 2
+            }
+          ]
+        },
+        "chosen": {
+          "trainN": 1326,
+          "testN": 1546,
+          "baseWinRateTrain": 0.17496229260935142,
+          "brierModel": 0.1485211837946769,
+          "brierBase": 0.12942663079087613,
+          "reliabilityTest": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 848,
+              "winRate": 0.19221698113207547,
+              "meanRetPct": -1.9955090864740757,
+              "wilsonLo": 0.16710679894649422,
+              "wilsonHi": 0.2201032175636175
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 268,
+              "winRate": 0.20149253731343283,
+              "meanRetPct": -1.3828462133451707,
+              "wilsonLo": 0.15784135329290147,
+              "wilsonHi": 0.2535805924284304
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 32,
+              "winRate": 0.25,
+              "meanRetPct": -0.5006433706357459,
+              "wilsonLo": 0.13252243982621553,
+              "wilsonHi": 0.42106891770246624
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 11,
+              "winRate": 0.09090909090909091,
+              "meanRetPct": -2.2023327933265113,
+              "wilsonLo": 0.016231752262825964,
+              "wilsonHi": 0.3773646254862038
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 1,
+              "winRate": 1,
+              "meanRetPct": 1.7549186336350746,
+              "wilsonLo": 0.20654329147389294,
+              "wilsonHi": 1
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 274,
+              "winRate": 0.021897810218978103,
+              "meanRetPct": -0.8503455253415074,
+              "wilsonLo": 0.010073557774394398,
+              "wilsonHi": 0.04694310207783795
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 112,
+              "winRate": 0.017857142857142856,
+              "meanRetPct": -0.9311579975589636,
+              "wilsonLo": 0.004910708625338284,
+              "wilsonHi": 0.06278172656202101
+            }
+          ],
+          "reliabilityTrain": [
+            {
+              "lo": 0,
+              "hi": 0.2,
+              "n": 331,
+              "winRate": 0.1419939577039275,
+              "meanRetPct": -1.249352964575432,
+              "wilsonLo": 0.10848973323933822,
+              "wilsonHi": 0.18371290824845782
+            },
+            {
+              "lo": 0.2,
+              "hi": 0.3,
+              "n": 610,
+              "winRate": 0.2278688524590164,
+              "meanRetPct": -1.1712584746959769,
+              "wilsonLo": 0.1963452315621624,
+              "wilsonHi": 0.26279862574565116
+            },
+            {
+              "lo": 0.3,
+              "hi": 0.4,
+              "n": 95,
+              "winRate": 0.29473684210526313,
+              "meanRetPct": -0.9852354329032164,
+              "wilsonLo": 0.21247799848789717,
+              "wilsonHi": 0.39295129444139576
+            },
+            {
+              "lo": 0.4,
+              "hi": 0.5,
+              "n": 39,
+              "winRate": 0.3333333333333333,
+              "meanRetPct": -0.41626638682318995,
+              "wilsonLo": 0.2063276610691516,
+              "wilsonHi": 0.4902289567975947
+            },
+            {
+              "lo": 0.5,
+              "hi": 0.6,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.6,
+              "hi": 0.7,
+              "n": 0,
+              "winRate": null,
+              "meanRetPct": null,
+              "wilsonLo": null,
+              "wilsonHi": null
+            },
+            {
+              "lo": 0.7,
+              "hi": 0.8,
+              "n": 183,
+              "winRate": 0.01639344262295082,
+              "meanRetPct": -0.861848881792385,
+              "wilsonLo": 0.005590545476989186,
+              "wilsonHi": 0.04708294907668623
+            },
+            {
+              "lo": 0.8,
+              "hi": 1.01,
+              "n": 68,
+              "winRate": 0.029411764705882353,
+              "meanRetPct": -0.8232060480330715,
+              "wilsonLo": 0.008103009605045343,
+              "wilsonHi": 0.10104823424253043
+            }
+          ],
+          "iso": [
+            {
+              "x": 0.0494,
+              "y": 0,
+              "n": 11
+            },
+            {
+              "x": 0.2041,
+              "y": 0.1417,
+              "n": 360
+            },
+            {
+              "x": 0.96,
+              "y": 0.1895,
+              "n": 955
+            }
+          ]
+        }
+      },
+      "brainCalibration": {
+        "n": 2872,
+        "pools": 10,
+        "baseWinRate": 0.16260445682451252,
+        "baseCi": [
+          0.1495609445436549,
+          0.17654936695611614
+        ],
+        "meanNetPct": -1.3544922711752008,
+        "scorePredictive": false,
+        "testIcLive": 0.03714749060674996,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 2730,
+            "winRate": 0.15787545787545787,
+            "meanRetPct": -1.3620566402712997,
+            "wilsonLo": 0.14467944825496892,
+            "wilsonHi": 0.17203297575672216
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 136,
+            "winRate": 0.2426470588235294,
+            "meanRetPct": -1.3201493230257038,
+            "wilsonLo": 0.17831424909262023,
+            "wilsonHi": 0.3211193958313509
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 6,
+            "winRate": 0.5,
+            "meanRetPct": 1.3088555094948375,
+            "wilsonLo": 0.1876128068994087,
+            "wilsonHi": 0.8123871931005913
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ]
+      },
+      "exitSensitivity": [
+        {
+          "k": "hold6_sl5_tp15",
+          "trainN": 50,
+          "trainExp": -0.7389464917810217,
+          "testN": 73,
+          "testExp": -0.9097717338901203,
+          "testHit": 0.0273972602739726,
+          "testPF": 0.005472625617750799
+        },
+        {
+          "k": "hold6_sl5_tp25",
+          "trainN": 50,
+          "trainExp": -0.7389464917810217,
+          "testN": 73,
+          "testExp": -0.9097717338901203,
+          "testHit": 0.0273972602739726,
+          "testPF": 0.005472625617750799
+        },
+        {
+          "k": "hold6_sl10_tp15",
+          "trainN": 50,
+          "trainExp": -0.7389464917810217,
+          "testN": 73,
+          "testExp": -0.9097717338901203,
+          "testHit": 0.0273972602739726,
+          "testPF": 0.005472625617750799
+        },
+        {
+          "k": "hold6_sl10_tp25",
+          "trainN": 50,
+          "trainExp": -0.7389464917810217,
+          "testN": 73,
+          "testExp": -0.9097717338901203,
+          "testHit": 0.0273972602739726,
+          "testPF": 0.005472625617750799
+        },
+        {
+          "k": "hold30_sl5_tp15",
+          "trainN": 27,
+          "trainExp": -0.7223243089356375,
+          "testN": 35,
+          "testExp": -0.934894717951061,
+          "testHit": 0.08571428571428572,
+          "testPF": 0.06660473848237385
+        },
+        {
+          "k": "hold30_sl5_tp25",
+          "trainN": 27,
+          "trainExp": -0.7223243089356375,
+          "testN": 35,
+          "testExp": -0.934894717951061,
+          "testHit": 0.08571428571428572,
+          "testPF": 0.06660473848237385
+        }
+      ],
+      "exitCurrent": {
+        "k": "hold6_sl5_tp15"
+      }
+    }
+  }
+}

@@ -1,0 +1,436 @@
+{
+  "clips": {
+    "25": {
+      "DEGEN": {
+        "n": 1856,
+        "pools": 13,
+        "baseWinRate": 0.2856,
+        "baseCi": [
+          0.2655,
+          0.3065
+        ],
+        "meanNetPct": -1.144,
+        "scorePredictive": false,
+        "testIcLive": -0.1826,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 1534,
+            "winRate": 0.2849,
+            "meanRetPct": -1.0668,
+            "wilsonLo": 0.2628,
+            "wilsonHi": 0.308
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 271,
+            "winRate": 0.262,
+            "meanRetPct": -1.6475,
+            "wilsonLo": 0.2132,
+            "wilsonHi": 0.3174
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 40,
+            "winRate": 0.45,
+            "meanRetPct": -0.2873,
+            "wilsonLo": 0.3071,
+            "wilsonHi": 0.6017
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 9,
+            "winRate": 0.3333,
+            "meanRetPct": -2.7082,
+            "wilsonLo": 0.1206,
+            "wilsonHi": 0.6458
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0.5,
+            "meanRetPct": -2.2322,
+            "wilsonLo": 0.0945,
+            "wilsonHi": 0.9055
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      },
+      "BALANCED": {
+        "n": 8172,
+        "pools": 28,
+        "baseWinRate": 0.2326,
+        "baseCi": [
+          0.2236,
+          0.2419
+        ],
+        "meanNetPct": -1.0885,
+        "scorePredictive": false,
+        "testIcLive": -0.1442,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 7154,
+            "winRate": 0.2291,
+            "meanRetPct": -1.0644,
+            "wilsonLo": 0.2195,
+            "wilsonHi": 0.239
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 905,
+            "winRate": 0.2497,
+            "meanRetPct": -1.2642,
+            "wilsonLo": 0.2226,
+            "wilsonHi": 0.2789
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 97,
+            "winRate": 0.3196,
+            "meanRetPct": -1.016,
+            "wilsonLo": 0.2352,
+            "wilsonHi": 0.4177
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 14,
+            "winRate": 0.2857,
+            "meanRetPct": -2.3576,
+            "wilsonLo": 0.1172,
+            "wilsonHi": 0.5465
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0.5,
+            "meanRetPct": -2.2322,
+            "wilsonLo": 0.0945,
+            "wilsonHi": 0.9055
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      },
+      "SAFER": {
+        "n": 2872,
+        "pools": 10,
+        "baseWinRate": 0.2134,
+        "baseCi": [
+          0.1988,
+          0.2288
+        ],
+        "meanNetPct": -0.9794,
+        "scorePredictive": false,
+        "testIcLive": -0.0325,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 2730,
+            "winRate": 0.2103,
+            "meanRetPct": -0.9845,
+            "wilsonLo": 0.1954,
+            "wilsonHi": 0.2259
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 136,
+            "winRate": 0.2647,
+            "meanRetPct": -0.9951,
+            "wilsonLo": 0.1978,
+            "wilsonHi": 0.3446
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 6,
+            "winRate": 0.5,
+            "meanRetPct": 1.7021,
+            "wilsonLo": 0.1876,
+            "wilsonHi": 0.8124
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      }
+    },
+    "500": {
+      "DEGEN": {
+        "n": 1856,
+        "pools": 13,
+        "baseWinRate": 0.0787,
+        "baseCi": [
+          0.0673,
+          0.0918
+        ],
+        "meanNetPct": -4.1,
+        "scorePredictive": false,
+        "testIcLive": -0.2264,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 1534,
+            "winRate": 0.0711,
+            "meanRetPct": -4.0104,
+            "wilsonLo": 0.0592,
+            "wilsonHi": 0.085
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 271,
+            "winRate": 0.0959,
+            "meanRetPct": -4.5865,
+            "wilsonLo": 0.0663,
+            "wilsonHi": 0.1369
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 40,
+            "winRate": 0.275,
+            "meanRetPct": -3.3148,
+            "wilsonLo": 0.1611,
+            "wilsonHi": 0.4284
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 9,
+            "winRate": 0,
+            "meanRetPct": -7.2369,
+            "wilsonLo": 0,
+            "wilsonHi": 0.2992
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0,
+            "meanRetPct": -8.4767,
+            "wilsonLo": 0,
+            "wilsonHi": 0.6576
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      },
+      "BALANCED": {
+        "n": 8172,
+        "pools": 28,
+        "baseWinRate": 0.0871,
+        "baseCi": [
+          0.0812,
+          0.0934
+        ],
+        "meanNetPct": -2.8514,
+        "scorePredictive": false,
+        "testIcLive": -0.1566,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 7154,
+            "winRate": 0.0812,
+            "meanRetPct": -2.7789,
+            "wilsonLo": 0.0751,
+            "wilsonHi": 0.0878
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 905,
+            "winRate": 0.1204,
+            "meanRetPct": -3.3369,
+            "wilsonLo": 0.1008,
+            "wilsonHi": 0.1433
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 97,
+            "winRate": 0.2268,
+            "meanRetPct": -2.993,
+            "wilsonLo": 0.1548,
+            "wilsonHi": 0.3196
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 14,
+            "winRate": 0,
+            "meanRetPct": -6.7331,
+            "wilsonLo": 0,
+            "wilsonHi": 0.2153
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 2,
+            "winRate": 0,
+            "meanRetPct": -8.4767,
+            "wilsonLo": 0,
+            "wilsonHi": 0.6576
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      },
+      "SAFER": {
+        "n": 2872,
+        "pools": 10,
+        "baseWinRate": 0.1626,
+        "baseCi": [
+          0.1496,
+          0.1765
+        ],
+        "meanNetPct": -1.3545,
+        "scorePredictive": false,
+        "testIcLive": 0.0371,
+        "buckets": [
+          {
+            "lo": 0,
+            "hi": 0.3,
+            "n": 2730,
+            "winRate": 0.1579,
+            "meanRetPct": -1.3621,
+            "wilsonLo": 0.1447,
+            "wilsonHi": 0.172
+          },
+          {
+            "lo": 0.3,
+            "hi": 0.5,
+            "n": 136,
+            "winRate": 0.2426,
+            "meanRetPct": -1.3201,
+            "wilsonLo": 0.1783,
+            "wilsonHi": 0.3211
+          },
+          {
+            "lo": 0.5,
+            "hi": 0.6,
+            "n": 6,
+            "winRate": 0.5,
+            "meanRetPct": 1.3089,
+            "wilsonLo": 0.1876,
+            "wilsonHi": 0.8124
+          },
+          {
+            "lo": 0.6,
+            "hi": 0.7,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.7,
+            "hi": 0.8,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          },
+          {
+            "lo": 0.8,
+            "hi": 1,
+            "n": 0,
+            "winRate": null,
+            "meanRetPct": null,
+            "wilsonLo": null,
+            "wilsonHi": null
+          }
+        ],
+        "exits": "hold6_sl5_tp15",
+        "threshold": 0.75
+      }
+    }
+  },
+  "generatedAt": "2026-11-11T17:17:09.289Z",
+  "datasetHash": "d6c54ef5b488",
+  "range": {
+    "start": "2026-10-29T13:15:00.000Z",
+    "end": "2026-11-11T17:15:00.000Z"
+  },
+  "pools": 60,
+  "method": "Walk-forward backtest of the live score on GeckoTerminal 5m candles (scripts/backtest/run.ts). Net of Jupiter fees, AMM impact, slippage. Owner fee schedule (no operator fee)."
+}

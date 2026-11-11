@@ -114,5 +114,17 @@ RESET ROLE;
 
 -- Views/functions created above are covered by cletus_md's default privileges for tables;
 -- grant explicitly so re-runs stay correct.
+-- Backtest history (scripts/backtest/backfill-gecko.ts): 5-minute GeckoTerminal candles and pool snapshots.
+SET ROLE cletus_md;
+CREATE TABLE IF NOT EXISTS market_data.ohlcv_5m (
+  pool text NOT NULL REFERENCES market_data.pools(address), bucket timestamptz NOT NULL,
+  open numeric NOT NULL, high numeric NOT NULL, low numeric NOT NULL, close numeric NOT NULL, volume_usd numeric NOT NULL DEFAULT 0,
+  source text NOT NULL DEFAULT 'geckoterminal', updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (pool, bucket));
+CREATE TABLE IF NOT EXISTS market_data.pool_snapshots (
+  pool text NOT NULL REFERENCES market_data.pools(address), taken_at timestamptz NOT NULL DEFAULT now(),
+  price_usd numeric, fdv_usd numeric, mcap_usd numeric, reserve_usd numeric, pool_created_at timestamptz, discovered_via text,
+  PRIMARY KEY (pool, taken_at));
+RESET ROLE;
+
 GRANT SELECT ON ALL TABLES IN SCHEMA market_data TO cletus_app;
 GRANT EXECUTE ON FUNCTION market_data.rollup_candles(interval) TO cletus_app;

@@ -6,6 +6,7 @@ import { prisma } from '../db';
 import { getConfig, publicConfig } from '../config';
 import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
 import { tierFor } from '../sizing';
+import { scoreConfidence, backtestSummary } from '../calibration';
 
 export interface ToolContext { userId: string; accountId: string; isAdmin: boolean }
 
@@ -25,6 +26,7 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_scan_candidates', description: 'Latest scanner results: tokens in the market-cap band ranked by volume/market-cap with composite scores, signals and audit results.', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_world_briefing', description: 'The latest rolling world briefing (crypto, macro, Fed, world news) plus SOL price and DexScreener trending tokens.' },
   { name: 'get_news', description: 'Recent stored news headlines, optionally by category.', parameters: { type: 'OBJECT', properties: { category: { type: 'STRING', description: 'crypto | macro | world | fed', enum: ['crypto', 'macro', 'world', 'fed'] }, ...limitParam } } },
+  { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
   { name: 'get_journal', description: "Cletus's own self-reflection journal entries (after each closed trade and daily).", parameters: { type: 'OBJECT', properties: limitParam } },
 ];
 
@@ -82,7 +84,7 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
         audit: { maxHolderConcentration: pc.maxHolderConcentration, requireLiquidityLock: pc.requireLiquidityLock, maxAuditRiskScore: pc.maxAuditRiskScore } };
     }
     case 'get_scan_candidates':
-      return mem.candidates.slice(0, lim(args)).map((x) => ({ symbol: x.symbol, mint: x.mint, marketCap: Math.round(x.marketCap), volume24h: Math.round(x.volume24h), volMcap: r2(x.volMcap), priceChangeH1: x.priceChangeH1, composite: Number(x.composite.toFixed(3)), rejected: x.rejected ?? null, audit: x.audit ? { passed: x.audit.passed, failed: x.audit.checks.filter((k) => !k.passed).map((k) => k.name) } : null }));
+      return mem.candidates.slice(0, lim(args)).map((x) => ({ symbol: x.symbol, mint: x.mint, marketCap: Math.round(x.marketCap), volume24h: Math.round(x.volume24h), volMcap: r2(x.volMcap), priceChangeH1: x.priceChangeH1, composite: Number(x.composite.toFixed(3)), historicalConfidence: scoreConfidence(x.composite, c.mcapPreset, Math.min(c.maxPositionSizeUsd, 500)), rejected: x.rejected ?? null, audit: x.audit ? { passed: x.audit.passed, failed: x.audit.checks.filter((k) => !k.passed).map((k) => k.name) } : null }));
     case 'get_world_briefing': {
       const [b, m] = await Promise.all([prisma.briefing.findFirst({ orderBy: { createdAt: 'desc' } }), prisma.marketSnapshot.findFirst({ orderBy: { createdAt: 'desc' } })]);
       return { briefing: b?.content ?? null, briefingAt: b?.createdAt ?? null, briefingSource: b?.source ?? null, solPriceUsd: m?.solPriceUsd ?? null, solChange24h: m?.solChange24h ?? null, trending: m ? JSON.parse(m.trending) : [] };
@@ -96,6 +98,8 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
       const rows = await prisma.journalEntry.findMany({ where: { OR: [{ accountId: ctx.accountId }, { accountId: null }] }, orderBy: { createdAt: 'desc' }, take: lim(args, 5) });
       return rows.map((j) => ({ kind: j.kind, title: j.title, content: j.content, at: j.createdAt }));
     }
+    case 'get_backtest':
+      return backtestSummary();
     default:
       return { error: `unknown function ${name}` };
   }

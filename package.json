@@ -18,6 +18,8 @@
     "db:backup": "scripts/db-backup.sh",
     "db:restore": "scripts/db-restore.sh",
     "db:sqlite": "scripts/prisma-sqlite.sh",
+    "backtest": "tsx --env-file=.env.local scripts/backtest/run.ts",
+    "backtest:backfill": "tsx --env-file=.env.local scripts/backtest/backfill-gecko.ts",
     "db:copy-sqlite": "node --env-file=.env.local scripts/sqlite-to-postgres.mjs"
   },
   "engines": {
