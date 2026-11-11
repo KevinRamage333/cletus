@@ -81,7 +81,7 @@ export default function WhitepaperPage() {
 
       <nav className="rounded-xl border border-zinc-800 bg-zinc-950 p-5" aria-label="Contents">
         <h2 className="text-sm font-semibold text-amber-300 uppercase tracking-wider">Contents</h2>
-        <ol className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-zinc-400" style={{ listStyleType: 'decimal', paddingLeft: '1.25rem' }}>
+        <ul className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-zinc-400" style={{ listStyle: 'none', padding: 0 }}>
           {SECTIONS.map((s) => (
             <li key={s.id}>
               <a href={`#${s.id}`} className="hover:text-amber-300 no-underline">
@@ -94,7 +94,7 @@ export default function WhitepaperPage() {
               Important disclaimer
             </a>
           </li>
-        </ol>
+        </ul>
       </nav>
 
       {SECTIONS.map((s) => (
