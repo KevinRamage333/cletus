@@ -58,3 +58,20 @@ to refresh the table the Brain reads. Reports: `docs/backtest/REPORT-clip25.md` 
 
 ## Whale flow and X hype
 The harness now loads `market_data.whale_swaps` and the X mention tables. It evaluates the whale veto (mean net return of vetoed vs kept decisions) and the IC of whale net flow and flow ratio using swaps strictly before each decision. It only does this once there is at least 72 h of history on at least 20 backtest tokens. As of this run there are 169 swaps on 4 tokens over 1 h, and no X data (no `X_BEARER_TOKEN`), so it reports **not evaluable yet**. See docs/FLOW_SIGNALS.md.
+
+## Exit styles for the live owner (2026-11-11, `scripts/backtest/adaptive-exits.ts`)
+Same entries for every style: liquidity weight set, score ≥ 0.60, $70k–$5M, 1 open position, $6 clip, same cost model.
+Test-window expectancy per trade (n trades) for four train/test splits:
+
+| split (train share) | fixed 5% / 20% | fixed taper (SL 20, 50%@+50, BE, 8% trail, +150, stale 120m ±3%) | adaptive | adaptive + learning |
+|---|---|---|---|---|
+| 0.4 | −0.31% (24) | −0.29% (18) | +1.04% (21) | +0.30% (25) |
+| 0.5 | +0.03% (19) | +0.23% (15) | +0.13% (26) | +2.84% (23) |
+| 0.6 | −0.93% (22) | +0.56% (11) | +0.11% (22) | +1.75% (20) |
+| 0.7 | −2.31% (23) | +1.97% (7) | +0.79% (16) | +3.29% (14) |
+
+- Fixed 5/20 is stopped out by ordinary noise (about 75% of its exits are stop-losses).
+- The fixed taper rarely reaches +50%; most of its trades end at the 2-hour stale exit, so the single slot sits idle and it takes about half as many trades.
+- Adaptive plans (median stop ≈ 10%) take about twice as many trades with few stop-outs; adding the learning loop was positive on every split.
+- Worst single trade in some splits was −22% (fixed taper) to −27% (adaptive), because 5-minute bars gap through stops; live checks every 3 s plus the Helius pool WebSocket, so gaps should be smaller live, but a rug can still gap.
+- **Caveat:** 3.6 days, one regime, 14–26 test trades per cell. This is "not worse and probably better", not a proven edge.
