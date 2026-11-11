@@ -211,6 +211,19 @@ async function operatorLamports(c: Config): Promise<number | null> {
   return connection(c).getBalance(new PublicKey(op));
 }
 
+/**
+ * Equity written to logs/live-trades.jsonl for a live trade: the on-chain wallet (SOL x price) plus open LIVE
+ * positions, never the operator's Postgres book (which still carries ~$9.7k of paper history and made the
+ * owner equity curve jump). Null when the wallet can't be read; the curve then rebuilds from trade P&L.
+ */
+export async function liveEquityForLog(c: Config, accountId: string, getLamports: () => Promise<number | bigint | null> = () => operatorLamports(c)): Promise<number | null> {
+  try {
+    const open = await prisma.position.findMany({ where: { accountId, status: 'open', simulated: false } });
+    const bal = await resolveSizingBalances({ live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice, liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0), getLamports });
+    return bal.ok ? Math.round(bal.equityUsd * 100) / 100 : null;
+  } catch { return null; }
+}
+
 /** Entry gating reads the wallet once per 10 s instead of once per candidate (sizing a real buy still reads fresh). */
 let lamportsMemo: { key: string; get: () => Promise<number | null> } | null = null;
 function cachedOperatorLamports(c: Config): Promise<number | null> {
@@ -512,11 +525,10 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   if (live) {
     try {
       const { appendLiveTrade } = await import('./live-trade-log');
-      const acc = await prisma.account.findUniqueOrThrow({ where: { id: a.id } });
-      const eq = await accountEquity(acc);
+      const eqUsd = await liveEquityForLog(c, a.id);
       appendLiveTrade({
         type: 'buy', side: 'buy', token: cand.symbol, symbol: cand.symbol, mint: cand.mint,
-        sizeUsd, price: fillPrice, entryPrice: fillPrice, signature: entryTx, equityUsd: eq.equity, simulated: false,
+        sizeUsd, price: fillPrice, entryPrice: fillPrice, signature: entryTx, equityUsd: eqUsd, simulated: false,
       });
     } catch { /* trade log must never block a fill */ }
   }
@@ -787,11 +799,10 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
   if (!p.simulated) {
     try {
       const { appendLiveTrade } = await import('./live-trade-log');
-      const acc = await prisma.account.findUniqueOrThrow({ where: { id: p.accountId } });
-      const eq = await accountEquity(acc);
+      const eqUsd = await liveEquityForLog(c, p.accountId);
       appendLiveTrade({
         type: 'sell', side: 'sell', token: p.symbol, symbol: p.symbol, mint: p.mint,
-        sizeUsd: costPortion, price, exitPrice: price, pnlUsd: pnl, signature: tx, equityUsd: eq.equity,
+        sizeUsd: costPortion, price, exitPrice: price, pnlUsd: pnl, signature: tx, equityUsd: eqUsd,
         reason: `partial_tp${rung}`, simulated: false,
       });
     } catch { /* trade log must never block a fill */ }
@@ -907,10 +918,11 @@ async function closePositionInner(positionId: string, price: number, reason: str
   if (live) {
     try {
       const { appendLiveTrade } = await import('./live-trade-log');
+      const eqUsd = await liveEquityForLog(c, a.id);
       appendLiveTrade({
         type: 'sell', side: 'sell', token: p.symbol, symbol: p.symbol, mint: p.mint,
         sizeUsd: p.sizeUsd + p.partialCostUsd, price: exitPrice, entryPrice: p.entryPrice, exitPrice,
-        pnlUsd, pnlPct, signature: exitTx, equityUsd: equity, reason, simulated: false,
+        pnlUsd, pnlPct, signature: exitTx, equityUsd: eqUsd, reason, simulated: false,
       });
     } catch { /* trade log must never block a fill */ }
   }

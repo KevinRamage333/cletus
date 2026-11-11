@@ -217,3 +217,39 @@ describe('item 3: live loss limits use the on-chain wallet and live trades only'
     expect(h.aggregate.mock.calls[0][0].where.simulated).toBeUndefined();
   });
 });
+
+describe('improvement pass: sell lock and on-chain equity in the live trade log', () => {
+  it('two paths closing the same live position at once sell only once', async () => {
+    h.positions.set('p1', livePosition());
+    h.tokenBalanceRaw.mockResolvedValue({ raw: 6_000_000_000n, decimals: 6 });
+    let release!: () => void;
+    h.executeSwap.mockImplementation(() => new Promise((r) => { release = () => r({ signature: 'sig', inAmount: '6000000000', outAmount: String(0.03 * 1e9) }); }));
+    const a = closePosition('p1', 0.0009, 'stop_loss');
+    const b = closePosition('p1', 0.0009, 'stop_loss'); // e.g. WebSocket fast path racing the monitor
+    await b;
+    await vi.waitFor(() => expect(h.executeSwap).toHaveBeenCalledTimes(1));
+    release(); await a;
+    expect(h.executeSwap).toHaveBeenCalledTimes(1);
+    expect(mem.selling.has('p1')).toBe(false);
+  });
+
+  it('a live close logs the on-chain wallet equity, not the ~$9.7k paper book', async () => {
+    const { appendLiveTrade } = await import('@/lib/live-trade-log');
+    (appendLiveTrade as unknown as ReturnType<typeof vi.fn>).mockClear();
+    h.positions.set('p1', livePosition());
+    h.tokenBalanceRaw.mockResolvedValue({ raw: 6_000_000_000n, decimals: 6 });
+    h.executeSwap.mockResolvedValue({ signature: 'sig', inAmount: '6000000000', outAmount: String(0.03 * 1e9) });
+    h.getBalance.mockResolvedValue(0.06 * 1e9); // 0.06 SOL x $160 = $9.60
+    h.findMany.mockResolvedValue([]);
+    await closePosition('p1', 0.001, 'take_profit');
+    const call = (appendLiveTrade as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as { equityUsd: number | null };
+    expect(call.equityUsd).toBeCloseTo(9.6, 2);
+  });
+
+  it('logs null equity (not the book) when the wallet cannot be read', async () => {
+    const { liveEquityForLog } = await import('@/lib/engine');
+    const { getConfig } = await import('@/lib/config');
+    expect(await liveEquityForLog(getConfig(), 'op', async () => { throw new Error('rpc timeout'); })).toBeNull();
+    expect(await liveEquityForLog(getConfig(), 'op', async () => 0.05 * 1e9)).toBeCloseTo(8, 2);
+  });
+});
