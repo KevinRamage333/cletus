@@ -58,6 +58,10 @@ export async function buildStatus(user: User, account: Account) {
       closedTrades: totalClosed, winRate: totalClosed ? wins / totalClosed : null, pnl, consecutiveLosses: account.consecutiveLosses,
     },
     scorecard,
+    ownerPlan: (account.isOperator || user.isAdmin) ? await (async () => {
+      const { ownerPlanStatus } = await import('./profit-sweep');
+      return ownerPlanStatus({ equityUsd: eq.equity, openPositions: eq.open.length, cashUsd: account.cashUsd, solPriceUsd: mem.solPrice || c.solPriceFallbackUsd });
+    })() : null,
     presetComparison: await presetComparison(),
     rpc: (await import('./rpc-pool')).rpcStatus(),
     heliusWs: (await import('./helius')).wsStatus(),

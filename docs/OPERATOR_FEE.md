@@ -12,20 +12,21 @@ This document is the one-time setup the operator must complete before live fees 
 - If the `referralTokenAccount` for that `feeMint` is missing, the swap still executes **but without your fee** (the user still gets the swap). The `/order` response then falls back to Jupiter's default platform fee; check `feeBps` vs `platformFee.feeBps`.
 - Fee range: 50 to 255 bps. Supports SPL and Token-2022 tokens.
 - Env:
-  - `OPERATOR_FEE_WALLET` — payout / partner wallet (default `GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq`). This is **not** the referral account.
+  - `PAYOUT_WALLET` — the owner's payout / partner wallet. When set, `OPERATOR_FEE_WALLET` defaults to this address (resolved in one place: `resolveOperatorFeeWallet` in `src/lib/owner-plan.ts`). This is **not** the referral account and **not** the trading wallet.
+  - `OPERATOR_FEE_WALLET` — optional override of the partner wallet. If unset, it uses `PAYOUT_WALLET`, then falls back to the trading wallet.
   - `OPERATOR_FEE_BPS` — default `50`. Set `0` to disable. Values 1–49 are clamped up to 50; values above 255 are clamped down to 255.
-  - `OPERATOR_FEE_ON_OWNER` — default `false`. When false, swaps whose taker is `OPERATOR_FEE_WALLET` (the owner's own trades) are not charged.
-  - `JUPITER_REFERRAL_ACCOUNT` (alias `OPERATOR_REFERRAL_ACCOUNT`) — the on-chain referral account. **Until this is set, live swaps will not collect the fee.** Paper fills and scoring still include 0.5% so simulations stay realistic.
+  - `OPERATOR_FEE_ON_OWNER` — default `false`. When false, the owner's own trades are not charged: that includes the operator account and the trading wallet `GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq`, even if the fee/payout wallet is a different address.
+  - `JUPITER_REFERRAL_ACCOUNT` (alias `OPERATOR_REFERRAL_ACCOUNT`) — the on-chain referral account. **Until this is set, live swaps will not collect the fee.** Paper fills and scoring still include 0.5% so simulations stay realistic. Do not invent this address.
 
 ## One-time on-chain setup (you do this)
 
-Do this from a wallet you control, ideally `OPERATOR_FEE_WALLET`. It costs a small amount of SOL for account rent. This repo will not spend those funds or sign those transactions.
+Do this from the payout wallet. The Jupiter referral program pays fees into a referral account owned by the partner wallet, so the referral account **must be created with `PAYOUT_WALLET` as owner** (connect that wallet at the dashboard). This repo will not invent a referral account address, spend those funds, or sign those setup transactions.
 
 ### Option A — Jupiter Referral Dashboard (recommended)
 
 1. Open [https://referral.jup.ag/dashboard-ultra](https://referral.jup.ag/dashboard-ultra) (Jupiter Ultra / Swap API referral project).
-2. Connect the `OPERATOR_FEE_WALLET` (or the partner wallet that should own the referral account).
-3. Create a **referral account** once. Copy its address — this is `JUPITER_REFERRAL_ACCOUNT`.
+2. Connect **`PAYOUT_WALLET`** (the partner wallet that will own the referral account). Do not create it from the trading wallet if that address is different from the payout wallet, or fees will not land in the payout wallet.
+3. Create a **referral account** once. Copy the address the dashboard shows you — this is `JUPITER_REFERRAL_ACCOUNT`. Do not invent or guess this address.
 4. Create a **referral token account** for at least:
    - SOL: `So11111111111111111111111111111111111111112`
    - USDC: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
@@ -53,7 +54,7 @@ const projectPubKey = new PublicKey("DkiqsTrw1u1bYFumumC7sCG2S8K25qc2vemJFHyW2wJ
 
 const created = await provider.initializeReferralAccountWithName({
   payerPubKey: wallet.publicKey,
-  partnerPubKey: wallet.publicKey, // OPERATOR_FEE_WALLET
+  partnerPubKey: wallet.publicKey, // must be PAYOUT_WALLET (the partner / payout wallet)
   projectPubKey,
   name: "cletus",
 });
@@ -78,4 +79,4 @@ Official docs:
 
 On a **non-owner** live swap, the `/order` response should echo your `referralAccount` and a `feeBps` of 50 (plus any extra recoup such as gasless). If `feeBps` falls back to Jupiter's default platform fee (often 2, 5, 10, or 50 on new tokens) and `referralAccount` is missing, the token account for that `feeMint` is probably not initialised — create it and retry.
 
-Claim / withdraw accumulated referral-token balances from the same dashboard when you want to move them to `OPERATOR_FEE_WALLET`.
+Claim / withdraw accumulated referral-token balances from the same dashboard when you want to move them to `PAYOUT_WALLET` (the referral account owner).

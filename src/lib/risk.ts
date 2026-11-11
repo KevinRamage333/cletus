@@ -31,3 +31,10 @@ export function capByEquityPct(sizeUsd: number, equityUsd: number, pct: number):
 export function lossStreakPause(consecutiveLossesAfter: number, max: number): boolean {
   return max > 0 && consecutiveLossesAfter >= max;
 }
+
+
+/** Never size a trade above equity minus the reserved SOL (for the exit-sell gas). */
+export function capByFeeReserve(sizeUsd: number, equityUsd: number, reserveUsd: number): { sizeUsd: number; capped: boolean } {
+  const cap = Math.floor(Math.max(0, equityUsd - Math.max(0, reserveUsd)) * 100) / 100;
+  return sizeUsd > cap ? { sizeUsd: cap, capped: true } : { sizeUsd, capped: false };
+}

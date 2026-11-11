@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import BrainChat from './BrainChat';
 import NewsPanel from './NewsPanel';
 import JournalPanel from './JournalPanel';
+import OwnerPlanCard from './OwnerPlanCard';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Status = any;
@@ -93,6 +94,7 @@ export default function Dashboard() {
 
       <div className="cols">
         <div className="grid">
+          {s.ownerPlan && a.isOperator && <OwnerPlanCard plan={s.ownerPlan} />}
           <div className="card">
             <h2>Performance scorecard</h2>
             <div className="scorecard">

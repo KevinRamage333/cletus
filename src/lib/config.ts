@@ -8,6 +8,7 @@
  */
 import { parseTpLadder, type TpRung } from './exits';
 import { parseSubmissionMode, type SubmissionMode } from './submission';
+import { parseOwnerPlanConfig, resolveOperatorFeeWallet, type OwnerPlanConfig } from './owner-plan';
 
 export type Env = Record<string, string | undefined>;
 export type AggressionLevel = 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE' | 'MAXIMUM';
@@ -158,6 +159,8 @@ export interface Config {
   maxTop10HolderPct: number; devSellCheck: boolean; blockIfDevExited: boolean; devExitLookbackHours: number;
   // live submission path
   submissionMode: SubmissionMode; privateRpcUrl: string | null; jitoBlockEngineUrl: string; jitoTipLamports: number;
+  // owner money plan (operator wallet only)
+  ownerPlan: OwnerPlanConfig;
 }
 
 const num = (v: string | undefined, d: number) => {
@@ -288,7 +291,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     failurePauseMinutes: num(env.FAILURE_PAUSE_MINUTES, 15),
     jupiterApiKey: env.JUPITER_API_KEY && !env.JUPITER_API_KEY.startsWith('your_') ? env.JUPITER_API_KEY : null,
     jupiterBaseUrl: str(env.JUPITER_SWAP_BASE, 'https://api.jup.ag/swap/v2'), // Swap API V2 (/order + /execute); see src/lib/jupiter.ts
-    operatorFeeWallet: str(env.OPERATOR_FEE_WALLET, 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq'),
+    operatorFeeWallet: resolveOperatorFeeWallet(env),
     operatorFeeBps: (() => { const n = num(env.OPERATOR_FEE_BPS, 50); if (n <= 0) return 0; return Math.min(255, Math.max(50, Math.round(n))); })(),
     operatorReferralAccount: (env.JUPITER_REFERRAL_ACCOUNT || env.OPERATOR_REFERRAL_ACCOUNT || '').trim() || null,
     operatorFeeOnOwner: bool(env.OPERATOR_FEE_ON_OWNER, false),
@@ -318,6 +321,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     privateRpcUrl: env.PRIVATE_RPC_URL && !env.PRIVATE_RPC_URL.includes('your_') ? env.PRIVATE_RPC_URL : null,
     jitoBlockEngineUrl: str(env.JITO_BLOCK_ENGINE_URL, 'https://mainnet.block-engine.jito.wtf'),
     jitoTipLamports: num(env.JITO_TIP_LAMPORTS, 10000),
+    ownerPlan: parseOwnerPlanConfig(env),
   };
 }
 
@@ -345,4 +349,24 @@ export function isWithinSchedule(c: Pick<Config, 'enable247' | 'startTime' | 'en
   const toMin = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
   const start = toMin(c.startTime), end = toMin(c.endTime);
   return start <= end ? minutes >= start && minutes <= end : minutes >= start || minutes <= end; // overnight windows
+}
+
+
+/** Apply the owner's locked money-plan overrides to the operator account only. */
+export function applyOwnerPlan<T extends Config>(c: T, isOperator: boolean): T {
+  if (!isOperator || !c.ownerPlan.enabled) return c;
+  const o = c.ownerPlan;
+  return {
+    ...c,
+    maxOpenPositions: o.maxOpenPositions,
+    stopLossPct: o.stopLossPct,
+    takeProfitPct: o.takeProfitPct,
+    tpLadder: [],
+    minTradeUsd: Math.min(c.minTradeUsd, o.minTradeUsd),
+    maxPositionPctOfEquity: 0,
+    equityProtectionLevel: 0,
+    mcapPreset: o.mcapPreset,
+    minMarketCap: c.mcapPreset === o.mcapPreset ? c.minMarketCap : MCAP_PRESETS[o.mcapPreset].min,
+    maxMarketCap: c.mcapPreset === o.mcapPreset ? c.maxMarketCap : MCAP_PRESETS[o.mcapPreset].max,
+  };
 }

@@ -8,6 +8,7 @@ import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
 import { tierFor } from '../sizing';
 import { scoreConfidence, backtestSummary } from '../calibration';
 import { whaleActivity, socialHype, flowStatus } from '../flow-collector';
+import { describeOwnerPlan } from '../owner-plan';
 
 export interface ToolContext { userId: string; accountId: string; isAdmin: boolean }
 
@@ -30,6 +31,7 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
   { name: 'get_whale_activity', description: 'On-chain big money movers for a tracked token (Helius): whale net flow, smart-money buys/sells, dev-wallet selling, fresh-wallet bundle clusters, top-holder concentration change, the confirm/veto verdict, fast-exit signal, and Solscan links. Use it as a confirmer/veto next to order flow, never as a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
   { name: 'get_social_hype', description: 'X (Twitter) mention velocity/acceleration, organic vs bot/shill share, and hype-vs-price/flow divergence for a tracked token (e.g. rising hype into selling = exit liquidity). Confirmer/veto only, never a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
+  { name: 'get_owner_plan', description: "Owner money plan for Cletus's own trading wallet: current equity sizing tier and trade size, stop/take-profit, one-position rule, profit-sweep ladder (current base, next target, total paid out), and whether the sweep is armed. Use this to explain where he is on the ladder." },
   { name: 'get_journal', description: "Cletus's own self-reflection journal entries (after each closed trade and daily).", parameters: { type: 'OBJECT', properties: limitParam } },
 ];
 
@@ -105,6 +107,15 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
       return whaleActivity({ mint: typeof args?.mint === 'string' ? args.mint : undefined, symbol: typeof args?.symbol === 'string' ? args.symbol : undefined });
     case 'get_social_hype':
       return { ...socialHype({ mint: typeof args?.mint === 'string' ? args.mint : undefined, symbol: typeof args?.symbol === 'string' ? args.symbol : undefined }), collector: { xEnabled: flowStatus().xEnabled, xRequestsToday: flowStatus().xRequestsToday } };
+    case 'get_owner_plan': {
+      const a = await prisma.account.findFirst({ where: ctx.isAdmin ? { isOperator: true } : { id: ctx.accountId } });
+      if (!a || (!a.isOperator && !ctx.isAdmin)) return { error: 'The money plan applies to the owner trading wallet only.' };
+      const { accountEquity, mem } = await import('../engine');
+      const { ownerPlanStatus } = await import('../profit-sweep');
+      const eq = await accountEquity(a);
+      const status = await ownerPlanStatus({ equityUsd: eq.equity, openPositions: eq.open.length, cashUsd: a.cashUsd, solPriceUsd: mem.solPrice || c.solPriceFallbackUsd });
+      return { ...status, summary: describeOwnerPlan(status) };
+    }
     case 'get_backtest':
       return backtestSummary();
     default:

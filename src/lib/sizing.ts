@@ -47,3 +47,6 @@ export function computePositionSize(i: SizingInput, p: SizingParams): SizingResu
   if (size < p.minTradeUsd) { notes.push(`below min trade $${p.minTradeUsd}`); size = 0; }
   return { sizeUsd: Math.floor(size * 100) / 100, tier: t.tier, multiplier: t.multiplier, notes };
 }
+
+
+export { computeOwnerTradeSize, tradeSizeForEquity, type OwnerSizingResult } from './owner-plan';

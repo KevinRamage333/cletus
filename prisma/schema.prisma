@@ -283,3 +283,40 @@ model TradeApproval {
   @@index([accountId, status])
   @@index([expiresAt])
 }
+
+
+/// Owner profit-sweep ladder (operator wallet only). One row (id = "owner").
+model ProfitSweepState {
+  id                    String             @id @default("owner")
+  currentBaseUsd        Float              @default(0)
+  nextTargetUsd         Float              @default(50)
+  totalPaidUsd          Float              @default(0)
+  confirmedPayoutWallet String?
+  pendingPayoutWallet   String?
+  paused                Boolean            @default(false)
+  pauseReason           String?
+  updatedAt             DateTime           @updatedAt
+  payouts               ProfitSweepPayout[]
+}
+
+/// One rung of the owner profit-sweep ladder. rungKey is the idempotency key (e.g. sweep:t50).
+model ProfitSweepPayout {
+  id             String           @id @default(cuid())
+  stateId        String           @default("owner")
+  state          ProfitSweepState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  rungKey        String           @unique
+  targetUsd      Float
+  baseAfterUsd   Float
+  amountUsd      Float
+  amountLamports String
+  toAddress      String
+  memo           String?
+  mode           String           // simulation | live
+  status         String           // pending | sent | simulated | failed | skipped
+  signature      String?
+  error          String?
+  createdAt      DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+}

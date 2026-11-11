@@ -5,6 +5,8 @@
  * - 429s back off until x-ratelimit-reset (or 5 s). Pure helpers are exported for tests.
  * Docs: https://developers.jup.ag/docs/swap/order-and-execute.md
  */
+import { isOwnerTrade, resolveOperatorFeeWallet, OWNER_TRADING_WALLET } from './owner-plan';
+
 export const JUP_SWAP_BASE = () => (process.env.JUPITER_SWAP_BASE || 'https://api.jup.ag/swap/v2').replace(/\/$/, '');
 export const JUP_PRICE_BASE = () => (process.env.JUPITER_PRICE_BASE || 'https://api.jup.ag/price/v3').replace(/\/$/, '');
 export const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -184,7 +186,7 @@ export function feePenalty(feeBps: number): number { return Math.max(0, 2 * feeB
 // referral account and per-mint referralTokenAccounts must be created once (see docs/OPERATOR_FEE.md).
 // We never create those accounts or sign setup transactions from this app.
 
-export const DEFAULT_OPERATOR_FEE_WALLET = 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq';
+export const DEFAULT_OPERATOR_FEE_WALLET = OWNER_TRADING_WALLET;
 export const DEFAULT_OPERATOR_FEE_BPS = 50;
 export const JUP_REFERRAL_FEE_MIN_BPS = 50;
 export const JUP_REFERRAL_FEE_MAX_BPS = 255;
@@ -201,7 +203,7 @@ export interface OperatorFeeConfig {
 }
 
 export function operatorFeeConfig(env: Record<string, string | undefined> = process.env): OperatorFeeConfig {
-  const wallet = (env.OPERATOR_FEE_WALLET ?? DEFAULT_OPERATOR_FEE_WALLET).trim() || DEFAULT_OPERATOR_FEE_WALLET;
+  const wallet = resolveOperatorFeeWallet(env, DEFAULT_OPERATOR_FEE_WALLET);
   const referralAccount = (env.JUPITER_REFERRAL_ACCOUNT ?? env.OPERATOR_REFERRAL_ACCOUNT ?? '').trim() || null;
   const raw = env.OPERATOR_FEE_BPS;
   let feeBps = DEFAULT_OPERATOR_FEE_BPS;
@@ -220,14 +222,12 @@ function samePubkey(a?: string | null, b?: string | null): boolean {
   return !!a && !!b && a.trim() === b.trim();
 }
 
-/** Whether this swap should include the operator fee. Owner/operator-wallet trades are skipped unless OPERATOR_FEE_ON_OWNER is set. */
+/** Whether this swap should include the operator fee. Owner trades (the trading wallet or the operator account) are skipped unless OPERATOR_FEE_ON_OWNER is set, even when the fee wallet is a separate payout address. */
 export function shouldChargeOperatorFee(taker: string | null | undefined, opts?: { isOwnerAccount?: boolean }, env: Record<string, string | undefined> = process.env): boolean {
   const cfg = operatorFeeConfig(env);
   if (!cfg.enabled) return false;
   if (cfg.chargeOwner) return true;
-  if (taker && samePubkey(taker, cfg.wallet)) return false;
-  // Paper operator account with no known pubkey, or whose pubkey is the fee wallet: skip.
-  if (opts?.isOwnerAccount && (!taker || samePubkey(taker, cfg.wallet))) return false;
+  if (isOwnerTrade(taker, opts, cfg.wallet)) return false;
   return true;
 }
 

@@ -10,10 +10,10 @@ import { shouldChargeOperatorFee } from './jupiter';
 import type { Account, Position } from '@prisma/client';
 import { prisma } from './db';
 import { log } from './logger';
-import { getConfig, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
+import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
 import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
 import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, type SignalBreakdown } from './signals';
-import { computePositionSize } from './sizing';
+import { computePositionSize, computeOwnerTradeSize } from './sizing';
 import { complianceGate, concentrationCap } from './compliance';
 import { exitDecision, partialTakeProfit } from './exits';
 import { flowExitFor, entryVerdict } from './flow-collector';
@@ -257,7 +257,7 @@ export async function scanTick(): Promise<string> {
 async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config): Promise<boolean> {
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
   const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
-  const c = us ? effectiveConfig(serverCfg, us) : serverCfg;
+  const c = applyOwnerPlan(us ? effectiveConfig(serverCfg, us) : serverCfg, a.isOperator);
   if (cand.composite < c.minCompositeScore) return false;
   const blocked = await entryBlockReason(a, c);
   if (blocked) return false;
@@ -267,10 +267,34 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   const pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
   if (!pre.allowed) { if (!pre.reasons.some((r) => r.startsWith('max open') || r.startsWith('duplicate'))) await log('info', `portfolio cap blocked ${cand.symbol}: ${pre.reasons.join('; ')}`, a.id); return false; }
 
-  const size = computePositionSize(
+  let size = computePositionSize(
     { equityUsd: equity, cashUsd: a.cashUsd, openExposureUsd: exposure, cumulativePnl: a.realizedPnl, recoveryMode: a.recoveryMode },
     c,
   );
+  if (a.isOperator && c.ownerPlan.enabled) {
+    const solPrice = mem.solPrice || c.solPriceFallbackUsd;
+    let equityUsd = equity;
+    let cashUsd = a.cashUsd;
+    if (c.mode === 'live') {
+      try {
+        const { connection } = await import('./executor');
+        const { getOperatorPublicKey } = await import('./wallet');
+        const { PublicKey } = await import('@solana/web3.js');
+        const { LAMPORTS_PER_SOL } = await import('./withdraw');
+        const op = getOperatorPublicKey();
+        if (op) {
+          const lamports = await connection(c).getBalance(new PublicKey(op));
+          cashUsd = (lamports / LAMPORTS_PER_SOL) * solPrice;
+          equityUsd = cashUsd + (equity - a.cashUsd);
+        }
+      } catch { /* book equity is the fallback */ }
+    }
+    const o = computeOwnerTradeSize(
+      { equityUsd, cashUsd, solPriceUsd: solPrice, feeReserveSol: c.ownerPlan.feeReserveSol, minTradeUsd: c.minTradeUsd },
+      c.ownerPlan.sizeTiers, c.ownerPlan.sizeStepUsd, c.ownerPlan.sizeIncrementUsd,
+    );
+    size = { sizeUsd: o.sizeUsd, tier: 1, multiplier: 1, notes: o.notes };
+  }
   if (us && us.positionSizePct !== null) { size.sizeUsd = Math.min(sizeFromPct(us, equity, size.sizeUsd), a.cashUsd); size.notes.push(`${us.positionSizePct}% of equity (your setting)`); }
   const eqCap = capByEquityPct(size.sizeUsd, equity, c.maxPositionPctOfEquity);
   if (eqCap.capped) { size.sizeUsd = eqCap.sizeUsd; size.notes.push(`capped at ${c.maxPositionPctOfEquity}% of equity`); }
@@ -386,7 +410,8 @@ async function fetchFastPrices(mints: string[]): Promise<Map<string, number>> {
 }
 
 async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
-  const c = effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg));
+  const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
+  const c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
   const highest = Math.max(p.highestPrice, price);
   if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
   // Fast exit on a dev dump or smart-money / whale exit (on-chain flow; WHALE_FAST_EXIT=off disables).
@@ -423,7 +448,10 @@ export async function monitorTick(): Promise<void> {
     // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
     const { syncPoolSubscriptions } = await import('./helius');
     syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m) => void onPoolChange(m));
-    if (!open.length) return;
+    if (!open.length) {
+      void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
+      return;
+    }
     const mints = [...new Set(open.map((p) => p.mint))];
     const fast = await fetchFastPrices(mints);
     for (const [m, v] of fast) mem.prices.set(m, v);
@@ -555,6 +583,7 @@ export async function closePosition(positionId: string, price: number, reason: s
   }
   void import('./journal').then((j) => j.writeTradeReflection(p.id, before, after));
   await log('trade', `${live ? 'LIVE' : 'PAPER'} SELL ${p.symbol} (${reason}) @ ${exitPrice.toPrecision(6)} PnL ${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlPct.toFixed(2)}%)`, a.id);
+  if (a.isOperator) void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
 }
 
 // ─── Kill switch ─────────────────────────────────────────────────────────────
@@ -582,7 +611,8 @@ export async function startEngine() {
     if (!getOperatorPublicKey()) await setKillSwitch(true, 'live mode but the trading wallet could not be loaded');
   }
   if (c.liveBlockedReason) await log('warn', `live trading NOT enabled: ${c.liveBlockedReason}. Running in SIMULATION.`);
-  await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s`);
+  const plan = c.ownerPlan;
+  await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s; owner plan ${plan.enabled ? `on (1 pos, SL ${plan.stopLossPct}% / TP ${plan.takeProfitPct}%, sweep ${plan.sweepArmed ? 'armed' : 'paused'})` : 'off'}`);
   if (process.env.ENGINE_DISABLED === 'true') { mem.lastScanSummary = 'engine disabled (ENGINE_DISABLED=true)'; return; }
   mem.timers.push(setInterval(() => void scanTick(), c.tradeFrequencySeconds * 1000));
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));
