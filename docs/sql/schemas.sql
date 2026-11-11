@@ -126,5 +126,28 @@ CREATE TABLE IF NOT EXISTS market_data.pool_snapshots (
   PRIMARY KEY (pool, taken_at));
 RESET ROLE;
 
+-- Whale flow (Helius Parsed Events) + X hype (X API v2); also created at runtime by src/lib/flow-collector.ts.
+SET ROLE cletus_md;
+create table if not exists market_data.whale_swaps (
+  signature text not null, mint text not null, pool text not null, wallet text not null, side text not null check (side in ('buy','sell')),
+  token_amount numeric not null, sol_amount numeric, usd numeric not null, block_time timestamptz not null, slot bigint, collected_at timestamptz not null default now(),
+  primary key (signature, mint, wallet));
+create index if not exists whale_swaps_mint_time on market_data.whale_swaps (mint, block_time);
+create index if not exists whale_swaps_wallet on market_data.whale_swaps (wallet);
+create table if not exists market_data.watched_wallets (
+  address text not null, kind text not null check (kind in ('smart','dev','top_holder','insider','manual')), mint text not null default '',
+  label text, score numeric, source text not null default 'auto', added_at timestamptz not null default now(), primary key (address, kind, mint));
+create table if not exists market_data.flow_features (
+  mint text not null, taken_at timestamptz not null, window_min int not null, features jsonb not null, verdict jsonb, primary key (mint, taken_at));
+create table if not exists market_data.holder_snapshots (mint text not null, taken_at timestamptz not null default now(), top10_pct numeric, top1_pct numeric, holders int, primary key (mint, taken_at));
+create table if not exists market_data.x_mention_counts (
+  mint text not null, bucket_start timestamptz not null, bucket_sec int not null, posts int not null, query text not null, collected_at timestamptz not null default now(),
+  primary key (mint, bucket_start, bucket_sec));
+create table if not exists market_data.x_author_samples (
+  mint text not null, taken_at timestamptz not null default now(), posts int, unique_authors int, reach numeric, bot_share numeric, dup_share numeric,
+  new_account_share numeric, organic_ratio numeric, top_authors jsonb, primary key (mint, taken_at));
+create table if not exists market_data.x_hype_features (mint text not null, taken_at timestamptz not null, features jsonb not null, divergence text, message text, primary key (mint, taken_at));
+RESET ROLE;
+
 GRANT SELECT ON ALL TABLES IN SCHEMA market_data TO cletus_app;
 GRANT EXECUTE ON FUNCTION market_data.rollup_candles(interval) TO cletus_app;

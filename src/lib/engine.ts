@@ -16,6 +16,7 @@ import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, ty
 import { computePositionSize } from './sizing';
 import { complianceGate, concentrationCap } from './compliance';
 import { exitDecision, partialTakeProfit } from './exits';
+import { flowExitFor, entryVerdict } from './flow-collector';
 import { simFillPrice } from './fills';
 import { narrativeOf, portfolioCheck, mapLimit } from './portfolio';
 import { parseSettings, effectiveConfig, withinTradingHours, dailyLimitHit, sizeFromPct, type AccountSettings } from './user-settings';
@@ -222,6 +223,12 @@ export async function scanTick(): Promise<string> {
 
     let opened = 0;
     for (const cand of qualified.slice(0, c.auditTopN)) {
+      // On-chain flow + X hype: confirmer/veto only (SIGNAL_VETO_MODE=shadow logs, on blocks, off ignores). Never a buy trigger.
+      const verdict = entryVerdict(cand.mint);
+      if (verdict.mode !== 'off' && verdict.veto) {
+        await log('info', `${verdict.mode === 'on' ? 'flow veto' : 'flow veto (shadow, not enforced)'} ${cand.symbol}: ${verdict.reasons.join(' | ')}`);
+        if (verdict.mode === 'on') continue;
+      }
       const audit = await auditToken(cand.mint, {
         priceUsd: cand.priceUsd, sizeUsd: Math.min(c.maxPositionSizeUsd, 1000),
         params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
@@ -382,7 +389,8 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
   const c = effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg));
   const highest = Math.max(p.highestPrice, price);
   if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
-  const reason = killSwitch ? 'kill_switch' : exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
+  // Fast exit on a dev dump or smart-money / whale exit (on-chain flow; WHALE_FAST_EXIT=off disables).
+  const reason = killSwitch ? 'kill_switch' : flowExitFor(p.mint) ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
   if (reason) { await closePosition(p.id, price, reason); return; }
   const partial = partialTakeProfit(p, price, c.tpLadder, p.partialsTaken, c.takeProfitPct);
   if (partial) await partialClose(p.id, price, partial.fraction, partial.rung, partial.gainPct);

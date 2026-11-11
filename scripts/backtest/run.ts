@@ -19,6 +19,7 @@ import { expectedFeeBps, feePenalty } from '../../src/lib/jupiter';
 import { snapshotAt, simulateTrade, volumePrefix, tradeStats, spearman, reliability, isotonic, brier, wilson, BAR_SEC, type Bar, type PoolMeta, type TradeResult, type CostModel } from '../../src/lib/backtest/replay';
 import { computeFeatures, FEATURE_NAMES, type FeatureName } from '../../src/lib/backtest/features';
 import type { ExitParams } from '../../src/lib/exits';
+import { flowFeatures, whaleGate, type WhaleSwap } from '../../src/lib/whales';
 
 const argv = process.argv;
 const arg = (k: string, d: string) => { const i = argv.indexOf(`--${k}`); return i > 0 ? argv[i + 1] : d; };
@@ -42,6 +43,11 @@ async function loadData() {
     select p.address, p.base_mint, p.base_symbol, p.dex, s.price_usd, s.fdv_usd, s.mcap_usd, s.reserve_usd, s.pool_created_at, s.discovered_via
     from market_data.pools p join lateral (select * from market_data.pool_snapshots s where s.pool = p.address order by taken_at desc limit 1) s on true`)).rows;
   const bars = (await md.query(`select pool, extract(epoch from bucket)::bigint as t, open, high, low, close, volume_usd from market_data.ohlcv_5m order by pool, bucket`)).rows;
+  let flow: WhaleSwap[] = []; let xRows = 0; let xSpanH = 0;
+  try {
+    flow = (await md.query(`select signature, mint, pool, wallet, side, token_amount, usd, extract(epoch from block_time)::bigint t from market_data.whale_swaps`)).rows.map((x) => ({ signature: x.signature, mint: x.mint, pool: x.pool, wallet: x.wallet, side: x.side, tokenAmount: Number(x.token_amount), solAmount: 0, usd: Number(x.usd), blockTime: Number(x.t), slot: null }));
+    const xr = (await md.query(`select count(*)::int n, coalesce(extract(epoch from max(bucket_start) - min(bucket_start)) / 3600, 0) h from market_data.x_mention_counts`)).rows[0]; xRows = xr.n; xSpanH = Number(xr.h);
+  } catch { /* tables not created yet */ }
   await md.end();
   const byPool = new Map<string, Bar[]>();
   for (const r of bars) { const a = byPool.get(r.pool) ?? []; a.push({ t: Number(r.t), o: Number(r.open), h: Number(r.high), l: Number(r.low), c: Number(r.close), v: Number(r.volume_usd) }); byPool.set(r.pool, a); }
@@ -60,7 +66,7 @@ async function loadData() {
     await app.end();
   } catch { /* app DB optional */ }
   const hash = crypto.createHash('sha256'); for (const s of series) hash.update(`${s.length}:${s[0].t}:${s[s.length - 1].t}:${s[s.length - 1].c};`);
-  return { metas, series, via, live, datasetHash: hash.digest('hex').slice(0, 12) };
+  return { metas, series, via, live, datasetHash: hash.digest('hex').slice(0, 12), flow, xRows, xSpanH };
 }
 
 function exitParamsOf(c: Config, o: Partial<ExitParams> = {}): ExitParams {
@@ -72,7 +78,7 @@ const pct = (x: number | null | undefined, d = 1) => (x === null || x === undefi
 
 async function main() {
   const t0 = Date.now();
-  const { metas, series, via, live, datasetHash } = await loadData();
+  const { metas, series, via, live, datasetHash, flow, xRows, xSpanH } = await loadData();
   const prefixes = series.map(volumePrefix);
   const datasetEnd = Math.max(...series.map((s) => s[s.length - 1].t + BAR_SEC));
   const datasetStart = Math.min(...series.map((s) => s[0].t));
@@ -83,6 +89,13 @@ async function main() {
   const snaps = series.map((bars, p) => bars.map((_, i) => snapshotAt(bars, i, metas[p], prefixes[p])));
 
   const report: any = { generatedAt: new Date().toISOString(), datasetHash, pools: metas.length, candles: nCandles, start: new Date(datasetStart * 1000).toISOString(), end: new Date(datasetEnd * 1000).toISOString(), discoveredVia: via.reduce((m: any, v) => ((m[v] = (m[v] ?? 0) + 1), m), {}), sizeUsd: SIZE_USD, presets: {} };
+
+  const flowSpanH = flow.length ? (Math.max(...flow.map((f) => f.blockTime)) - Math.min(...flow.map((f) => f.blockTime))) / 3600 : 0;
+  const flowMints = new Set(flow.map((f) => f.mint));
+  const overlap = metas.filter((m) => flowMints.has(m.mint)).length;
+  report.flowData = { whaleSwaps: flow.length, whaleTokens: flowMints.size, whaleSpanHours: +flowSpanH.toFixed(1), overlapWithBacktestPools: overlap, xMentionRows: xRows, xSpanHours: +xSpanH.toFixed(1),
+    minimum: 'evaluate when ≥ 72 h of history on ≥ 20 backtest tokens (and ≥ 200 eligible decisions with flow coverage)' };
+  const flowByMint = new Map<string, WhaleSwap[]>(); for (const f of flow) { const a = flowByMint.get(f.mint) ?? []; a.push(f); flowByMint.set(f.mint, a); }
 
   for (const preset of PRESETS) {
     const cfg = buildConfig({ ...process.env, MCAP_PRESET: preset, MIN_MARKET_CAP: undefined, MAX_MARKET_CAP: undefined });
@@ -244,6 +257,12 @@ async function main() {
         scorePredictive: cl.brierModel !== null && cl.brierBase !== null && cl.brierModel < 0.98 * cl.brierBase /* must beat the base rate by ≥2% out of sample */, testIcLive: P.ic.liveComposite.test,
         buckets: reliability(all, [0, 0.3, 0.5, 0.6, 0.7, 0.8, 1.01]).map((b) => ({ ...b, hi: Math.min(1, b.hi) })) }; }
 
+    // ── whale-flow veto (only when history exists; features use swaps strictly before each decision) ──
+    { const cov = rows.map((r) => { const sw = flowByMint.get(metas[r.pool].mint); if (!sw) return null; const prior = sw.filter((x) => x.blockTime <= r.t && x.blockTime > r.t - 3600); if (!prior.length) return null; const o = outcome(r, 'E0', E0, 'owner'); if (!o || o.censored) return null; const f = flowFeatures(metas[r.pool].mint, prior, [], { nowSec: r.t, windowMin: 60 }); return { f, v: whaleGate(f), ret: o.pnlPct }; }).filter((x): x is NonNullable<typeof x> => !!x);
+      const evaluable = cov.length >= 200 && report.flowData.whaleSpanHours >= 72 && report.flowData.overlapWithBacktestPools >= 20;
+      const m = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+      P.flowEval = { decisionsWithFlow: cov.length, evaluable, icWhaleNet: cov.length >= 30 ? spearman(cov.map((x) => x.f.whaleNetUsd), cov.map((x) => x.ret)) : null, icFlowRatio: cov.length >= 30 ? spearman(cov.map((x) => x.f.flowRatio ?? 0.5), cov.map((x) => x.ret)) : null,
+        vetoedMeanNetPct: m(cov.filter((x) => x.v.veto).map((x) => x.ret)), keptMeanNetPct: m(cov.filter((x) => !x.v.veto).map((x) => x.ret)), vetoed: cov.filter((x) => x.v.veto).length }; }
     // ── exit sensitivity (recommendation only; selected on train, reported on test) ──
     const ex = exitGrid.slice(1).map(([k, e]) => { const tr = simulate(chosenSc, chosen.thr, tMin, tSplit, k, e); const te = simulate(chosenSc, chosen.thr, tSplit, tMax + 1, k, e); return { k, train: tradeStats(tr), test: tradeStats(te), obj: lcb(tr) }; });
     ex.sort((a, b) => b.obj - a.obj);
@@ -278,6 +297,12 @@ function renderReport(r: any): string {
   L.push(`# Cletus backtest report`, '', `Generated ${r.generatedAt} · dataset ${r.datasetHash} · ${r.pools} pools · ${r.candles.toLocaleString()} five-minute candles · ${r.start} → ${r.end} (UTC) · clip $${r.sizeUsd}`, '');
   L.push(`Pools by discovery source: ${Object.entries(r.discoveredVia).map(([k, v]) => `${k} ${v}`).join(', ')}`, '');
   L.push('All returns are net of Jupiter fees (50 bps/side under 24 h, 10 bps after), AMM price impact, 30 bps/side slippage, +100 bps on stop-type exits, and network fees. "Owner" = no operator fee; "customer" = 0.5% operator fee per side. Test = later, unseen time window.', '');
+  if (r.flowData) {
+    const f = r.flowData;
+    L.push('## Whale flow and X hype data', '', `Whale swaps stored: ${f.whaleSwaps} across ${f.whaleTokens} tokens over ${f.whaleSpanHours} h (${f.overlapWithBacktestPools} overlap the backtest pools). X mention rows: ${f.xMentionRows} over ${f.xSpanHours} h. Rule: ${f.minimum}.`, '');
+    for (const [k, P] of Object.entries<any>(r.presets)) if (P.flowEval) L.push(`- ${k}: ${P.flowEval.decisionsWithFlow} eligible decisions with prior-hour flow → ${P.flowEval.evaluable ? `IC(whale net) ${fmt(P.flowEval.icWhaleNet, 3)}, IC(flow ratio) ${fmt(P.flowEval.icFlowRatio, 3)}, vetoed ${P.flowEval.vetoed} at ${fmt(P.flowEval.vetoedMeanNetPct)}% vs kept ${fmt(P.flowEval.keptMeanNetPct)}%` : '**not evaluable yet** (too little history)'}`);
+    L.push('');
+  }
   for (const [name, P] of Object.entries<any>(r.presets)) {
     L.push(`## ${P.label}`, '', `Snapshots ${P.snapshots.toLocaleString()} · eligible after filters ${P.eligible.toLocaleString()} (${P.eligiblePools ?? 0} pools)`, '');
     if (P.note) { L.push(`_${P.note}_`, ''); continue; }

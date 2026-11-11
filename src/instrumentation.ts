@@ -4,5 +4,7 @@ export async function register() {
     startEngine().catch((e) => console.error('[cletus] engine failed to start', e?.message));
     const { startCollector } = await import('./lib/market-data');
     startCollector();
+    const { startFlowCollectors } = await import('./lib/flow-collector');
+    startFlowCollectors();
   }
 }

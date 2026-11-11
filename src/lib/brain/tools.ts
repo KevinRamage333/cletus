@@ -7,6 +7,7 @@ import { getConfig, publicConfig } from '../config';
 import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
 import { tierFor } from '../sizing';
 import { scoreConfidence, backtestSummary } from '../calibration';
+import { whaleActivity, socialHype, flowStatus } from '../flow-collector';
 
 export interface ToolContext { userId: string; accountId: string; isAdmin: boolean }
 
@@ -27,6 +28,8 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_world_briefing', description: 'The latest rolling world briefing (crypto, macro, Fed, world news) plus SOL price and DexScreener trending tokens.' },
   { name: 'get_news', description: 'Recent stored news headlines, optionally by category.', parameters: { type: 'OBJECT', properties: { category: { type: 'STRING', description: 'crypto | macro | world | fed', enum: ['crypto', 'macro', 'world', 'fed'] }, ...limitParam } } },
   { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
+  { name: 'get_whale_activity', description: 'On-chain big money movers for a tracked token (Helius): whale net flow, smart-money buys/sells, dev-wallet selling, fresh-wallet bundle clusters, top-holder concentration change, the confirm/veto verdict, fast-exit signal, and Solscan links. Use it as a confirmer/veto next to order flow, never as a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
+  { name: 'get_social_hype', description: 'X (Twitter) mention velocity/acceleration, organic vs bot/shill share, and hype-vs-price/flow divergence for a tracked token (e.g. rising hype into selling = exit liquidity). Confirmer/veto only, never a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
   { name: 'get_journal', description: "Cletus's own self-reflection journal entries (after each closed trade and daily).", parameters: { type: 'OBJECT', properties: limitParam } },
 ];
 
@@ -98,6 +101,10 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
       const rows = await prisma.journalEntry.findMany({ where: { OR: [{ accountId: ctx.accountId }, { accountId: null }] }, orderBy: { createdAt: 'desc' }, take: lim(args, 5) });
       return rows.map((j) => ({ kind: j.kind, title: j.title, content: j.content, at: j.createdAt }));
     }
+    case 'get_whale_activity':
+      return whaleActivity({ mint: typeof args?.mint === 'string' ? args.mint : undefined, symbol: typeof args?.symbol === 'string' ? args.symbol : undefined });
+    case 'get_social_hype':
+      return { ...socialHype({ mint: typeof args?.mint === 'string' ? args.mint : undefined, symbol: typeof args?.symbol === 'string' ? args.symbol : undefined }), collector: { xEnabled: flowStatus().xEnabled, xRequestsToday: flowStatus().xRequestsToday } };
     case 'get_backtest':
       return backtestSummary();
     default:

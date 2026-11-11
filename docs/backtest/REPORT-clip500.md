@@ -1,10 +1,18 @@
 # Cletus backtest report
 
-Generated 2026-11-11T17:16:55.033Z · dataset d6c54ef5b488 · 60 pools · 46,789 five-minute candles · 2026-10-29T13:15:00.000Z → 2026-11-11T17:15:00.000Z (UTC) · clip $500
+Generated 2026-11-11T17:31:59.079Z · dataset 02432c3ecf49 · 60 pools · 46,789 five-minute candles · 2026-10-29T13:15:00.000Z → 2026-11-11T17:15:00.000Z (UTC) · clip $500
 
 Pools by discovery source: collector 19, topvol 10, trending24h 31
 
 All returns are net of Jupiter fees (50 bps/side under 24 h, 10 bps after), AMM price impact, 30 bps/side slippage, +100 bps on stop-type exits, and network fees. "Owner" = no operator fee; "customer" = 0.5% operator fee per side. Test = later, unseen time window.
+
+## Whale flow and X hype data
+
+Whale swaps stored: 169 across 4 tokens over 1 h (4 overlap the backtest pools). X mention rows: 0 over 0 h. Rule: evaluate when ≥ 72 h of history on ≥ 20 backtest tokens (and ≥ 200 eligible decisions with flow coverage).
+
+- DEGEN: 0 eligible decisions with prior-hour flow → **not evaluable yet** (too little history)
+- BALANCED: 0 eligible decisions with prior-hour flow → **not evaluable yet** (too little history)
+- SAFER: 0 eligible decisions with prior-hour flow → **not evaluable yet** (too little history)
 
 ## Degen $10k-$500k
 
@@ -15,44 +23,44 @@ Split: train 2026-11-08T03:00:00.000Z → 2026-11-10T06:15:00.000Z, test → 202
 | | trades | hit rate | avg win | avg loss | expectancy | profit factor | max DD | Sharpe/trade |
 |---|---|---|---|---|---|---|---|---|
 | baseline (live weights @ 0.75) train | 0 | – | –% | –% | –% | – | 0.00% | – |
-| baseline TEST | 0 | – | –% | –% | –% | – | 0.00% | – |
-| baseline TEST (customer fee) | 0 | – | –% | –% | –% | – | 0.00% | – |
+| baseline TEST | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
+| baseline TEST (customer fee) | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
 | chosen (icAll @ 0.525) train | 15 | 26.7% | 5.73% | -3.45% | -1.00% | 0.60 | 0.77% | -0.20 |
 | chosen TEST | 57 | 14.0% | 5.72% | -6.37% | -4.67% | 0.15 | 13.31% | -0.93 |
 | chosen TEST (customer fee) | 57 | 14.0% | 5.10% | -6.84% | -5.17% | 0.12 | 14.73% | -1.04 |
 | joint score+exits (icAll @ 0.525, hold60_sl5_tp15) train | 13 | 38.5% | 12.09% | -3.88% | 2.26% | 1.95 | 1.17% | 0.27 |
 | joint TEST | 56 | 12.5% | 7.87% | -7.61% | -5.68% | 0.15 | 15.89% | -1.00 |
 | joint TEST (customer fee) | 56 | 12.5% | 7.04% | -8.05% | -6.16% | 0.12 | 17.26% | -1.11 |
-| walk-forward baseline (3 folds OOS) | 0 | – | –% | –% | –% | – | 0.00% | – |
-| walk-forward chosen (3 folds OOS) | 97 | 9.3% | 6.27% | -5.25% | -4.18% | 0.12 | 20.28% | -0.93 |
+| walk-forward baseline (3 folds OOS) | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
+| walk-forward chosen (3 folds OOS) | 100 | 10.0% | 6.86% | -5.27% | -4.05% | 0.14 | 20.26% | -0.86 |
 | walk-forward joint (3 folds OOS) | 66 | 19.7% | 6.76% | -7.67% | -4.82% | 0.22 | 15.93% | -0.64 |
 
-Walk-forward picks: fold 1: defaults@0.325; fold 1 joint: icAll@0.45 hold60_sl10_tp15; fold 2: live@0.325; fold 2 joint: icBase@0.675 hold30_sl10_tp15; fold 3: icBase@0.675; fold 3 joint: icBase@0.65 hold30_sl10_tp15
+Walk-forward picks: fold 1: defaults@0.325; fold 1 joint: icAll@0.45 hold60_sl10_tp15; fold 2: defaults@0.325; fold 2 joint: icBase@0.675 hold30_sl10_tp15; fold 3: icBase@0.675; fold 3 joint: icBase@0.65 hold30_sl10_tp15
 
 Ranking quality, threshold-free (TEST decisions; mean net return of the top q% by each score):
 
 | scorer | top 2% | top 5% | top 10% | top 25% | all |
 |---|---|---|---|---|---|
-| live | -5.61% (win 13%, n=23) | -4.94% (win 16%, n=56) | -5.19% (win 12%, n=113) | -5.21% (win 9%, n=282) | -4.55% (win 7%, n=1127) |
+| live | -6.07% (win 9%, n=23) | -5.30% (win 14%, n=56) | -5.17% (win 12%, n=113) | -5.26% (win 9%, n=282) | -4.55% (win 7%, n=1127) |
 | defaults | -5.82% (win 9%, n=23) | -4.99% (win 16%, n=56) | -5.19% (win 12%, n=113) | -5.13% (win 9%, n=282) | -4.55% (win 7%, n=1127) |
 | icBase | -4.54% (win 4%, n=23) | -4.12% (win 9%, n=56) | -4.68% (win 7%, n=113) | -4.45% (win 8%, n=282) | -4.55% (win 7%, n=1127) |
 | icAll | -4.93% (win 13%, n=23) | -4.69% (win 14%, n=56) | -4.71% (win 12%, n=113) | -4.58% (win 10%, n=282) | -4.55% (win 7%, n=1127) |
 | icShippable | -4.93% (win 13%, n=23) | -4.69% (win 14%, n=56) | -4.71% (win 12%, n=113) | -4.58% (win 10%, n=282) | -4.55% (win 7%, n=1127) |
 
-Each scorer at the live threshold 0.75 (TEST portfolio): live: n=0, exp –%; defaults: n=0, exp –%; icBase: n=8, exp -4.68%; icAll: n=1, exp -2.88%; icShippable: n=1, exp -2.88%
+Each scorer at the live threshold 0.75 (TEST portfolio): live: n=1, exp -8.93%; defaults: n=0, exp –%; icBase: n=8, exp -4.68%; icAll: n=1, exp -2.88%; icShippable: n=1, exp -2.88%
 
 Live weights, threshold sweep (train | test):
 
 | threshold | train n | train exp | test n | test hit | test exp |
 |---|---|---|---|---|---|
-| 0.3 | 63 | -2.55% | 216 | 10.6% | -5.04% |
-| 0.4 | 21 | -2.68% | 94 | 12.8% | -5.09% |
-| 0.5 | 8 | -0.51% | 39 | 17.9% | -5.05% |
-| 0.55 | 4 | 1.35% | 27 | 14.8% | -5.15% |
-| 0.6 | 0 | –% | 11 | 0.0% | -7.46% |
-| 0.65 | 0 | –% | 6 | 0.0% | -8.40% |
-| 0.7 | 0 | –% | 2 | 0.0% | -8.48% |
-| 0.75 | 0 | –% | 0 | – | –% |
+| 0.3 | 67 | -2.65% | 234 | 10.3% | -5.05% |
+| 0.4 | 23 | -2.76% | 110 | 10.9% | -5.34% |
+| 0.5 | 10 | -2.04% | 43 | 16.3% | -5.06% |
+| 0.55 | 4 | 1.35% | 29 | 13.8% | -5.38% |
+| 0.6 | 0 | –% | 15 | 6.7% | -6.36% |
+| 0.65 | 0 | –% | 7 | 0.0% | -8.46% |
+| 0.7 | 0 | –% | 3 | 0.0% | -8.55% |
+| 0.75 | 0 | –% | 1 | 0.0% | -8.93% |
 
 Information coefficient (Spearman of signal vs net trade return; and vs raw 60-min forward return):
 
@@ -71,19 +79,19 @@ Information coefficient (Spearman of signal vs net trade return; and vs raw 60-m
 | freshness | -0.081 | -0.019 | 0.033 | 0.088 |
 | dipInUptrend | 0.050 | -0.065 | -0.005 | -0.100 |
 | higherLows | -0.128 | -0.011 | -0.067 | 0.023 |
-| liveComposite | -0.038 | -0.226 | -0.001 | -0.120 |
+| liveComposite | -0.040 | -0.231 | -0.002 | -0.123 |
 
-Calibration (live score; isotonic fit on train). Test Brier 0.0746 vs base-rate 0.0677 (lower is better). Train win rate 8.8%.
+Calibration (live score; isotonic fit on train). Test Brier 0.0751 vs base-rate 0.0677 (lower is better). Train win rate 8.8%.
 
 | score bucket | test n | test win rate (95% CI) | test mean net |
 |---|---|---|---|
-| 0–0.2 | 567 | 6.9% (5%–9%) | -4.05% |
-| 0.2–0.3 | 309 | 6.1% (4%–9%) | -4.97% |
-| 0.3–0.4 | 144 | 7.6% (4%–13%) | -5.17% |
-| 0.4–0.5 | 64 | 7.8% (3%–17%) | -5.30% |
-| 0.5–0.6 | 32 | 25.0% (13%–42%) | -4.02% |
-| 0.6–0.7 | 9 | 0.0% (0%–30%) | -7.24% |
-| 0.7–0.8 | 2 | 0.0% (0%–66%) | -8.48% |
+| 0–0.2 | 553 | 6.9% (5%–9%) | -4.02% |
+| 0.2–0.3 | 303 | 6.3% (4%–10%) | -4.96% |
+| 0.3–0.4 | 146 | 8.2% (5%–14%) | -5.02% |
+| 0.4–0.5 | 75 | 6.7% (3%–15%) | -5.58% |
+| 0.5–0.6 | 34 | 20.6% (10%–37%) | -4.31% |
+| 0.6–0.7 | 13 | 7.7% (1%–33%) | -6.04% |
+| 0.7–0.8 | 3 | 0.0% (0%–56%) | -8.55% |
 | 0.8–1 | 0 | – (–––) | –% |
 
 Calibration (chosen score; isotonic fit on train). Test Brier 0.0693 vs base-rate 0.0677 (lower is better). Train win rate 8.8%.
@@ -121,15 +129,15 @@ Split: train 2026-11-08T02:40:00.000Z → 2026-11-10T06:37:00.000Z, test → 202
 | | trades | hit rate | avg win | avg loss | expectancy | profit factor | max DD | Sharpe/trade |
 |---|---|---|---|---|---|---|---|---|
 | baseline (live weights @ 0.75) train | 0 | – | –% | –% | –% | – | 0.00% | – |
-| baseline TEST | 0 | – | –% | –% | –% | – | 0.00% | – |
-| baseline TEST (customer fee) | 0 | – | –% | –% | –% | – | 0.00% | – |
+| baseline TEST | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
+| baseline TEST (customer fee) | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
 | chosen (icBase @ 0.75) train | 322 | 3.7% | 3.53% | -1.94% | -1.74% | 0.07 | 27.96% | -0.90 |
 | chosen TEST | 617 | 6.0% | 2.69% | -2.41% | -2.11% | 0.07 | 65.00% | -0.84 |
 | chosen TEST (customer fee) | 617 | 3.9% | 3.16% | -3.14% | -2.89% | 0.04 | 89.25% | -1.16 |
 | joint score+exits (icBase @ 0.75, hold30_sl10_tp15) train | 126 | 10.3% | 8.16% | -2.39% | -1.30% | 0.39 | 8.33% | -0.30 |
 | joint TEST | 255 | 18.4% | 4.71% | -3.98% | -2.38% | 0.27 | 30.29% | -0.45 |
 | joint TEST (customer fee) | 255 | 14.9% | 4.94% | -4.57% | -3.15% | 0.19 | 40.22% | -0.60 |
-| walk-forward baseline (3 folds OOS) | 0 | – | –% | –% | –% | – | 0.00% | – |
+| walk-forward baseline (3 folds OOS) | 1 | 0.0% | –% | -8.93% | -8.93% | 0.00 | 0.45% | – |
 | walk-forward chosen (3 folds OOS) | 905 | 5.6% | 2.54% | -2.29% | -2.02% | 0.07 | 91.28% | -0.87 |
 | walk-forward joint (3 folds OOS) | 307 | 17.9% | 5.32% | -4.52% | -2.76% | 0.26 | 42.32% | -0.47 |
 
@@ -139,26 +147,26 @@ Ranking quality, threshold-free (TEST decisions; mean net return of the top q% b
 
 | scorer | top 2% | top 5% | top 10% | top 25% | all |
 |---|---|---|---|---|---|
-| live | -3.97% (win 17%, n=105) | -3.81% (win 15%, n=262) | -3.74% (win 12%, n=524) | -3.52% (win 9%, n=1309) | -3.00% (win 8%, n=5235) |
+| live | -4.04% (win 17%, n=105) | -3.85% (win 15%, n=262) | -3.77% (win 12%, n=524) | -3.52% (win 9%, n=1309) | -3.00% (win 8%, n=5235) |
 | defaults | -4.06% (win 16%, n=105) | -3.83% (win 14%, n=262) | -3.82% (win 12%, n=524) | -3.53% (win 9%, n=1309) | -3.00% (win 8%, n=5235) |
 | icBase | -1.19% (win 9%, n=105) | -1.55% (win 7%, n=262) | -1.62% (win 7%, n=524) | -2.22% (win 6%, n=1309) | -3.00% (win 8%, n=5235) |
 | icAll | -1.19% (win 9%, n=105) | -1.55% (win 7%, n=262) | -1.62% (win 7%, n=524) | -2.22% (win 6%, n=1309) | -3.00% (win 8%, n=5235) |
 | icShippable | -1.19% (win 9%, n=105) | -1.55% (win 7%, n=262) | -1.62% (win 7%, n=524) | -2.22% (win 6%, n=1309) | -3.00% (win 8%, n=5235) |
 
-Each scorer at the live threshold 0.75 (TEST portfolio): live: n=0, exp –%; defaults: n=0, exp –%; icBase: n=617, exp -2.11%; icAll: n=617, exp -2.11%; icShippable: n=617, exp -2.11%
+Each scorer at the live threshold 0.75 (TEST portfolio): live: n=1, exp -8.93%; defaults: n=0, exp –%; icBase: n=617, exp -2.11%; icAll: n=617, exp -2.11%; icShippable: n=617, exp -2.11%
 
 Live weights, threshold sweep (train | test):
 
 | threshold | train n | train exp | test n | test hit | test exp |
 |---|---|---|---|---|---|
-| 0.3 | 238 | -2.83% | 603 | 12.1% | -3.67% |
-| 0.4 | 91 | -2.84% | 243 | 13.6% | -3.85% |
-| 0.5 | 28 | -2.23% | 78 | 17.9% | -4.20% |
-| 0.55 | 13 | -4.41% | 37 | 13.5% | -5.26% |
-| 0.6 | 1 | -7.66% | 15 | 0.0% | -6.90% |
-| 0.65 | 0 | –% | 6 | 0.0% | -8.40% |
-| 0.7 | 0 | –% | 2 | 0.0% | -8.48% |
-| 0.75 | 0 | –% | 0 | – | –% |
+| 0.3 | 252 | -2.76% | 655 | 11.5% | -3.75% |
+| 0.4 | 97 | -2.74% | 273 | 12.5% | -4.07% |
+| 0.5 | 32 | -2.77% | 94 | 17.0% | -4.10% |
+| 0.55 | 14 | -4.30% | 45 | 13.3% | -5.19% |
+| 0.6 | 4 | -7.62% | 20 | 5.0% | -6.25% |
+| 0.65 | 0 | –% | 9 | 0.0% | -7.74% |
+| 0.7 | 0 | –% | 3 | 0.0% | -8.55% |
+| 0.75 | 0 | –% | 1 | 0.0% | -8.93% |
 
 Information coefficient (Spearman of signal vs net trade return; and vs raw 60-min forward return):
 
@@ -177,19 +185,19 @@ Information coefficient (Spearman of signal vs net trade return; and vs raw 60-m
 | freshness | -0.066 | -0.031 | 0.021 | 0.118 |
 | dipInUptrend | -0.010 | -0.097 | 0.007 | -0.068 |
 | higherLows | -0.072 | -0.044 | -0.068 | 0.026 |
-| liveComposite | -0.097 | -0.157 | -0.049 | -0.040 |
+| liveComposite | -0.098 | -0.159 | -0.051 | -0.041 |
 
-Calibration (live score; isotonic fit on train). Test Brier 0.0768 vs base-rate 0.0763 (lower is better). Train win rate 9.4%.
+Calibration (live score; isotonic fit on train). Test Brier 0.0771 vs base-rate 0.0763 (lower is better). Train win rate 9.4%.
 
 | score bucket | test n | test win rate (95% CI) | test mean net |
 |---|---|---|---|
-| 0–0.2 | 3340 | 8.3% (7%–9%) | -2.74% |
-| 0.2–0.3 | 1161 | 5.9% (5%–7%) | -3.34% |
-| 0.3–0.4 | 454 | 10.6% (8%–14%) | -3.55% |
-| 0.4–0.5 | 196 | 12.8% (9%–18%) | -3.54% |
-| 0.5–0.6 | 69 | 21.7% (14%–33%) | -3.50% |
-| 0.6–0.7 | 13 | 0.0% (0%–23%) | -6.66% |
-| 0.7–0.8 | 2 | 0.0% (0%–66%) | -8.48% |
+| 0–0.2 | 3260 | 8.4% (8%–9%) | -2.72% |
+| 0.2–0.3 | 1170 | 6.1% (5%–8%) | -3.30% |
+| 0.3–0.4 | 487 | 9.9% (8%–13%) | -3.49% |
+| 0.4–0.5 | 213 | 11.3% (8%–16%) | -3.83% |
+| 0.5–0.6 | 84 | 20.2% (13%–30%) | -3.45% |
+| 0.6–0.7 | 18 | 5.6% (1%–26%) | -6.02% |
+| 0.7–0.8 | 3 | 0.0% (0%–56%) | -8.55% |
 | 0.8–1 | 0 | – (–––) | –% |
 
 Calibration (chosen score; isotonic fit on train). Test Brier 0.0830 vs base-rate 0.0763 (lower is better). Train win rate 9.4%.
@@ -245,7 +253,7 @@ Ranking quality, threshold-free (TEST decisions; mean net return of the top q% b
 
 | scorer | top 2% | top 5% | top 10% | top 25% | all |
 |---|---|---|---|---|---|
-| live | 0.50% (win 42%, n=31) | -0.87% (win 26%, n=77) | -1.40% (win 19%, n=155) | -1.32% (win 16%, n=387) | -1.58% (win 15%, n=1546) |
+| live | 0.57% (win 48%, n=31) | -0.93% (win 25%, n=77) | -1.44% (win 19%, n=155) | -1.31% (win 15%, n=387) | -1.58% (win 15%, n=1546) |
 | defaults | 0.50% (win 48%, n=31) | -1.01% (win 25%, n=77) | -1.47% (win 19%, n=155) | -1.43% (win 15%, n=387) | -1.58% (win 15%, n=1546) |
 | icBase | -0.90% (win 0%, n=31) | -0.95% (win 1%, n=77) | -0.92% (win 1%, n=155) | -0.87% (win 2%, n=387) | -1.58% (win 15%, n=1546) |
 | icAll | -1.10% (win 3%, n=31) | -0.97% (win 1%, n=77) | -0.92% (win 1%, n=155) | -0.87% (win 2%, n=387) | -1.58% (win 15%, n=1546) |
@@ -257,10 +265,10 @@ Live weights, threshold sweep (train | test):
 
 | threshold | train n | train exp | test n | test hit | test exp |
 |---|---|---|---|---|---|
-| 0.3 | 42 | -1.42% | 80 | 22.5% | -1.28% |
-| 0.4 | 13 | -2.14% | 13 | 61.5% | 2.15% |
+| 0.3 | 43 | -1.44% | 84 | 21.4% | -1.50% |
+| 0.4 | 14 | -2.25% | 14 | 57.1% | 1.85% |
 | 0.5 | 0 | –% | 5 | 40.0% | -0.39% |
-| 0.55 | 0 | –% | 2 | 50.0% | 2.70% |
+| 0.55 | 0 | –% | 3 | 66.7% | 3.03% |
 | 0.6 | 0 | –% | 0 | – | –% |
 | 0.65 | 0 | –% | 0 | – | –% |
 | 0.7 | 0 | –% | 0 | – | –% |
@@ -283,16 +291,16 @@ Information coefficient (Spearman of signal vs net trade return; and vs raw 60-m
 | freshness | -0.070 | -0.172 | -0.058 | 0.049 |
 | dipInUptrend | 0.026 | -0.075 | -0.013 | -0.013 |
 | higherLows | -0.017 | -0.030 | -0.102 | -0.057 |
-| liveComposite | -0.096 | 0.037 | -0.035 | 0.002 |
+| liveComposite | -0.097 | 0.040 | -0.037 | 0.001 |
 
-Calibration (live score; isotonic fit on train). Test Brier 0.1279 vs base-rate 0.1294 (lower is better). Train win rate 17.5%.
+Calibration (live score; isotonic fit on train). Test Brier 0.1328 vs base-rate 0.1294 (lower is better). Train win rate 17.5%.
 
 | score bucket | test n | test win rate (95% CI) | test mean net |
 |---|---|---|---|
-| 0–0.2 | 1224 | 15.7% (14%–18%) | -1.63% |
-| 0.2–0.3 | 229 | 9.2% (6%–14%) | -1.50% |
-| 0.3–0.4 | 76 | 15.8% (9%–26%) | -1.72% |
-| 0.4–0.5 | 11 | 63.6% (35%–85%) | 1.81% |
+| 0–0.2 | 1210 | 15.6% (14%–18%) | -1.63% |
+| 0.2–0.3 | 239 | 10.0% (7%–15%) | -1.43% |
+| 0.3–0.4 | 79 | 15.2% (9%–25%) | -1.92% |
+| 0.4–0.5 | 12 | 58.3% (32%–81%) | 1.48% |
 | 0.5–0.6 | 6 | 50.0% (19%–81%) | 1.31% |
 | 0.6–0.7 | 0 | – (–––) | –% |
 | 0.7–0.8 | 0 | – (–––) | –% |

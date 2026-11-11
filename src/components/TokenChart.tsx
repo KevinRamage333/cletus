@@ -75,8 +75,13 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
     const markers = (data.markers ?? []).filter((m: any) => m.time >= first - step).map((m: any) => ({
       time: snap(m.time), position: m.side === 'buy' ? 'belowBar' : 'aboveBar', color: m.side === 'buy' ? '#F59E0B' : m.pnlUsd >= 0 ? '#22c55e' : '#ef4444',
       shape: m.side === 'buy' ? 'arrowUp' : 'arrowDown', text: m.side === 'buy' ? `BUY $${Number(m.sizeUsd).toFixed(0)}` : `SELL ${m.pnlUsd >= 0 ? '+' : ''}$${Number(m.pnlUsd ?? 0).toFixed(2)}`,
-    })).sort((a: any, b: any) => a.time - b.time);
-    s.candles.setMarkers(markers);
+    }));
+    // Whale / smart-money big movers (Helius, ≥ whale threshold) as small circles.
+    const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`);
+    const whales = (data.whaleMarkers ?? []).filter((m: any) => m.time >= first - step).slice(-40).map((m: any) => ({
+      time: snap(m.time), position: m.side === 'buy' ? 'belowBar' : 'aboveBar', color: m.side === 'buy' ? '#38bdf8' : '#e879f9', shape: 'circle', text: `whale ${m.side} $${k(m.usd)}`,
+    }));
+    s.candles.setMarkers([...markers, ...whales].sort((a: any, b: any) => a.time - b.time));
     chartRef.current?.timeScale().fitContent();
   }, [data]);
 
@@ -106,7 +111,7 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
         <>
           <div ref={box} style={{ height }} className="w-full" />
           {data && !data.candles?.length && <div className="px-4 py-2 text-xs text-white/40">No candles from GeckoTerminal for this pool yet. Try the GeckoTerminal or DexScreener tab.</div>}
-          <div className="px-4 py-1.5 text-[10px] text-white/30">Candles: GeckoTerminal OHLCV (auto-refresh {Math.round((REFRESH[range] ?? 30000) / 1000)}s, cached server-side). Arrows: your Cletus {data?.markers?.length ? `trades (${data.markers.length})` : 'trades (none in range)'}.</div>
+          <div className="px-4 py-1.5 text-[10px] text-white/30">Candles: GeckoTerminal OHLCV (auto-refresh {Math.round((REFRESH[range] ?? 30000) / 1000)}s, cached server-side). Arrows: your Cletus {data?.markers?.length ? `trades (${data.markers.length})` : 'trades (none in range)'}. Circles: whale swaps {data?.whaleMarkers?.length ? `(${data.whaleMarkers.length}, Helius)` : '(none tracked)'}{data?.whaleMarkers?.length ? <> · <a className="underline" href={data.whaleMarkers[data.whaleMarkers.length - 1].solscan} target="_blank" rel="noreferrer">latest on Solscan</a></> : null}.</div>
         </>
       )}
       {view !== 'native' && data?.embeds && (

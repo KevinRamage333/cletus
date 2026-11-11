@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { whaleMarkers as whaleMarkers_ } from '@/lib/flow-collector';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse, HttpError } from '@/lib/auth';
 import { resolveAccount } from '@/lib/status';
@@ -34,6 +35,7 @@ export async function GET(req: Request) {
       { time: Math.floor(p.openedAt.getTime() / 1000), side: 'buy', price: p.entryPrice, sizeUsd: p.sizeUsd + p.partialCostUsd, simulated: p.simulated },
       ...(p.closedAt && p.exitPrice ? [{ time: Math.floor(p.closedAt.getTime() / 1000), side: 'sell', price: p.exitPrice, pnlUsd: p.pnlUsd, reason: p.exitReason, simulated: p.simulated }] : []),
     ]);
+    const whaleMarkers = await whaleMarkers_(mint, Math.floor(since.getTime() / 1000));
     return NextResponse.json({
       address, mint, pool, dexId: info?.dexId ?? null, symbol: info?.symbol ?? null, name: info?.name ?? null, quote: info?.quote ?? null,
       priceUsd: info?.priceUsd ?? null, change24h: info?.change24h ?? null, volume24h: info?.volume24h ?? null, mcap: info?.mcap ?? null, liquidityUsd: info?.liquidityUsd ?? null,
@@ -43,6 +45,7 @@ export async function GET(req: Request) {
         dexscreener: `https://dexscreener.com/solana/${pool}?embed=1&theme=dark`,
       },
       markers,
+      whaleMarkers,
       sources: ['DexScreener (pool lookup)', 'GeckoTerminal (OHLCV)'],
     });
   } catch (e) { return errorResponse(e); }

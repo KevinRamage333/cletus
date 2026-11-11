@@ -11,52 +11,52 @@
         ],
         "meanNetPct": -1.144,
         "scorePredictive": false,
-        "testIcLive": -0.1826,
+        "testIcLive": -0.185,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 1534,
-            "winRate": 0.2849,
-            "meanRetPct": -1.0668,
-            "wilsonLo": 0.2628,
-            "wilsonHi": 0.308
+            "n": 1510,
+            "winRate": 0.2854,
+            "meanRetPct": -1.0543,
+            "wilsonLo": 0.2632,
+            "wilsonHi": 0.3087
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 271,
-            "winRate": 0.262,
-            "meanRetPct": -1.6475,
-            "wilsonLo": 0.2132,
-            "wilsonHi": 0.3174
+            "n": 285,
+            "winRate": 0.2596,
+            "meanRetPct": -1.651,
+            "wilsonLo": 0.2122,
+            "wilsonHi": 0.3135
           },
           {
             "lo": 0.5,
             "hi": 0.6,
-            "n": 40,
-            "winRate": 0.45,
-            "meanRetPct": -0.2873,
-            "wilsonLo": 0.3071,
-            "wilsonHi": 0.6017
+            "n": 45,
+            "winRate": 0.4444,
+            "meanRetPct": -0.4259,
+            "wilsonLo": 0.3094,
+            "wilsonHi": 0.5882
           },
           {
             "lo": 0.6,
             "hi": 0.7,
-            "n": 9,
-            "winRate": 0.3333,
-            "meanRetPct": -2.7082,
-            "wilsonLo": 0.1206,
-            "wilsonHi": 0.6458
+            "n": 13,
+            "winRate": 0.3077,
+            "meanRetPct": -2.2841,
+            "wilsonLo": 0.1268,
+            "wilsonHi": 0.5763
           },
           {
             "lo": 0.7,
             "hi": 0.8,
-            "n": 2,
-            "winRate": 0.5,
-            "meanRetPct": -2.2322,
-            "wilsonLo": 0.0945,
-            "wilsonHi": 0.9055
+            "n": 3,
+            "winRate": 0.3333,
+            "meanRetPct": -3.9412,
+            "wilsonLo": 0.0615,
+            "wilsonHi": 0.7923
           },
           {
             "lo": 0.8,
@@ -81,52 +81,52 @@
         ],
         "meanNetPct": -1.0885,
         "scorePredictive": false,
-        "testIcLive": -0.1442,
+        "testIcLive": -0.146,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 7154,
-            "winRate": 0.2291,
-            "meanRetPct": -1.0644,
-            "wilsonLo": 0.2195,
-            "wilsonHi": 0.239
+            "n": 7068,
+            "winRate": 0.2293,
+            "meanRetPct": -1.0564,
+            "wilsonLo": 0.2197,
+            "wilsonHi": 0.2393
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 905,
-            "winRate": 0.2497,
-            "meanRetPct": -1.2642,
-            "wilsonLo": 0.2226,
-            "wilsonHi": 0.2789
+            "n": 965,
+            "winRate": 0.2446,
+            "meanRetPct": -1.3025,
+            "wilsonLo": 0.2185,
+            "wilsonHi": 0.2727
           },
           {
             "lo": 0.5,
             "hi": 0.6,
-            "n": 97,
-            "winRate": 0.3196,
-            "meanRetPct": -1.016,
-            "wilsonLo": 0.2352,
-            "wilsonHi": 0.4177
+            "n": 114,
+            "winRate": 0.3333,
+            "meanRetPct": -0.8442,
+            "wilsonLo": 0.2535,
+            "wilsonHi": 0.4241
           },
           {
             "lo": 0.6,
             "hi": 0.7,
-            "n": 14,
-            "winRate": 0.2857,
-            "meanRetPct": -2.3576,
-            "wilsonLo": 0.1172,
-            "wilsonHi": 0.5465
+            "n": 22,
+            "winRate": 0.2273,
+            "meanRetPct": -2.8794,
+            "wilsonLo": 0.1012,
+            "wilsonHi": 0.4344
           },
           {
             "lo": 0.7,
             "hi": 0.8,
-            "n": 2,
-            "winRate": 0.5,
-            "meanRetPct": -2.2322,
-            "wilsonLo": 0.0945,
-            "wilsonHi": 0.9055
+            "n": 3,
+            "winRate": 0.3333,
+            "meanRetPct": -3.9412,
+            "wilsonLo": 0.0615,
+            "wilsonHi": 0.7923
           },
           {
             "lo": 0.8,
@@ -151,25 +151,25 @@
         ],
         "meanNetPct": -0.9794,
         "scorePredictive": false,
-        "testIcLive": -0.0325,
+        "testIcLive": -0.0313,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 2730,
-            "winRate": 0.2103,
-            "meanRetPct": -0.9845,
-            "wilsonLo": 0.1954,
-            "wilsonHi": 0.2259
+            "n": 2725,
+            "winRate": 0.2106,
+            "meanRetPct": -0.9798,
+            "wilsonLo": 0.1957,
+            "wilsonHi": 0.2264
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 136,
-            "winRate": 0.2647,
-            "meanRetPct": -0.9951,
-            "wilsonLo": 0.1978,
-            "wilsonHi": 0.3446
+            "n": 141,
+            "winRate": 0.2553,
+            "meanRetPct": -1.0853,
+            "wilsonLo": 0.1905,
+            "wilsonHi": 0.3331
           },
           {
             "lo": 0.5,
@@ -223,52 +223,52 @@
         ],
         "meanNetPct": -4.1,
         "scorePredictive": false,
-        "testIcLive": -0.2264,
+        "testIcLive": -0.2307,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 1534,
-            "winRate": 0.0711,
-            "meanRetPct": -4.0104,
-            "wilsonLo": 0.0592,
-            "wilsonHi": 0.085
+            "n": 1510,
+            "winRate": 0.0715,
+            "meanRetPct": -3.9921,
+            "wilsonLo": 0.0596,
+            "wilsonHi": 0.0856
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 271,
-            "winRate": 0.0959,
-            "meanRetPct": -4.5865,
-            "wilsonLo": 0.0663,
-            "wilsonHi": 0.1369
+            "n": 285,
+            "winRate": 0.0912,
+            "meanRetPct": -4.607,
+            "wilsonLo": 0.063,
+            "wilsonHi": 0.1303
           },
           {
             "lo": 0.5,
             "hi": 0.6,
-            "n": 40,
-            "winRate": 0.275,
-            "meanRetPct": -3.3148,
-            "wilsonLo": 0.1611,
-            "wilsonHi": 0.4284
+            "n": 45,
+            "winRate": 0.2444,
+            "meanRetPct": -3.6502,
+            "wilsonLo": 0.1424,
+            "wilsonHi": 0.3867
           },
           {
             "lo": 0.6,
             "hi": 0.7,
-            "n": 9,
-            "winRate": 0,
-            "meanRetPct": -7.2369,
-            "wilsonLo": 0,
-            "wilsonHi": 0.2992
+            "n": 13,
+            "winRate": 0.0769,
+            "meanRetPct": -6.0424,
+            "wilsonLo": 0.0137,
+            "wilsonHi": 0.3331
           },
           {
             "lo": 0.7,
             "hi": 0.8,
-            "n": 2,
+            "n": 3,
             "winRate": 0,
-            "meanRetPct": -8.4767,
+            "meanRetPct": -8.5505,
             "wilsonLo": 0,
-            "wilsonHi": 0.6576
+            "wilsonHi": 0.5615
           },
           {
             "lo": 0.8,
@@ -293,52 +293,52 @@
         ],
         "meanNetPct": -2.8514,
         "scorePredictive": false,
-        "testIcLive": -0.1566,
+        "testIcLive": -0.1595,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 7154,
-            "winRate": 0.0812,
-            "meanRetPct": -2.7789,
-            "wilsonLo": 0.0751,
-            "wilsonHi": 0.0878
+            "n": 7068,
+            "winRate": 0.0816,
+            "meanRetPct": -2.7656,
+            "wilsonLo": 0.0755,
+            "wilsonHi": 0.0882
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 905,
-            "winRate": 0.1204,
-            "meanRetPct": -3.3369,
-            "wilsonLo": 0.1008,
-            "wilsonHi": 0.1433
+            "n": 965,
+            "winRate": 0.113,
+            "meanRetPct": -3.3685,
+            "wilsonLo": 0.0945,
+            "wilsonHi": 0.1345
           },
           {
             "lo": 0.5,
             "hi": 0.6,
-            "n": 97,
-            "winRate": 0.2268,
-            "meanRetPct": -2.993,
-            "wilsonLo": 0.1548,
-            "wilsonHi": 0.3196
+            "n": 114,
+            "winRate": 0.2193,
+            "meanRetPct": -2.98,
+            "wilsonLo": 0.1532,
+            "wilsonHi": 0.3037
           },
           {
             "lo": 0.6,
             "hi": 0.7,
-            "n": 14,
-            "winRate": 0,
-            "meanRetPct": -6.7331,
-            "wilsonLo": 0,
-            "wilsonHi": 0.2153
+            "n": 22,
+            "winRate": 0.0455,
+            "meanRetPct": -6.306,
+            "wilsonLo": 0.0081,
+            "wilsonHi": 0.218
           },
           {
             "lo": 0.7,
             "hi": 0.8,
-            "n": 2,
+            "n": 3,
             "winRate": 0,
-            "meanRetPct": -8.4767,
+            "meanRetPct": -8.5505,
             "wilsonLo": 0,
-            "wilsonHi": 0.6576
+            "wilsonHi": 0.5615
           },
           {
             "lo": 0.8,
@@ -363,25 +363,25 @@
         ],
         "meanNetPct": -1.3545,
         "scorePredictive": false,
-        "testIcLive": 0.0371,
+        "testIcLive": 0.0398,
         "buckets": [
           {
             "lo": 0,
             "hi": 0.3,
-            "n": 2730,
-            "winRate": 0.1579,
-            "meanRetPct": -1.3621,
-            "wilsonLo": 0.1447,
-            "wilsonHi": 0.172
+            "n": 2725,
+            "winRate": 0.1582,
+            "meanRetPct": -1.3554,
+            "wilsonLo": 0.1449,
+            "wilsonHi": 0.1723
           },
           {
             "lo": 0.3,
             "hi": 0.5,
-            "n": 136,
-            "winRate": 0.2426,
-            "meanRetPct": -1.3201,
-            "wilsonLo": 0.1783,
-            "wilsonHi": 0.3211
+            "n": 141,
+            "winRate": 0.234,
+            "meanRetPct": -1.4506,
+            "wilsonLo": 0.1718,
+            "wilsonHi": 0.3104
           },
           {
             "lo": 0.5,
@@ -425,8 +425,8 @@
       }
     }
   },
-  "generatedAt": "2026-11-11T17:17:09.289Z",
-  "datasetHash": "d6c54ef5b488",
+  "generatedAt": "2026-11-11T17:32:12.681Z",
+  "datasetHash": "02432c3ecf49",
   "range": {
     "start": "2026-10-29T13:15:00.000Z",
     "end": "2026-11-11T17:15:00.000Z"
