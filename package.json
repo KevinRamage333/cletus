@@ -11,7 +11,14 @@
     "db:push": "node --env-file=.env.local node_modules/prisma/build/index.js db push",
     "wallet:generate": "tsx scripts/generate-wallet.ts",
     "screenshot": "node scripts/screenshot.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:migrate": "node --env-file=.env.local node_modules/prisma/build/index.js migrate deploy",
+    "db:migrate:new": "node --env-file=.env.local node_modules/prisma/build/index.js migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script",
+    "db:init": "scripts/db-init.sh",
+    "db:backup": "scripts/db-backup.sh",
+    "db:restore": "scripts/db-restore.sh",
+    "db:sqlite": "scripts/prisma-sqlite.sh",
+    "db:copy-sqlite": "node --env-file=.env.local scripts/sqlite-to-postgres.mjs"
   },
   "engines": {
     "node": ">=18.17"
@@ -25,12 +32,14 @@
     "fast-xml-parser": "^5.12.0",
     "lightweight-charts": "^4.2.3",
     "next": "^14.2.35",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "autoprefixer": "^10.6.2",

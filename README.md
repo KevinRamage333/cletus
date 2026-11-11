@@ -7,20 +7,29 @@ Cletus scans Solana micro-caps on live market data, scores them with 8 self-lear
 > Not financial advice. Micro-cap tokens are extremely risky, and losses can be total. Nothing here promises or projects returns.
 
 ## Stack
-Next.js 14 (App Router) + TypeScript · @solana/web3.js · Helius RPC + WebSocket + DAS (FluxRPC backup with automatic failover) · Jupiter (quotes, swaps, Price v3) · DexScreener · RugCheck · Prisma (SQLite in dev; self-hosted Postgres planned, see docs/DATABASE_PLAN.md) · Brain: Gemini by Google (default) → Grok by xAI → offline mock.
+Next.js 14 (App Router) + TypeScript · @solana/web3.js · Helius RPC + WebSocket + DAS (FluxRPC backup with automatic failover) · Jupiter (quotes, swaps, Price v3) · DexScreener · RugCheck · Prisma on PostgreSQL 17 (self-hosted, SSL-only; SQLite optional for dev; see docs/DATABASE_PLAN.md) · Brain: Gemini by Google (default) → Grok by xAI → offline mock.
 
 ## Quick start
 ```bash
 npm install                 # approve prisma/esbuild install scripts if npm asks
 cp .env.example .env.local  # then set SESSION_SECRET (openssl rand -hex 32)
 npm run wallet:generate     # optional: creates .secrets/trading-wallet.json (operator wallet, chmod 600)
-npm run db:push
+sudo apt install postgresql-17 age   # once; see docs/DATABASE_PLAN.md
+npm run db:init             # roles + DB + schemas (passwords generated into .env.local, never printed)
+npm run db:migrate          # Prisma migrations -> app schema
 npm run dev                 # http://localhost:3000; the engine starts automatically
 npm test                    # vitest
 npm run build
 npm run screenshot          # drives onboarding with a throwaway user; writes landing/dashboard/engine/config/trade/signals/chart/dev-wallet/community/brain .png (+ mobile)
 ```
 The screenshot script creates a test user (`screenshot-*@test.local`). Delete it afterwards with `node --env-file=.env.local scripts/db-users.mjs delete <email>`, because the first user to sign up becomes admin.
+
+## Database
+- **PostgreSQL (default):** database `cletus` with schemas `app` (Prisma: users, trades, Brain), `llc_records` (expenses, contracts, ideas log) and `market_data` (pools, swaps, 1m candles). Each has its own least-privilege role. Only localhost is allowed, SSL only (`hostssl` + scram). Details are in `docs/DATABASE_PLAN.md`.
+- `npm run db:backup` creates an age-encrypted `pg_dump` (7 daily / 4 weekly / 6 monthly). `npm run db:restore -- <file>` restores it into a scratch DB and checks it.
+- Moving to the Oracle Cloud VM: `scripts/migrate-to-server.md`.
+- **SQLite dev mode (optional):** `npm run db:sqlite` generates `prisma/sqlite/schema.prisma` and a client for `file:./dev.db`. Start with `DATABASE_URL=file:./dev.db npm run dev`, and run `npx prisma generate` to switch back to Postgres. `npm run db:copy-sqlite` copies an old `dev.db` into Postgres.
+- Watch out: an exported `DATABASE_URL` in your shell overrides `.env.local`.
 
 ## How a trade happens
 1. **Scanner** (`src/lib/dexscreener.ts`, `src/lib/signals.ts`): DexScreener discovery feeds plus search queries, ranked by volume / market cap, inside the market-cap band from `MCAP_PRESET`:

@@ -57,3 +57,14 @@ export async function poolOhlcv(pool: string, range: string) {
     return parseOhlcv(await res.json());
   });
 }
+
+/** 1-minute candles for the market_data collector. Shares the same token bucket + cache as the charts,
+ *  so the collector can never push GeckoTerminal past GECKO_RPM. Returns null when rate-limited. */
+export async function minuteCandles(pool: string, limit = 100): Promise<Candle[] | null> {
+  const r = await cached(`collect:${pool}`, 20_000, async () => {
+    const res = await fetch(`${GT}/networks/solana/pools/${pool}/ohlcv/minute?aggregate=1&limit=${limit}&currency=usd`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+    if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
+    return parseOhlcv(await res.json());
+  });
+  return r.limited ? null : r.v;
+}

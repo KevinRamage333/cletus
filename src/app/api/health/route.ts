@@ -4,6 +4,7 @@ import { mem } from '@/lib/engine';
 import { heliusConfig, wsStatus } from '@/lib/helius';
 import { rpcStatus } from '@/lib/rpc-pool';
 import { rugcheckStatus } from '@/lib/rugcheck';
+import { collectorStatus } from '@/lib/market-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export async function GET() {
   const h = heliusConfig();
   return NextResponse.json({
     ok: true, mode: c.mode, engineStarted: mem.started, lastScan: mem.lastScanSummary,
-    rpc: rpcStatus(), rugcheck: rugcheckStatus(), heliusWs: { enabled: h.wsEnabled, ...wsStatus() },
+    rpc: rpcStatus(), rugcheck: rugcheckStatus(), marketData: collectorStatus(), heliusWs: { enabled: h.wsEnabled, ...wsStatus() },
     brainProvider: (process.env.BRAIN_PROVIDER || 'gemini').toLowerCase(),
   });
 }

@@ -2,10 +2,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Dev uses SQLite (DATABASE_URL="file:./dev.db").
-// Production: change provider to "postgresql" and point DATABASE_URL at Postgres.
+// Postgres (default): DATABASE_URL=postgresql://cletus_app:…@127.0.0.1:5432/cletus?schema=app&sslmode=require
+// Tables live in the `app` schema (owned by role cletus_app). See docs/DATABASE_PLAN.md.
+// SQLite fallback for quick local dev: `npm run db:sqlite` generates prisma/sqlite/schema.prisma
+// from this file and pushes it to file:./dev.db (see README "Database").
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

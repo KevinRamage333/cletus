@@ -4,7 +4,7 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     instrumentationHook: true,
-    serverComponentsExternalPackages: ['@prisma/client'],
+    serverComponentsExternalPackages: ['@prisma/client', 'pg'],
   },
   async headers() {
     return [{ source: '/(.*)', headers: [
