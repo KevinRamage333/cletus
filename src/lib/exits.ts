@@ -2,6 +2,8 @@ export interface ExitParams {
   stopLossPct: number; takeProfitPct: number; breakEvenTriggerPct: number; enableTrailingStop: boolean; trailingStopPct: number; holdTimeMinutes: number;
   /** Stale-position exit: after this many minutes, close if P&L is still inside ±staleBandPct. 0 disables. */
   stalePositionMinutes?: number; staleBandPct?: number;
+  /** Peak gain (%) that arms the trailing stop. Unset/0 = breakEvenTriggerPct (old behaviour). */
+  trailingArmPct?: number;
 }
 export interface PositionLike { entryPrice: number; highestPrice: number; openedAt: Date }
 export type ExitReason = 'stop_loss' | 'take_profit' | 'break_even' | 'trailing_stop' | 'stale_exit' | 'time_exit';
@@ -14,7 +16,7 @@ export function exitDecision(pos: PositionLike, price: number, p: ExitParams, no
   const ageMin = (now.getTime() - pos.openedAt.getTime()) / 60_000;
   if (pnlPct <= -p.stopLossPct) return 'stop_loss';
   if (pnlPct >= p.takeProfitPct) return 'take_profit';
-  if (p.enableTrailingStop && peakPct >= p.breakEvenTriggerPct && price <= peak * (1 - p.trailingStopPct / 100) && price > pos.entryPrice) return 'trailing_stop';
+  if (p.enableTrailingStop && peakPct >= (p.trailingArmPct && p.trailingArmPct > 0 ? p.trailingArmPct : p.breakEvenTriggerPct) && price <= peak * (1 - p.trailingStopPct / 100) && price > pos.entryPrice) return 'trailing_stop';
   if (peakPct >= p.breakEvenTriggerPct && price <= pos.entryPrice) return 'break_even';
   if (p.stalePositionMinutes && p.stalePositionMinutes > 0 && ageMin >= p.stalePositionMinutes && Math.abs(pnlPct) < (p.staleBandPct ?? 2)) return 'stale_exit';
   if (ageMin >= p.holdTimeMinutes) return 'time_exit';

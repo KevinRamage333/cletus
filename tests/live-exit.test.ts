@@ -72,6 +72,7 @@ beforeEach(() => {
   mem.solPrice = 160;
   process.env.LIVE_ZERO_RECHECK_MS = '0';
   process.env.LIVE_FILL_READ_DELAY_MS = '0';
+  process.env.RECLAIM_TOKEN_RENT = 'off';
 });
 
 describe('live-exit helpers', () => {
@@ -178,12 +179,25 @@ describe('item 3: live loss limits use the on-chain wallet and live trades only'
   const c = applyOwnerPlan(buildConfig({ TRADING_MODE: 'live', TRADING_WALLET_PRIVATE_KEY: 'x', ALLOW_LIVE_IN_BETA: 'true', OWNER_PLAN_ENABLED: 'true' }), true);
   const lamports = (usd: number) => Math.round((usd / 160) * 1e9);
 
-  it('a -$1 live day on a ~$9.87 wallet trips the 5% daily stop (paper $9,725 would not)', async () => {
+  it('owner daily stop is 15% of on-chain equity: -$1 passes, -$1.80 trips (paper $9,725 never would)', async () => {
+    expect(c.maxDailyLossPct).toBe(15);
     h.aggregate.mockResolvedValue({ _sum: { pnlUsd: -1 } });
+    expect(await entryBlockReason(h.account as never, c, { getLamports: async () => lamports(9.87) })).toBeNull();
+    h.aggregate.mockReset();
+    h.aggregate.mockResolvedValue({ _sum: { pnlUsd: -1.8 } });
     const r = await entryBlockReason(h.account as never, c, { getLamports: async () => lamports(9.87) });
     expect(r).toMatch(/max daily loss/);
     const where = h.aggregate.mock.calls[0][0].where;
     expect(where.simulated).toBe(false);
+  });
+
+  it('loss streak counts only live trades, not the paper history on the account', async () => {
+    h.aggregate.mockResolvedValue({ _sum: { pnlUsd: 0 } });
+    const acct = { ...h.account, consecutiveLosses: 9 }; // paper streak
+    h.findMany.mockImplementation(async ({ where }: { where: { status: string } }) => (where.status === 'closed' ? [{ pnlUsd: -0.3 }, { pnlUsd: 0.5 }, { pnlUsd: -1 }] : []));
+    expect(await entryBlockReason(acct as never, c, { getLamports: async () => lamports(9.87) })).toBeNull();
+    h.findMany.mockImplementation(async ({ where }: { where: { status: string } }) => (where.status === 'closed' ? [{ pnlUsd: -0.3 }, { pnlUsd: -0.2 }, { pnlUsd: -0.1 }, { pnlUsd: -0.4 }] : []));
+    expect(await entryBlockReason(acct as never, c, { getLamports: async () => lamports(9.87) })).toMatch(/4 losses in a row/);
   });
 
   it('allows entries when live P&L is flat', async () => {

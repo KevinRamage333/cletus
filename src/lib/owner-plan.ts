@@ -204,6 +204,8 @@ export interface OwnerPlanConfig {
   stopLossPct: number;
   takeProfitPct: number;
   maxOpenPositions: number;
+  /** Live owner daily loss stop, % of on-chain equity at the start of the day (OWNER_MAX_DAILY_LOSS_PCT). */
+  maxDailyLossPct: number;
   minTradeUsd: number;
   ladder: LadderParams;
   dailyCapUsd: number;
@@ -232,6 +234,7 @@ export function parseOwnerPlanConfig(env: Record<string, string | undefined> = {
     stopLossPct: num(env.OWNER_STOP_LOSS_PCT, DEFAULT_OWNER_STOP_LOSS_PCT),
     takeProfitPct: num(env.OWNER_TAKE_PROFIT_PCT, DEFAULT_OWNER_TAKE_PROFIT_PCT),
     maxOpenPositions: Math.max(1, Math.round(num(env.OWNER_MAX_OPEN_POSITIONS, DEFAULT_OWNER_MAX_OPEN_POSITIONS))),
+    maxDailyLossPct: num(env.OWNER_MAX_DAILY_LOSS_PCT, 15),
     minTradeUsd: num(env.OWNER_MIN_TRADE_USD, DEFAULT_TRADE_SIZES.under10),
     ladder,
     dailyCapUsd: num(env.OWNER_SWEEP_DAILY_CAP_USD, DEFAULT_SWEEP_DAILY_CAP_USD),

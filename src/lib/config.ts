@@ -122,12 +122,12 @@ export interface Config {
   minCompositeScore: number; maxPositionSizeUsd: number; maxOpenPositions: number; slippageTolerance: number;
   priorityFeeLamports: number; tradeFrequencySeconds: number; positionMonitorSeconds: number; holdTimeMinutes: number;
   // pnl
-  stopLossPct: number; takeProfitPct: number; breakEvenTriggerPct: number; enableTrailingStop: boolean; trailingStopPct: number;
+  stopLossPct: number; takeProfitPct: number; breakEvenTriggerPct: number; enableTrailingStop: boolean; trailingStopPct: number; trailingArmPct: number;
   dailyPnlTarget: number; dailyLossLimit: number; weeklyPnlTarget: number; weeklyLossLimit: number; monthlyPnlTarget: number; monthlyLossLimit: number;
   tiers: SizingTier[];
   maxDrawdownPct: number; enableRecoveryMode: boolean; recoveryMultiplier: number; recoveryExitWins: number;
   // signals
-  enableDynamicWeights: boolean; initialWeights: Record<SignalName, number>; winAmplify: number; lossDampen: number; minSignalWeight: number;
+  enableDynamicWeights: boolean; signalWeightSet: SignalWeightSet; initialWeights: Record<SignalName, number>; winAmplify: number; lossDampen: number; minSignalWeight: number;
   // risk
   maxPositionsPerCluster: number;
   riskPerTradePct: number; maxTotalExposurePct: number; equityProtectionLevel: number; minTradeUsd: number;
@@ -170,6 +170,17 @@ const num = (v: string | undefined, d: number) => {
 };
 const bool = (v: string | undefined, d: boolean) => (v === undefined || v === '' ? d : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase()));
 const str = (v: string | undefined, d: string) => (v === undefined || v.trim() === '' ? d : v.trim());
+
+/**
+ * Named composite scoring sets. `classic` = the original 8-signal weighted score (DB/self-learned weights).
+ * `liquidity` = the backtest-backed shape: deep, growing liquidity and fresh activity, not chasing pumps.
+ */
+export const SIGNAL_WEIGHT_SETS = ['classic', 'liquidity'] as const;
+export type SignalWeightSet = (typeof SIGNAL_WEIGHT_SETS)[number];
+export function parseSignalWeightSet(v: string | undefined): SignalWeightSet {
+  const k = (v ?? '').trim().toLowerCase();
+  return (SIGNAL_WEIGHT_SETS as readonly string[]).includes(k) ? (k as SignalWeightSet) : 'classic';
+}
 
 export function hasWalletKey(env: Env): boolean {
   return Boolean((env.TRADING_WALLET_PRIVATE_KEY && env.TRADING_WALLET_PRIVATE_KEY.trim()) || (env.TRADING_WALLET_KEYPAIR_PATH && env.TRADING_WALLET_KEYPAIR_PATH.trim()));
@@ -238,6 +249,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     breakEvenTriggerPct: num(env.BREAK_EVEN_TRIGGER_PERCENTAGE, 5),
     enableTrailingStop: bool(env.ENABLE_TRAILING_STOP, true),
     trailingStopPct: num(env.TRAILING_STOP_PERCENTAGE, 5),
+    trailingArmPct: num(env.TRAILING_ARM_PERCENTAGE, 0),
     dailyPnlTarget: num(env.DAILY_PNL_TARGET, 5000),
     dailyLossLimit: -Math.abs(num(env.DAILY_LOSS_LIMIT, -2000)),
     weeklyPnlTarget: num(env.WEEKLY_PNL_TARGET, 30000),
@@ -250,6 +262,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     recoveryMultiplier: num(env.RECOVERY_MODE_AGGRESSION_MULTIPLIER, 0.5),
     recoveryExitWins: num(env.RECOVERY_MODE_EXIT_WINS, 5),
     enableDynamicWeights: bool(env.ENABLE_DYNAMIC_SIGNAL_WEIGHTING, true),
+    signalWeightSet: parseSignalWeightSet(env.SIGNAL_WEIGHT_SET),
     initialWeights,
     winAmplify: num(env.WIN_SIGNAL_AMPLIFY_FACTOR, 1.15),
     lossDampen: num(env.LOSS_SIGNAL_DAMPEN_FACTOR, 0.85),
@@ -359,6 +372,7 @@ export function applyOwnerPlan<T extends Config>(c: T, isOperator: boolean): T {
   return {
     ...c,
     maxOpenPositions: o.maxOpenPositions,
+    maxDailyLossPct: o.maxDailyLossPct,
     stopLossPct: o.stopLossPct,
     takeProfitPct: o.takeProfitPct,
     tpLadder: [],

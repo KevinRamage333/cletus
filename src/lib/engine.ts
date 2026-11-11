@@ -174,6 +174,14 @@ export async function accountSettings(accountId: string, c: Config, raw?: string
 }
 export function invalidateAccountSettings(accountId: string) { settingsCache.delete(accountId); }
 
+/** Losses in a row among the account's real (simulated:false) closed trades, newest first. */
+export async function liveLossStreak(accountId: string): Promise<number> {
+  const rows = await prisma.position.findMany({ where: { accountId, status: 'closed', simulated: false }, orderBy: { closedAt: 'desc' }, take: 50, select: { pnlUsd: true } });
+  let n = 0;
+  for (const r of rows) { if ((r.pnlUsd ?? 0) > 0) break; n++; }
+  return n;
+}
+
 /** Operator trading wallet SOL balance in lamports (null when the key is not loaded). */
 async function operatorLamports(c: Config): Promise<number | null> {
   const { connection } = await import('./executor');
@@ -194,7 +202,9 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
   const liveOperator = c.mode === 'live' && a.isOperator;
   const p = await periodPnl(a.id, c.timezone, { liveOnly: liveOperator });
   let equity: number;
+  let consecutiveLosses = a.consecutiveLosses;
   if (liveOperator) {
+    consecutiveLosses = await liveLossStreak(a.id); // paper losses on the same account don't count
     const open = await prisma.position.findMany({ where: { accountId: a.id, status: 'open', simulated: false } });
     const bal = await resolveSizingBalances({
       live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice,
@@ -206,7 +216,7 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
   } else {
     equity = (await accountEquity(a)).equity;
   }
-  const hard = hardRiskBlock({ dayPnlUsd: p.day, equityUsd: equity, consecutiveLosses: a.consecutiveLosses }, { dailyLossLimitUsd: c.dailyLossLimit, maxDailyLossPct: c.maxDailyLossPct, maxPositionPctOfEquity: c.maxPositionPctOfEquity, maxConsecutiveLosses: c.maxConsecutiveLosses });
+  const hard = hardRiskBlock({ dayPnlUsd: p.day, equityUsd: equity, consecutiveLosses }, { dailyLossLimitUsd: c.dailyLossLimit, maxDailyLossPct: c.maxDailyLossPct, maxPositionPctOfEquity: c.maxPositionPctOfEquity, maxConsecutiveLosses: c.maxConsecutiveLosses });
   if (hard) return hard;
   if (p.week <= c.weeklyLossLimit) return `weekly loss limit hit (${p.week.toFixed(2)})`;
   if (p.month <= c.monthlyLossLimit) return `monthly loss limit hit (${p.month.toFixed(2)})`;
@@ -515,7 +525,10 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
   const highest = Math.max(p.highestPrice, price);
   if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
   // Fast exit on a dev dump or smart-money / whale exit (on-chain flow; WHALE_FAST_EXIT=off disables).
-  const reason = killSwitch ? 'kill_switch' : flowExitFor(p.mint) ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
+  // Dev-dump / whale-exit fast exit: an EXIT signal for an open position only, never a buy trigger.
+  const flow = killSwitch ? null : flowExitFor(p.mint);
+  if (flow && !p.simulated) await log('warn', `LIVE ${p.symbol}: ${flow === 'dev_exit' ? 'dev wallet dumping' : 'tracked whales / smart money exiting'} — fast exit`, p.accountId);
+  const reason = killSwitch ? 'kill_switch' : flow ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
   if (reason) { await closePosition(p.id, price, reason); return; }
   const partial = partialTakeProfit(p, price, c.tpLadder, p.partialsTaken, c.takeProfitPct);
   if (partial) await partialClose(p.id, price, partial.fraction, partial.rung, partial.gainPct);
@@ -711,7 +724,9 @@ export async function closePosition(positionId: string, price: number, reason: s
   const data: Partial<Account> = { peakEquity: peak };
   if (c.enableRecoveryMode && !updated.recoveryMode && dd >= c.maxDrawdownPct / 2) { data.recoveryMode = true; await log('warn', `recovery mode ON (drawdown ${dd.toFixed(1)}%) — sizes x${c.recoveryMultiplier}`, a.id); }
   if (updated.recoveryMode && updated.consecutiveWins >= c.recoveryExitWins) { data.recoveryMode = false; await log('info', `recovery mode OFF after ${updated.consecutiveWins} wins`, a.id); }
-  if (!won && lossStreakPause(updated.consecutiveLosses, c.maxConsecutiveLosses) && !updated.paused) { data.paused = true; data.pauseReason = `${updated.consecutiveLosses} losses in a row (MAX_CONSECUTIVE_LOSSES=${c.maxConsecutiveLosses})`; await log('warn', `account AUTO-PAUSED: ${data.pauseReason}`, a.id); }
+  // Live closes on the operator count only real trades toward the loss streak (not the paper book's history).
+  const streak = live && a.isOperator ? await liveLossStreak(a.id) : updated.consecutiveLosses;
+  if (!won && lossStreakPause(streak, c.maxConsecutiveLosses) && !updated.paused) { data.paused = true; data.pauseReason = `${streak} losses in a row (MAX_CONSECUTIVE_LOSSES=${c.maxConsecutiveLosses})`; await log('warn', `account AUTO-PAUSED: ${data.pauseReason}`, a.id); }
   if (dd >= c.maxDrawdownPct) { data.paused = true; data.pauseReason = `max drawdown ${dd.toFixed(1)}% >= ${c.maxDrawdownPct}%`; await log('warn', `account PAUSED: ${data.pauseReason}`, a.id); }
   await prisma.account.update({ where: { id: a.id }, data });
 
@@ -739,7 +754,24 @@ export async function closePosition(positionId: string, price: number, reason: s
       });
     } catch { /* trade log must never block a fill */ }
   }
+  // Reclaim the token account's rent once the wallet holds none of this coin (best-effort, never blocks the close).
+  if (live && (exitTx || reason === 'external_zero') && process.env.RECLAIM_TOKEN_RENT !== 'off') {
+    setTimeout(() => void reclaimRent(p.mint, p.symbol, a.id), envNum('RECLAIM_RENT_DELAY_MS', 15_000));
+  }
   if (a.isOperator) void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
+}
+
+async function reclaimRent(mint: string, symbol: string, accountId: string) {
+  try {
+    const stillOpen = await prisma.position.count({ where: { status: 'open', mint, simulated: false } });
+    if (stillOpen) return;
+    const [{ connection }, { loadTradingKeypair }, { closeEmptyTokenAccounts }] = await Promise.all([import('./executor'), import('./wallet'), import('./rent-reclaim')]);
+    const r = await closeEmptyTokenAccounts(connection(getConfig()), loadTradingKeypair(), mint);
+    if (r.closed) await log('info', `LIVE ${symbol}: closed ${r.closed} empty token account(s), rent returned to wallet (tx ${r.signature})`, accountId);
+    else if (r.skipped === 'balance remains') await log('warn', `LIVE ${symbol}: token account not closed — balance remains`, accountId);
+  } catch (e) {
+    await log('warn', `LIVE ${symbol}: rent reclaim failed: ${(e as Error).message}`, accountId);
+  }
 }
 
 // ─── Kill switch ─────────────────────────────────────────────────────────────

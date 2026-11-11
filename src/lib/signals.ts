@@ -1,6 +1,7 @@
 import { expectedFeeBps, feePenalty } from './jupiter';
 import type { DexPair } from './dexscreener';
-import { SIGNAL_NAMES, type SignalName } from './config';
+import { SIGNAL_NAMES, type SignalName, type SignalWeightSet } from './config';
+import { freshness, dipInUptrend, volumePersistence } from './backtest/features';
 
 export type SignalBreakdown = Record<SignalName, number>;
 
@@ -60,6 +61,44 @@ export function compositeScore(s: SignalBreakdown, weights: Record<SignalName, n
 }
 
 /**
+ * `liquidity` weight set. Built from the out-of-sample information coefficients in docs/backtest
+ * (Balanced band): liquidityBuild was the only consistently positive signal (IC +0.08..+0.10),
+ * velocitySurge / volumePersistence / freshness small positive; momentum, breakout, buy pressure
+ * (microCapHeat) and trend alignment were negative, i.e. chasing pumps loses. So: lean on deep,
+ * growing liquidity and fresh activity, reward NOT having already pumped (antiChase = 1 - momentum),
+ * small credit for a pullback inside a 6h uptrend, and ignore nanoCapSpike (it is 0 above $100k by
+ * design, which used to drag every $100k+ coin's score down).
+ */
+export const LIQUIDITY_WEIGHTS = {
+  liquidityBuild: 0.4,
+  velocitySurge: 0.15,
+  volumePersistence: 0.1,
+  freshness: 0.15,
+  antiChase: 0.15,
+  dipInUptrend: 0.05,
+} as const;
+export type LiquidityTerm = keyof typeof LIQUIDITY_WEIGHTS;
+
+export function liquidityTerms(s: SignalBreakdown, p: DexPair): Record<LiquidityTerm, number> {
+  return {
+    liquidityBuild: s.liquidityBuild, velocitySurge: s.velocitySurge, volumePersistence: volumePersistence(p),
+    freshness: freshness(p), antiChase: 1 - clamp(s.momentum), dipInUptrend: dipInUptrend(p),
+  };
+}
+
+export function liquidityScore(s: SignalBreakdown, p: DexPair): number {
+  const t = liquidityTerms(s, p);
+  let tot = 0, acc = 0;
+  for (const [k, w] of Object.entries(LIQUIDITY_WEIGHTS) as Array<[LiquidityTerm, number]>) { tot += w; acc += w * clamp(t[k]); }
+  return tot > 0 ? acc / tot : 0;
+}
+
+/** Composite for the configured weight set (classic = weighted 8 signals; liquidity = liquidityScore). */
+export function scoreFor(set: SignalWeightSet | undefined, s: SignalBreakdown, p: DexPair, weights: Record<SignalName, number>): number {
+  return set === 'liquidity' ? liquidityScore(s, p) : compositeScore(s, weights);
+}
+
+/**
  * Self-learning update after a closed trade. Signals that were active at entry
  * are amplified on wins and dampened on losses, scaled by their strength, then
  * re-normalised to sum to 1 with a floor so no signal is ever switched off.
@@ -113,6 +152,7 @@ export interface ScanFilters {
   volumeSpikeMcapPct?: number; breakout5mPct?: number; buyPressureRatio?: number;
   minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; minTokenAgeHours: number; maxHourlyPriceMovement: number; nanoCapMax: number;
   minLiquidityUsd?: number; minVolumeMcapRatio?: number; requireKnownAge?: boolean;
+  signalWeightSet?: SignalWeightSet;
 }
 
 /** Scanner: keep $minMcap-$maxMcap tokens, rank by volume-to-market-cap. */
@@ -127,7 +167,7 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
     const c: ScanCandidate = {
       mint: p.baseToken.address, symbol: p.baseToken.symbol, name: p.baseToken.name, pairAddress: p.pairAddress, dexId: p.dexId, url: p.url,
       priceUsd: price, marketCap: mcap, volume24h: v24, liquidityUsd: p.liquidity?.usd ?? null, ageHours,
-      priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: compositeScore(signals, weights),
+      priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: scoreFor(f.signalWeightSet, signals, p, weights),
     };
     // Fee-aware score: expectedFeeBps includes Jupiter's age-based platform fee and the 0.5% operator fee (50 bps,
     // which replaces the platform fee when the referral program is active). feePenalty nets the extra round-trip cost.
