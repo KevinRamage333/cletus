@@ -14,6 +14,7 @@ import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS
 import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
 import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, type SignalBreakdown } from './signals';
 import { computePositionSize, computeOwnerTradeSize } from './sizing';
+import { resolveSizingBalances } from './live-sizing';
 import { complianceGate, concentrationCap } from './compliance';
 import { exitDecision, partialTakeProfit } from './exits';
 import { flowExitFor, entryVerdict } from './flow-collector';
@@ -264,41 +265,55 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   const { equity, exposure, open } = await accountEquity(a);
   const narrative = narrativeOf(cand.symbol, cand.name);
   const creator = audit.creator ?? null;
-  const pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
+  let pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
   if (!pre.allowed) { if (!pre.reasons.some((r) => r.startsWith('max open') || r.startsWith('duplicate'))) await log('info', `portfolio cap blocked ${cand.symbol}: ${pre.reasons.join('; ')}`, a.id); return false; }
 
+  // A live operator entry spends real SOL, so it sizes strictly from the on-chain trading wallet.
+  // Never fall back to the Postgres paper book: if the balance can't be read, skip the trade.
+  const liveEntry = c.mode === 'live' && a.isOperator;
+  const bal = await resolveSizingBalances({
+    live: liveEntry,
+    bookEquityUsd: equity,
+    bookCashUsd: a.cashUsd,
+    liveOpenValueUsd: open.filter((p) => !p.simulated).reduce((s, p) => s + positionValue(p), 0),
+    solPriceUsd: mem.solPrice,
+    getLamports: async () => {
+      const { connection } = await import('./executor');
+      const { getOperatorPublicKey } = await import('./wallet');
+      const { PublicKey } = await import('@solana/web3.js');
+      const op = getOperatorPublicKey();
+      if (!op) return null;
+      return connection(c).getBalance(new PublicKey(op));
+    },
+  });
+  if (!bal.ok) {
+    await log('warn', `LIVE entry skipped ${cand.symbol}: on-chain wallet balance unavailable (${bal.reason}); not sizing from the paper book`, a.id);
+    return false;
+  }
+  const sizingEquity = bal.equityUsd;
+  const sizingCash = bal.cashUsd;
+  if (liveEntry) {
+    pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, sizingEquity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
+    if (!pre.allowed) return false;
+  }
+
   let size = computePositionSize(
-    { equityUsd: equity, cashUsd: a.cashUsd, openExposureUsd: exposure, cumulativePnl: a.realizedPnl, recoveryMode: a.recoveryMode },
+    { equityUsd: sizingEquity, cashUsd: sizingCash, openExposureUsd: exposure, cumulativePnl: a.realizedPnl, recoveryMode: a.recoveryMode },
     c,
   );
   if (a.isOperator && c.ownerPlan.enabled) {
     const solPrice = mem.solPrice || c.solPriceFallbackUsd;
-    let equityUsd = equity;
-    let cashUsd = a.cashUsd;
-    if (c.mode === 'live') {
-      try {
-        const { connection } = await import('./executor');
-        const { getOperatorPublicKey } = await import('./wallet');
-        const { PublicKey } = await import('@solana/web3.js');
-        const { LAMPORTS_PER_SOL } = await import('./withdraw');
-        const op = getOperatorPublicKey();
-        if (op) {
-          const lamports = await connection(c).getBalance(new PublicKey(op));
-          cashUsd = (lamports / LAMPORTS_PER_SOL) * solPrice;
-          equityUsd = cashUsd + (equity - a.cashUsd);
-        }
-      } catch { /* book equity is the fallback */ }
-    }
     const o = computeOwnerTradeSize(
-      { equityUsd, cashUsd, solPriceUsd: solPrice, feeReserveSol: c.ownerPlan.feeReserveSol, minTradeUsd: c.minTradeUsd },
+      { equityUsd: sizingEquity, cashUsd: sizingCash, solPriceUsd: solPrice, feeReserveSol: c.ownerPlan.feeReserveSol, minTradeUsd: c.minTradeUsd },
       c.ownerPlan.sizeTiers, c.ownerPlan.sizeStepUsd, c.ownerPlan.sizeIncrementUsd,
     );
     size = { sizeUsd: o.sizeUsd, tier: 1, multiplier: 1, notes: o.notes };
   }
-  if (us && us.positionSizePct !== null) { size.sizeUsd = Math.min(sizeFromPct(us, equity, size.sizeUsd), a.cashUsd); size.notes.push(`${us.positionSizePct}% of equity (your setting)`); }
-  const eqCap = capByEquityPct(size.sizeUsd, equity, c.maxPositionPctOfEquity);
+  if (us && us.positionSizePct !== null) { size.sizeUsd = Math.min(sizeFromPct(us, sizingEquity, size.sizeUsd), sizingCash); size.notes.push(`${us.positionSizePct}% of equity (your setting)`); }
+  const eqCap = capByEquityPct(size.sizeUsd, sizingEquity, c.maxPositionPctOfEquity);
   if (eqCap.capped) { size.sizeUsd = eqCap.sizeUsd; size.notes.push(`capped at ${c.maxPositionPctOfEquity}% of equity`); }
   if (size.sizeUsd > pre.maxSizeUsd) { size.sizeUsd = pre.maxSizeUsd; size.notes.push(`capped by ${c.maxTotalExposurePct}% portfolio exposure`); }
+  if (liveEntry && size.sizeUsd > sizingCash) { size.sizeUsd = Math.floor(sizingCash * 100) / 100; size.notes.push('capped at on-chain wallet cash'); }
   if (size.sizeUsd < c.minTradeUsd) return false;
 
   const history = await prisma.position.findMany({
