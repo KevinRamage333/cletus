@@ -3,12 +3,18 @@
  * flow collectors without the Next.js web server. Env must already request live
  * mode (see scripts/start-live-worker.sh). Does not change .env.local.
  */
+/** Forced: what makes this the live owner worker. */
 const LIVE_ENV: Record<string, string> = {
   TRADING_MODE: 'live',
   ALLOW_LIVE_IN_BETA: 'true',
   WITHDRAW_LIVE_ENABLED: 'true',
   OWNER_PLAN_ENABLED: 'true',
   MCAP_PRESET: 'BALANCED',
+  ENGINE_DISABLED: 'false',
+  CLETUS_DEMO: '0',
+};
+/** Defaults only: exit tuning comes from scripts/start-live-worker.sh when it sets them. */
+const LIVE_DEFAULTS: Record<string, string> = {
   OWNER_STOP_LOSS_PCT: '5',
   OWNER_TAKE_PROFIT_PCT: '20',
   OWNER_MAX_OPEN_POSITIONS: '1',
@@ -16,11 +22,10 @@ const LIVE_ENV: Record<string, string> = {
   ENABLE_TRAILING_STOP: 'false',
   HOLD_TIME_MINUTES: '10080',
   STALE_POSITION_MINUTES: '0',
-  ENGINE_DISABLED: 'false',
-  CLETUS_DEMO: '0',
 };
 
 for (const [k, v] of Object.entries(LIVE_ENV)) process.env[k] = v;
+for (const [k, v] of Object.entries(LIVE_DEFAULTS)) if (process.env[k] === undefined || process.env[k] === '') process.env[k] = v;
 process.env.NEXT_RUNTIME ??= 'nodejs';
 delete process.env.NEXT_PHASE;
 
