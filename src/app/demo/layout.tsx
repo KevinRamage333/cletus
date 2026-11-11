@@ -1,3 +1,4 @@
+import { COMPANY_LEGAL } from '@/lib/company';
 import Link from 'next/link';
 const NAV = [['/demo', 'Home'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/disclaimer', 'Terms & risk'], ['/legal', 'Legal']];
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       <main className="max-w-5xl mx-auto px-4 py-6">{children}</main>
       <footer className="max-w-5xl mx-auto px-4 py-8 text-xs text-zinc-500 border-t border-zinc-800">
         Demo mode: simulation only, no accounts, no wallets, no trading. Not financial advice. No guaranteed gains; losses, including total loss, can happen.
+        <div className="mt-2 text-zinc-600">© 2026 {COMPANY_LEGAL}</div>
       </footer>
     </div>
   );

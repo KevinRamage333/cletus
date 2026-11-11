@@ -1,4 +1,5 @@
 'use client';
+import { COMPANY_LEGAL } from '@/lib/company';
 
 /**
  * Page 3 — Cletus Wallet
@@ -272,7 +273,7 @@ export default function CletusWalletPage() {
           </div>
 
           <p className="text-center text-xs text-white/30">
-            Educational software only. Trading involves risk of loss. Not financial advice.
+            Educational software only. Trading involves risk of loss. Not financial advice. © 2026 {COMPANY_LEGAL}
           </p>
         </div>
       </main>

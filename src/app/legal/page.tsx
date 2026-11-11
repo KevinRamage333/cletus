@@ -1,4 +1,5 @@
 'use client';
+import { COMPANY_LEGAL, COMPANY_LINE } from '@/lib/company';
 
 /**
  * Page 1 — Legal gate (first page)
@@ -54,6 +55,10 @@ export default function LegalEntryPage() {
           </h2>
 
           <div className="border border-white/10 rounded-xl p-6 space-y-4 text-sm leading-relaxed text-white/80 bg-white/5">
+            <p>
+              <strong className="text-white">Who operates Cletus.</strong> {COMPANY_LINE} References to
+              &quot;we&quot;, &quot;us&quot; or &quot;Cletus&quot; in these terms mean that company and its software.
+            </p>
             <p>
               <strong className="text-white">What Cletus is.</strong> Cletus is an
               autonomous, AI-assisted trading software system for Solana and related
@@ -143,6 +148,7 @@ export default function LegalEntryPage() {
 
           <p className="mt-6 text-center text-xs text-white/30">
             Educational software only. Not financial, legal, or tax advice.
+            <br />© 2026 {COMPANY_LEGAL}
           </p>
         </div>
       </main>

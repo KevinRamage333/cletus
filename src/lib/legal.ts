@@ -1,15 +1,17 @@
+import { COMPANY_LEGAL } from './company';
 /**
  * Onboarding legal text and versions. Bump TERMS_VERSION (or set env TERMS_VERSION
  * and rebuild) to force every user to re-accept the terms and re-acknowledge the risk disclaimer.
  *
  * TEMPLATE LANGUAGE — must be reviewed by a qualified lawyer before any public use.
  */
-export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.1';
+export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.2';
 export const RISK_VERSION = TERMS_VERSION;
 
 export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
   { title: '1. Acceptance of these Terms', body: [
     'These Terms and Conditions ("Terms") govern your access to and use of the Cletus software, website, dashboard, APIs and any related services (together, "Cletus" or the "Software"). By clicking "Accept" you confirm that you have read, understood and agree to be bound by these Terms. If you do not agree, do not use Cletus.',
+    `Cletus is provided by ${COMPANY_LEGAL} ("we", "us" or "our"). References to Cletus as a party to these Terms mean that company.`,
     'You must be of legal age in your jurisdiction and legally permitted to use automated trading software and to hold and trade digital assets. You are solely responsible for complying with the laws, regulations and tax rules that apply to you.' ] },
   { title: '2. Cletus is not a financial advisor', body: [
     'Cletus is an experimental software tool. Cletus, its authors, operators and contributors are NOT registered investment advisers, broker-dealers, financial planners, tax advisers or fiduciaries, and do not act in any such capacity toward you.',
