@@ -45,6 +45,10 @@ export PRIVATE_ROUTE=dryrun    # log a simulated Jito bundle beside each live sw
 export RETRAINED_WEIGHTS=on     # load the promoted weight set + score threshold from data/weight-sets/registry.json
 export WEIGHTS_HOT_RELOAD=on    # re-apply within 60s after a promotion or rollback (no restart)
 export RETRAIN_SCHEDULE=on      # run scripts/retrain-weights.ts --apply when >= 20h since the last run (catches up on wake)
+# Trade journal + daily review (see docs/JOURNAL.md). Logging/read-only; takes effect at the next restart.
+export TRADE_JOURNAL=on          # logs/trade-journal.jsonl: why (score, 8 signals + 6 terms, mcap, liq, vol, mood, exit plan) + what (MFE/MAE, fees, slippage, P&L)
+export TRADE_REVIEW_SCHEDULE=on  # writes logs/reviews/YYYY-MM-DD.md + flags.json (yesterday if missing, else refresh after 20h)
+# export JOURNAL_FEEDBACK=on     # trade less of flagged setups: +0.025 score bar per flagged entry-time setup, max +0.05
 export CLETUS_DEMO=0
 export NEXT_RUNTIME=nodejs
 

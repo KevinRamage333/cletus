@@ -13,7 +13,7 @@ import { prisma } from './db';
 import { log } from './logger';
 import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
 import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
-import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, type SignalBreakdown } from './signals';
+import { rankCandidates, updateWeights, normaliseWeights, activeLiquidityWeights, type ScanCandidate, type SignalBreakdown } from './signals';
 import { computePositionSize, computeOwnerTradeSize } from './sizing';
 import { ownerRecoverySize } from './owner-plan';
 import { resolveSizingBalances } from './live-sizing';
@@ -27,7 +27,7 @@ import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
 import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, memoizeFor, type TickFence } from './watchdog';
-import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
+import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, regimeOf, volatilityPctPerHour, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
 import { fastPriceOn, fastPriceParams, fastPriceFromSignature, acceptFastPrice, TrailingDebounce } from './fast-price';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
@@ -456,11 +456,28 @@ export function auditSizeUsd(c: Config): number {
   return Math.min(c.maxPositionSizeUsd, 1000);
 }
 
+const fbLogged = new Map<string, number>();
+/** Log a feedback skip at most once per mint per 15 min. */
+function feedbackLogged(mint: string, now = Date.now()): boolean {
+  const t = fbLogged.get(mint);
+  if (t !== undefined && now - t < 15 * 60_000) return false;
+  fbLogged.set(mint, now);
+  return true;
+}
+
 async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number): Promise<boolean> {
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
   const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
   const c = applyOwnerPlan(us ? effectiveConfig(serverCfg, us) : serverCfg, a.isOperator);
   if (cand.composite < c.minCompositeScore) return false;
+  // Optional bounded feedback from the daily review (JOURNAL_FEEDBACK=on, default off): +0.025 per flagged setup, max +0.05.
+  if (process.env.JOURNAL_FEEDBACK) {
+    const fb = (await import('./review-runtime')).entryFeedback({ signals: cand.signals, terms: cand.terms ?? null, mcapUsd: cand.marketCap });
+    if (fb.bump > 0 && cand.composite < c.minCompositeScore + fb.bump) {
+      if (!a.labPreset && feedbackLogged(cand.mint)) await log('info', `review feedback: skipped ${cand.symbol} score ${cand.composite.toFixed(3)} < ${(c.minCompositeScore + fb.bump).toFixed(3)} (flagged setup: ${fb.why})`, a.id);
+      return false;
+    }
+  }
   const blocked = await entryBlockReason(a, c);
   if (blocked) return false;
   const { equity, exposure, open } = await accountEquity(a);
@@ -585,6 +602,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   if (live && adaptiveExitsOn(c, a.isOperator)) {
     try { await createExitPlan(created, 'entry', { composite: cand.composite, liquidityUsd: liquidity ?? null }); } catch (e) { await log('warn', `LIVE ${cand.symbol}: exit plan failed (${(e as Error).message}); fixed owner exits apply`, a.id); }
   }
+  if (journalOn()) await journalEntryHook(a, c, cand, created, live, liquidity ?? null);
   if (live) {
     try {
       const { appendLiveTrade } = await import('./live-trade-log');
@@ -669,6 +687,44 @@ export function adaptiveExitsOn(c: Config, isOperator: boolean): boolean {
   return c.mode === 'live' && isOperator && c.ownerPlan.enabled && c.ownerPlan.adaptiveExits;
 }
 
+/** Trade journal (TRADE_JOURNAL=on): the why at entry. Logging only; never throws into the trade path. */
+const journalOn = () => ['on', 'true', '1'].includes((process.env.TRADE_JOURNAL ?? '').toLowerCase());
+async function journalEntryHook(a: Account, c: Config, cand: ScanCandidate, p: Position, live: boolean, liquidity: number | null) {
+  try {
+    const { appendJournal, slippagePct } = await import('./trade-journal');
+    const rec = live ? (await import('./exit-plan-store')).getPlanRecord(p.id) : null;
+    const pc = mem.pairChange.get(cand.mint) ?? { h1: cand.priceChangeH1, h24: cand.priceChangeH24 };
+    const reg = mem.regime;
+    appendJournal({
+      event: 'entry', v: 1, at: new Date().toISOString(), positionId: p.id, accountId: a.id, book: live ? 'live' : 'paper', labPreset: a.labPreset ?? null,
+      symbol: cand.symbol, mint: cand.mint, score: cand.composite, threshold: c.minCompositeScore, weightSet: c.signalWeightSet ?? 'classic',
+      liquidityWeights: c.signalWeightSet === 'liquidity' ? { ...activeLiquidityWeights() } : null,
+      signals: { ...cand.signals }, terms: cand.terms ? { ...cand.terms } : null,
+      mcapUsd: cand.marketCap, liquidityUsd: liquidity, volume24hUsd: cand.volume24h, ageHours: cand.ageHours,
+      priceChangeH1: cand.priceChangeH1, priceChangeH24: cand.priceChangeH24 ?? null, volPctPerHour: volatilityPctPerHour(pc),
+      regime: reg ? { label: regimeOf(reg), medianH1: reg.medianH1, breadth: reg.breadth, n: reg.n } : null,
+      sizeUsd: p.sizeUsd, feesUsd: p.feesUsd, quotePrice: cand.priceUsd, fillPrice: p.entryPrice, entrySlippagePct: slippagePct('buy', cand.priceUsd, p.entryPrice),
+      exitPlan: rec ? { ...rec.plan } : null,
+    });
+  } catch { /* journal must never block a fill */ }
+}
+
+/** Trade journal (TRADE_JOURNAL=on): the what at close. */
+async function journalExitHook(p: Position, observed: number, reason: string, exitPrice: number, exitFees: number, pnlUsd: number, pnlPct: number) {
+  try {
+    const memLow = mem.lowest.get(p.id) ?? Infinity;
+    const { appendJournal, slippagePct, excursions, takeLow } = await import('./trade-journal');
+    const low = Math.min(takeLow(p.id) ?? Infinity, memLow);
+    const ex = excursions(p.entryPrice, p.highestPrice, Number.isFinite(low) ? low : p.entryPrice, observed);
+    appendJournal({
+      event: 'exit', v: 1, at: new Date().toISOString(), positionId: p.id, book: p.simulated ? 'paper' : 'live', symbol: p.symbol,
+      reason, holdMin: Math.round((Date.now() - p.openedAt.getTime()) / 600) / 100, mfePct: ex.mfePct, maePct: ex.maePct,
+      feesUsd: p.feesUsd + exitFees, observedPrice: observed, exitPrice, exitSlippagePct: exitPrice > 0 ? slippagePct('sell', observed, exitPrice) : null,
+      costUsd: p.sizeUsd + p.partialCostUsd, pnlUsd, pnlPct, partialsTaken: p.partialsTaken, partialPnlUsd: p.partialPnlUsd,
+    });
+  } catch { /* journal must never block a close */ }
+}
+
 /** Compute, persist and log a position's exit plan. */
 async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra: { composite?: number; liquidityUsd?: number | null; currentPrice?: number } = {}) {
   const store = await import('./exit-plan-store');
@@ -721,6 +777,7 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
     mem.lowest.set(p.id, low);
     void import('./exit-plan-store').then((s) => s.noteDrawdown(p.id, Math.max(0, (1 - low / p.entryPrice) * 100))).catch(() => undefined);
   }
+  if (journalOn()) void import('./trade-journal').then((j) => j.noteLow(p.id, price)).catch(() => undefined);
   const highest = Math.max(p.highestPrice, price);
   if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
   // Fast exit on a dev dump or smart-money / whale exit (on-chain flow; WHALE_FAST_EXIT=off disables).
@@ -1010,6 +1067,8 @@ async function closePositionInner(positionId: string, price: number, reason: str
   const won = pnlUsd > 0;
 
   await prisma.position.update({ where: { id: p.id }, data: { status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason, exitTx, lastPrice: price, feesUsd: p.feesUsd + exitFees } });
+
+  if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
 
   // Account bookkeeping, drawdown & recovery mode.
   const updated = await prisma.account.update({ where: { id: a.id }, data: { cashUsd: { increment: proceeds - exitFees }, realizedPnl: { increment: remainderPnl }, consecutiveWins: won ? { increment: 1 } : 0, consecutiveLosses: won ? 0 : { increment: 1 } } });

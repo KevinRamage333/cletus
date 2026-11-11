@@ -53,6 +53,7 @@ async function main() {
   startCollector();
   startFlowCollectors();
   rt.startRetrainTasks(rlog);
+  try { (await import('../src/lib/review-runtime')).startReviewTasks(rlog); } catch (e) { rlog('warn', `journal/review tasks failed to start (${(e as Error).message})`); }
   console.log('[cletus] live worker running (box only; public deploy stays simulation)');
 }
 
