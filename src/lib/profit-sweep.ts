@@ -254,6 +254,18 @@ export function memoInstruction(memo: string): TransactionInstruction {
   return new TransactionInstruction({ keys: [], programId: MEMO_PROGRAM_ID, data: Buffer.from(memo, 'utf8') });
 }
 
+/**
+ * All account keys of a fetched transaction (legacy or v0). A v0 swap that uses address lookup tables makes
+ * message.getAccountKeys() throw ("address table lookups were not resolved") unless the loaded addresses are passed,
+ * which used to abort the whole sweep lookup on the first Jupiter swap in the wallet's history. Never throws.
+ */
+export function txAccountKeys(tx: { transaction: { message: { getAccountKeys: (a?: { accountKeysFromLookups?: { writable: PublicKey[]; readonly: PublicKey[] } | null }) => { keySegments: () => PublicKey[][] } } }; meta?: { loadedAddresses?: { writable: PublicKey[]; readonly: PublicKey[] } | null } | null }): string[] {
+  try {
+    const lookups = tx.meta?.loadedAddresses ?? undefined;
+    return tx.transaction.message.getAccountKeys(lookups ? { accountKeysFromLookups: lookups } : undefined).keySegments().flat().map((k) => k.toBase58());
+  } catch { return []; }
+}
+
 export async function lookupSweepSignature(rungKey: string, toAddress: string, tradingWallet: string): Promise<string | null> {
   const { connection } = await import('./executor');
   const conn = connection(getConfig());
@@ -263,7 +275,8 @@ export async function lookupSweepSignature(rungKey: string, toAddress: string, t
     if (s.err) continue;
     const tx = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' });
     if (!tx) continue;
-    const keys = tx.transaction.message.getAccountKeys().staticAccountKeys.map((k) => k.toBase58());
+    const keys = txAccountKeys(tx);
+    if (!keys.length) continue;
     const toIdx = keys.indexOf(toAddress);
     if (toIdx < 0) continue;
     // Memo in log messages, or as a program instruction.
