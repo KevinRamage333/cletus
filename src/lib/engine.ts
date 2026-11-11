@@ -25,6 +25,7 @@ import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
 import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, type TickFence } from './watchdog';
+import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
 interface EngineMemory {
@@ -50,12 +51,17 @@ interface EngineMemory {
   scanFence: TickFence; monitorFence: TickFence;
   /** Positions with a sell in flight (monitor, WebSocket fast path and abandoned ticks can't double-sell). */
   selling: InFlight;
+  /** Adaptive exits: latest DexScreener price change per mint, band regime from the last scan, worst price per open position. */
+  pairChange: Map<string, PriceChange>;
+  regime: RegimeStats | null;
+  lowest: Map<string, number>;
 }
 const g = globalThis as unknown as { __cletusEngine?: EngineMemory };
 export const mem: EngineMemory = (g.__cletusEngine ??= {
   started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(), liquidity: new Map(), monitorTicks: 0,
   priceAt: new Map(), sellFailures: new Map(), lastFailureSource: null,
   scanStage: 'idle', monitorStage: 'idle', lastScanDoneAt: null, lastMonitorDoneAt: null, scanFence: { gen: 0 }, monitorFence: { gen: 0 }, selling: new InFlight(),
+  pairChange: new Map(), regime: null, lowest: new Map(),
 });
 mem.priceAt ??= new Map();
 mem.sellFailures ??= new Map();
@@ -64,6 +70,7 @@ mem.scanStage ??= 'idle'; mem.monitorStage ??= 'idle';
 mem.lastScanDoneAt ??= null; mem.lastMonitorDoneAt ??= null;
 mem.scanFence ??= { gen: 0 }; mem.monitorFence ??= { gen: 0 };
 mem.selling ??= new InFlight();
+mem.pairChange ??= new Map(); mem.regime ??= null; mem.lowest ??= new Map();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const envNum = (k: string, d: number) => { const v = Number(process.env[k]); return process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(v) ? v : d; };
@@ -301,7 +308,9 @@ async function scanTickInner(gen: number): Promise<string> {
     const weights = await getWeights();
     const ranked = rankCandidates([...pairs.values()], c, weights);
     for (const r of ranked) { setPrice(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
+    for (const [m, p] of pairs) if (p.priceChange) mem.pairChange.set(m, p.priceChange);
     const eligible = ranked.filter((r) => !r.rejected);
+    mem.regime = regimeStats(eligible.map((r) => r.priceChangeH1));
     mem.candidates = ranked.slice(0, c.scanTopN);
     await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
 
@@ -478,7 +487,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     fees = simFeesUsd(sizeUsd, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
 
-  await prisma.$transaction([
+  const [created] = await prisma.$transaction([
     prisma.position.create({
       data: {
         accountId: a.id, mint: cand.mint, symbol: cand.symbol, pairAddress: cand.pairAddress, simulated: !live,
@@ -489,6 +498,9 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     prisma.account.update({ where: { id: a.id }, data: { cashUsd: { decrement: sizeUsd + fees } } }),
   ]);
   await log('trade', `${live ? 'LIVE' : 'PAPER'} BUY ${cand.symbol} $${sizeUsd.toFixed(2)} @ ${fillPrice.toPrecision(6)} (score ${cand.composite.toFixed(3)}, mcap $${Math.round(cand.marketCap).toLocaleString()}, tier ${size.tier} ${size.multiplier}x; ${size.notes.join(', ')})`, a.id);
+  if (live && adaptiveExitsOn(c, a.isOperator)) {
+    try { await createExitPlan(created, 'entry', { composite: cand.composite, liquidityUsd: liquidity ?? null }); } catch (e) { await log('warn', `LIVE ${cand.symbol}: exit plan failed (${(e as Error).message}); fixed owner exits apply`, a.id); }
+  }
   if (live) {
     try {
       const { appendLiveTrade } = await import('./live-trade-log');
@@ -568,9 +580,58 @@ async function fetchFastPrices(mints: string[]): Promise<Map<string, number>> {
   } catch { return new Map(); }
 }
 
+// ─── Adaptive (self-directed) exits: live owner positions only ───────────────
+
+export function adaptiveExitsOn(c: Config, isOperator: boolean): boolean {
+  return c.mode === 'live' && isOperator && c.ownerPlan.enabled && c.ownerPlan.adaptiveExits;
+}
+
+/** Compute, persist and log a position's exit plan. */
+async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra: { composite?: number; liquidityUsd?: number | null; currentPrice?: number } = {}) {
+  const store = await import('./exit-plan-store');
+  const currentPnlPct = source === 'recomputed' && extra.currentPrice ? (extra.currentPrice / p.entryPrice - 1) * 100 : undefined;
+  const plan = computeExitPlan({
+    priceChange: mem.pairChange.get(p.mint) ?? null,
+    composite: extra.composite ?? p.compositeScore,
+    liquidityUsd: extra.liquidityUsd ?? mem.liquidity.get(p.mint) ?? null,
+    regime: mem.regime, history: store.pastTrades(), currentPnlPct,
+  });
+  if (!planWithinBounds(plan)) throw new Error(`plan outside hard bounds: ${describePlan(plan)}`);
+  const lowSeen = mem.lowest.get(p.id);
+  store.savePlanRecord({ positionId: p.id, mint: p.mint, symbol: p.symbol, plan, source, computedAt: new Date().toISOString(), maePct: lowSeen ? Math.max(0, (1 - lowSeen / p.entryPrice) * 100) : 0 });
+  await log('info', `LIVE exit plan ${p.symbol} (${source === 'entry' ? 'chosen at entry' : 'recomputed on restart'}): ${describePlan(plan)}`, p.accountId);
+  return plan;
+}
+
+/**
+ * The exit plan for a live owner position: stored plan, else recompute (older position, e.g. after a restart).
+ * Recompute waits for the first scan (regime) and a price-change read, so it isn't built from nothing;
+ * until then the fixed owner exits still protect the position.
+ */
+async function exitPlanFor(p: Position, price: number) {
+  const store = await import('./exit-plan-store');
+  const rec = store.getPlanRecord(p.id);
+  if (rec) return rec.plan;
+  if (!mem.regime || !mem.pairChange.has(p.mint)) return null;
+  return createExitPlan(p, 'recomputed', { currentPrice: price });
+}
+
+const planWarned = new Set<string>();
+
 async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
   const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
-  const c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
+  let c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
+  if (!p.simulated && adaptiveExitsOn(c, !!acct?.isOperator)) {
+    try {
+      const plan = await exitPlanFor(p, price);
+      if (plan) c = { ...c, ...planOverrides(plan) };
+    } catch (e) {
+      if (!planWarned.has(p.id)) { planWarned.add(p.id); await log('warn', `LIVE ${p.symbol}: exit plan unavailable (${(e as Error).message}); fixed owner exits apply`, p.accountId); }
+    }
+    const low = Math.min(mem.lowest.get(p.id) ?? price, price);
+    mem.lowest.set(p.id, low);
+    void import('./exit-plan-store').then((s) => s.noteDrawdown(p.id, Math.max(0, (1 - low / p.entryPrice) * 100))).catch(() => undefined);
+  }
   const highest = Math.max(p.highestPrice, price);
   if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
   // Fast exit on a dev dump or smart-money / whale exit (on-chain flow; WHALE_FAST_EXIT=off disables).
@@ -646,6 +707,7 @@ async function monitorTickInner(gen: number): Promise<void> {
         for (const [m, p] of pairs) {
           if (!fast.has(m) && Number(p.priceUsd) > 0) setPrice(m, Number(p.priceUsd));
           if (p.liquidity?.usd) mem.liquidity.set(m, p.liquidity.usd);
+          if (p.priceChange) mem.pairChange.set(m, p.priceChange);
         }
       } catch (e) {
         await log('warn', `price refresh failed: ${(e as Error).message}`);
@@ -827,6 +889,15 @@ async function closePositionInner(positionId: string, price: number, reason: str
   await log('trade', `${live ? 'LIVE' : 'PAPER'} SELL ${p.symbol} (${reason}) @ ${exitPrice.toPrecision(6)} PnL ${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlPct.toFixed(2)}%)`, a.id);
   if (live) {
     try {
+      const store = await import('./exit-plan-store');
+      const low = Math.min(mem.lowest.get(p.id) ?? price, price);
+      store.noteDrawdown(p.id, Math.max(0, (1 - low / p.entryPrice) * 100));
+      store.recordOutcome(p.id, { mfePct: Math.max(0, (Math.max(p.highestPrice, price) / p.entryPrice - 1) * 100), pnlPct, reason });
+      mem.lowest.delete(p.id);
+    } catch { /* learning data must never block a close */ }
+  }
+  if (live) {
+    try {
       const { appendLiveTrade } = await import('./live-trade-log');
       appendLiveTrade({
         type: 'sell', side: 'sell', token: p.symbol, symbol: p.symbol, mint: p.mint,
@@ -882,6 +953,7 @@ export async function startEngine() {
   if (c.liveBlockedReason) await log('warn', `live trading NOT enabled: ${c.liveBlockedReason}. Running in SIMULATION.`);
   const plan = c.ownerPlan;
   await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s; owner plan ${plan.enabled ? `on (${plan.maxOpenPositions} pos, SL ${plan.stopLossPct}% / TP ${plan.takeProfitPct}%${plan.tpLadder.length ? `, partials ${plan.tpLadder.map((r) => `${r.sellPct}%@+${r.gainPct}%`).join(' ')}` : ''}${plan.breakEvenTriggerPct !== null ? `, BE after +${plan.breakEvenTriggerPct}%` : ''}${plan.trailingStopPct !== null ? `, trail ${plan.trailingStopPct}% armed +${plan.trailingArmPct ?? 0}%` : ''}, sweep ${plan.sweepArmed ? 'armed' : 'paused'})` : 'off'}`);
+  if (adaptiveExitsOn(c, true)) await log('info', `adaptive exits ON for live owner trades: per-trade plan from volatility, score, liquidity, regime and past trades; hard bounds SL ${HARD_BOUNDS.minStopPct}-${HARD_BOUNDS.maxStopPct}%, partial +${HARD_BOUNDS.minPartialPct}-${HARD_BOUNDS.maxPartialPct}% selling ${HARD_BOUNDS.minPartialSellPct}-${HARD_BOUNDS.maxPartialSellPct}%, trail ${HARD_BOUNDS.minTrailPct}-${HARD_BOUNDS.maxTrailPct}%, final <= +${HARD_BOUNDS.maxFinalPct}%, daily loss stop ${plan.maxDailyLossPct}%; fixed owner exits are the fallback`);
   if (process.env.ENGINE_DISABLED === 'true') { mem.lastScanSummary = 'engine disabled (ENGINE_DISABLED=true)'; return; }
   mem.timers.push(setInterval(() => void scanTick(), c.tradeFrequencySeconds * 1000));
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));

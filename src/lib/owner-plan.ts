@@ -217,6 +217,8 @@ export interface OwnerPlanConfig {
   breakEvenTriggerPct: number | null;
   trailingArmPct: number | null;
   trailingStopPct: number | null;
+  /** OWNER_ADAPTIVE_EXITS=on: each live trade gets its own exit plan (src/lib/adaptive-exits.ts); the fixed numbers above become the fallback. */
+  adaptiveExits: boolean;
   minTradeUsd: number;
   ladder: LadderParams;
   dailyCapUsd: number;
@@ -250,6 +252,7 @@ export function parseOwnerPlanConfig(env: Record<string, string | undefined> = {
     breakEvenTriggerPct: optNum(env.OWNER_BREAK_EVEN_TRIGGER_PCT),
     trailingArmPct: optNum(env.OWNER_TRAILING_ARM_PCT),
     trailingStopPct: optNum(env.OWNER_TRAILING_STOP_PCT),
+    adaptiveExits: ['on', 'true', '1'].includes(String(env.OWNER_ADAPTIVE_EXITS ?? '').trim().toLowerCase()),
     minTradeUsd: num(env.OWNER_MIN_TRADE_USD, DEFAULT_TRADE_SIZES.under10),
     ladder,
     dailyCapUsd: num(env.OWNER_SWEEP_DAILY_CAP_USD, DEFAULT_SWEEP_DAILY_CAP_USD),
