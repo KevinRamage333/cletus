@@ -50,8 +50,11 @@ async function executeSwapInner(cfg: Config, r: SwapRequest): Promise<SwapResult
     if (problem) throw new Error(`jupiter /order: ${problem}`);
     const tx = VersionedTransaction.deserialize(Buffer.from(order.transaction!, 'base64'));
     tx.sign([kp]);                                     // our signature only; JupiterZ market makers co-sign in /execute
-    const ex = await executeOrder(Buffer.from(tx.serialize()).toString('base64'), order.requestId);
+    // PRIVATE_ROUTE (default off) = plain Jupiter /execute; see private-route.ts for the optional Jito bundle path.
+    const { submitSwap } = await import('./private-route');
+    const ex = await submitSwap({ order, signedTx: tx, kp, execute: executeOrder });
     if (ex.status === 'Success' && ex.signature) {
+      if (ex.route !== 'jupiter') console.log(`[cletus] swap landed via ${ex.route}`);
       return { signature: ex.signature, inAmount: ex.totalInputAmount ?? order.inAmount, outAmount: ex.totalOutputAmount ?? order.outAmount, feeBps: order.feeBps, router: order.router };
     }
     lastErr = `${describeExecute(ex.code)} (code ${ex.code})${ex.signature ? ` sig ${ex.signature}` : ''}${ex.error ? `: ${ex.error}` : ''}`;
