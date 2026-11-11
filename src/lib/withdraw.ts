@@ -7,26 +7,13 @@
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
+import { BLOCKED_DESTINATIONS, LAMPORTS_PER_SOL, validateDestination, type DestResult } from './solana-address';
+export { BLOCKED_DESTINATIONS, LAMPORTS_PER_SOL, validateDestination, type DestResult };
 
-export const LAMPORTS_PER_SOL = 1_000_000_000;
 export const BASE_FEE_LAMPORTS = 5_000;
 export const RENT_EXEMPT_MIN_LAMPORTS = 890_880;           // 0-data system account
 export const CONFIRM_WORD = 'WITHDRAW';
 export const TOKEN_TTL_MS = 2 * 60_000;
-
-/** Addresses you must never "withdraw" to: programs and mints (funds sent there are unrecoverable). */
-export const BLOCKED_DESTINATIONS = new Set([
-  '11111111111111111111111111111111',                       // System Program
-  'So11111111111111111111111111111111111111112',            // wrapped SOL mint
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',           // USDC mint
-  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',            // SPL Token program
-  'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',            // Token-2022 program
-  'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',           // Associated Token program
-  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',            // Jupiter v6
-  'Sysvar1nstructions1111111111111111111111111',
-  'SysvarRent111111111111111111111111111111111',
-  'SysvarC1ock11111111111111111111111111111111',
-]);
 
 export function reserveLamports(env: Record<string, string | undefined> = process.env): number {
   const sol = Number(env.WITHDRAW_FEE_RESERVE_SOL ?? 0.002);
@@ -34,20 +21,6 @@ export function reserveLamports(env: Record<string, string | undefined> = proces
   return Math.max(l, RENT_EXEMPT_MIN_LAMPORTS + BASE_FEE_LAMPORTS);
 }
 
-export type DestResult = { ok: true; address: string } | { ok: false; error: string };
-export function validateDestination(input: unknown, ownAddress: string | null): DestResult {
-  const s = String(input ?? '').trim();
-  if (!s) return { ok: false, error: 'Enter a Solana address' };
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s)) return { ok: false, error: 'That is not a valid Solana address (base58, 32–44 characters)' };
-  let pk: PublicKey;
-  try { pk = new PublicKey(s); } catch { return { ok: false, error: 'That is not a valid Solana address' }; }
-  const addr = pk.toBase58();
-  if (addr !== s) return { ok: false, error: 'Address did not round-trip; check for typos' };
-  if (BLOCKED_DESTINATIONS.has(addr)) return { ok: false, error: 'That is a program or token mint address, not a wallet. Funds sent there are lost.' };
-  if (ownAddress && addr === ownAddress) return { ok: false, error: 'That is the trading wallet itself' };
-  if (!PublicKey.isOnCurve(pk.toBytes())) return { ok: false, error: 'That address is off-curve (a program-derived account), not a normal wallet' };
-  return { ok: true, address: addr };
-}
 
 export type AmountResult = { ok: true; lamports: number; remainingLamports: number; feeLamports: number } | { ok: false; error: string };
 /** amountSol > 0, or max=true for (balance − reserve). The wallet always keeps `reserve` (≥ rent-exempt minimum + fee). */

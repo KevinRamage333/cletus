@@ -6,7 +6,7 @@
  * 5% stop / 20% take-profit, and a profit-sweep ladder to PAYOUT_WALLET.
  * Pure helpers live here so they can be unit-tested without the DB or chain.
  */
-import { LAMPORTS_PER_SOL, validateDestination } from './withdraw';
+import { LAMPORTS_PER_SOL, validateDestination } from './solana-address';
 
 /** The server trading wallet. Owner trades from this address are never charged the platform fee. */
 export const OWNER_TRADING_WALLET = 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq';
