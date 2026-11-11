@@ -58,3 +58,12 @@ describe('memoizeFor', () => {
     fail = false; expect(await f()).toBe(4); // failure was not cached
   });
 });
+
+import { suspendGapMs } from '../src/lib/watchdog';
+describe('suspendGapMs', () => {
+  it('flags a wall-clock jump the monotonic clock did not see', () => {
+    expect(suspendGapMs({ wall: 0, mono: 0 }, { wall: 10_000, mono: 10_000 })).toBe(0);
+    expect(suspendGapMs({ wall: 0, mono: 0 }, { wall: 610_000, mono: 10_000 })).toBe(600_000);
+    expect(suspendGapMs({ wall: 0, mono: 0 }, { wall: 13_000, mono: 10_000 })).toBe(0);
+  });
+});

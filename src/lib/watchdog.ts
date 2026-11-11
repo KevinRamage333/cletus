@@ -51,3 +51,12 @@ export function memoizeFor<T>(ms: number, fn: () => Promise<T>, now: () => numbe
     return p;
   };
 }
+
+/**
+ * How long the process was frozen (box/VM suspended) between two samples: wall-clock time advanced but the
+ * monotonic clock did not. Returns ms of the gap beyond `toleranceMs`, else 0.
+ */
+export function suspendGapMs(prev: { wall: number; mono: number }, now: { wall: number; mono: number }, toleranceMs = 5_000): number {
+  const gap = (now.wall - prev.wall) - (now.mono - prev.mono);
+  return gap > toleranceMs ? gap : 0;
+}

@@ -1043,6 +1043,18 @@ export async function startEngine() {
   const hbMin = envNum('HEARTBEAT_MINUTES', 5);
   const liveHb = async () => (c.mode === 'live' ? `; ${(await import('./live-drawdown')).describeLive((await import('./live-drawdown')).loadState())}` : '');
   if (hbMin > 0) mem.timers.push(setInterval(() => void liveHb().catch(() => '').then((extra) => log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})${extra}`)).catch(() => undefined), hbMin * 60_000));
+  // Suspend detector: the box can be paused while idle; the process then sees a wall-clock jump that its
+  // monotonic clock (and ps start time) never sees. Log it so a silent gap isn't mistaken for a hang or restart.
+  {
+    const { suspendGapMs } = await import('./watchdog');
+    let last = { wall: Date.now(), mono: performance.now() };
+    mem.timers.push(setInterval(() => {
+      const now = { wall: Date.now(), mono: performance.now() };
+      const gap = suspendGapMs(last, now);
+      last = now;
+      if (gap > 0) void log('warn', `box was suspended ~${Math.round(gap / 1000)}s (wall clock jumped, process clock did not): scans and stop checks were paused meanwhile${c.mode === 'live' ? '; open positions are re-checked now' : ''}`).catch(() => undefined);
+    }, 10_000));
+  }
   if (c.mode === 'live') {
     setTimeout(() => void sampleLiveEquity(), 8000); // after the first scan has a SOL price
     mem.timers.push(setInterval(() => void sampleLiveEquity(), envNum('LIVE_EQUITY_SAMPLE_SECONDS', 60) * 1000));
