@@ -1,0 +1,50 @@
+{
+  "name": "cletus",
+  "version": "0.2.0-beta",
+  "private": true,
+  "description": "Cletus - autonomous Solana micro-cap trading bot (simulation-first) with web dashboard",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3000",
+    "test": "vitest run",
+    "db:push": "node --env-file=.env.local node_modules/prisma/build/index.js db push",
+    "wallet:generate": "tsx scripts/generate-wallet.ts",
+    "screenshot": "node scripts/screenshot.mjs",
+    "postinstall": "prisma generate"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "@prisma/client": "^5.22.0",
+    "@scure/bip39": "^2.4.0",
+    "@solana/web3.js": "^1.99.0",
+    "bs58": "^6.0.0",
+    "fast-xml-parser": "^5.12.0",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "playwright-core": "^1.65.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "bufferutil": false,
+    "utf-8-validate": false
+  }
+}

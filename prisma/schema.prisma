@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Dev uses SQLite (DATABASE_URL="file:./dev.db").
+// Production: change provider to "postgresql" and point DATABASE_URL at Postgres.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  isAdmin         Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  riskVersion     String?
+  riskAckAt       DateTime?
+  walletPublicKey String?
+  walletSource    String?      // "created" | "imported"
+  walletSetupAt   DateTime?
+  acceptances     Acceptance[]
+  account         Account?
+  feedback        Feedback[]
+  conversations   Conversation[]
+}
+
+// Immutable audit trail of every onboarding acceptance.
+model Acceptance {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String   // "terms" | "risk" | "wallet"
+  version   String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind])
+}
+
+model Account {
+  id              String     @id @default(cuid())
+  userId          String?    @unique
+  user            User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  isOperator      Boolean    @default(false)
+  startingBalance Float
+  cashUsd         Float
+  realizedPnl     Float      @default(0)
+  peakEquity      Float
+  paused          Boolean    @default(false)
+  pauseReason     String?
+  recoveryMode    Boolean    @default(false)
+  consecutiveWins Int        @default(0)
+  createdAt       DateTime   @default(now())
+  positions       Position[]
+  logs            LogEntry[]
+}
+
+model Position {
+  id             String    @id @default(cuid())
+  accountId      String
+  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  mint           String
+  symbol         String
+  pairAddress    String?
+  status         String    @default("open") // open | closed
+  simulated      Boolean   @default(true)
+  entryPrice     Float
+  sizeUsd        Float
+  tokenAmount    Float
+  feesUsd        Float     @default(0)
+  highestPrice   Float
+  lastPrice      Float
+  compositeScore Float
+  signals        String    // JSON SignalBreakdown at entry
+  tier           Int       @default(1)
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+  exitPrice      Float?
+  pnlUsd         Float?
+  pnlPct         Float?
+  exitReason     String?
+  entryTx        String?
+  exitTx         String?
+
+  @@index([accountId, status])
+  @@index([accountId, mint])
+}
+
+model SignalWeight {
+  name   String @id
+  weight Float
+  wins   Int    @default(0)
+  trials Int    @default(0)
+}
+
+model EngineState {
+  id                  String    @id @default("global")
+  killSwitch          Boolean   @default(false)
+  killReason          String?
+  killedAt            DateTime?
+  priorityFeeLamports Int
+  slippageBps         Int
+  consecutiveFailures Int       @default(0)
+  pausedUntil         DateTime?
+  lastScanAt          DateTime?
+  lastError           String?
+  scanCount           Int       @default(0)
+  updatedAt           DateTime  @updatedAt
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  level     String
+  message   String
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String   // bug | feedback | idea
+  message   String
+  page      String?
+  severity  String?
+  createdAt DateTime @default(now())
+}
+
+// ── Brain: persistent per-user conversation memory ─────────────────────────
+model Conversation {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String        @default("New chat")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String       // user | model
+  content        String
+  meta           String?      // JSON: { source, model, tools: [...], grounded }
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// ── World events ───────────────────────────────────────────────────────────
+model NewsItem {
+  id          String   @id @default(cuid())
+  source      String
+  category    String   // crypto | macro | world | fed
+  title       String
+  url         String   @unique
+  summary     String?
+  publishedAt DateTime?
+  fetchedAt   DateTime @default(now())
+
+  @@index([publishedAt])
+}
+
+model MarketSnapshot {
+  id          String   @id @default(cuid())
+  solPriceUsd Float?
+  solChange24h Float?
+  trending    String   // JSON array of { symbol, mint, priceChangeH1, volume24h, marketCap }
+  createdAt   DateTime @default(now())
+}
+
+model Briefing {
+  id         String   @id @default(cuid())
+  content    String
+  source     String   // gemini | gemini-grounded | heuristic
+  itemsCount Int
+  sources    String?  // JSON array of grounding/source links
+  createdAt  DateTime @default(now())
+}
+
+// ── Self-reflection journal ───────────────────────────────────────────────
+model JournalEntry {
+  id         String   @id @default(cuid())
+  kind       String   // trade | daily
+  accountId  String?
+  positionId String?  @unique
+  dayKey     String?  // YYYY-MM-DD for daily entries (per account)
+  title      String
+  content    String
+  source     String   // gemini | heuristic
+  createdAt  DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@unique([kind, accountId, dayKey])
+}

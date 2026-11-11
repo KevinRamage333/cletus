@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+# secrets - never commit
+.secrets/
+.env*
+!.env.example
+# local db
+prisma/*.db
+prisma/*.db-journal
+dev.log
