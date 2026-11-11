@@ -8,12 +8,16 @@
 import type { Account, Position } from '@prisma/client';
 import { prisma } from './db';
 import { log } from './logger';
-import { getConfig, isWithinSchedule, SIGNAL_NAMES, type Config, type SignalName } from './config';
+import { getConfig, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
 import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
 import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, type SignalBreakdown } from './signals';
 import { computePositionSize } from './sizing';
 import { complianceGate, concentrationCap } from './compliance';
-import { exitDecision } from './exits';
+import { exitDecision, partialTakeProfit } from './exits';
+import { simFillPrice } from './fills';
+import { narrativeOf, portfolioCheck, mapLimit } from './portfolio';
+import { parseSettings, effectiveConfig, withinTradingHours, dailyLimitHit, sizeFromPct, type AccountSettings } from './user-settings';
+import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
 
@@ -26,10 +30,12 @@ interface EngineMemory {
   solPrice: number;
   lastScanSummary: string;
   prices: Map<string, number>;
+  liquidity: Map<string, number>;
+  monitorTicks: number;
 }
 const g = globalThis as unknown as { __cletusEngine?: EngineMemory };
 export const mem: EngineMemory = (g.__cletusEngine ??= {
-  started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(),
+  started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(), liquidity: new Map(), monitorTicks: 0,
 });
 
 const healParams = (c: Config): HealParams => ({
@@ -122,14 +128,38 @@ export async function accountEquity(a: Account) {
   return { equity: a.cashUsd + openValue, openValue, exposure, open };
 }
 
+const settingsCache = new Map<string, { at: number; s: AccountSettings }>();
+/** Per-account settings (Config page), cached for 5s. Call invalidateAccountSettings after a save. */
+export async function accountSettings(accountId: string, c: Config, raw?: string | null): Promise<AccountSettings> {
+  const hit = settingsCache.get(accountId);
+  if (raw === undefined && hit && Date.now() - hit.at < 5000) return hit.s;
+  const json = raw !== undefined ? raw : (await prisma.account.findUnique({ where: { id: accountId }, select: { settings: true } }))?.settings;
+  const st = parseSettings(json, c);
+  settingsCache.set(accountId, { at: Date.now(), s: st });
+  return st;
+}
+export function invalidateAccountSettings(accountId: string) { settingsCache.delete(accountId); }
+
 /** Why an account may not open new trades right now (null = allowed). */
 async function entryBlockReason(a: Account, c: Config): Promise<string | null> {
   if (a.paused) return `account paused: ${a.pauseReason ?? 'manual'}`;
   const p = await periodPnl(a.id, c.timezone);
-  if (p.day <= c.dailyLossLimit) return `daily loss limit hit (${p.day.toFixed(2)})`;
+  const { equity } = await accountEquity(a);
+  const hard = hardRiskBlock({ dayPnlUsd: p.day, equityUsd: equity, consecutiveLosses: a.consecutiveLosses }, { dailyLossLimitUsd: c.dailyLossLimit, maxDailyLossPct: c.maxDailyLossPct, maxPositionPctOfEquity: c.maxPositionPctOfEquity, maxConsecutiveLosses: c.maxConsecutiveLosses });
+  if (hard) return hard;
   if (p.week <= c.weeklyLossLimit) return `weekly loss limit hit (${p.week.toFixed(2)})`;
   if (p.month <= c.monthlyLossLimit) return `monthly loss limit hit (${p.month.toFixed(2)})`;
   if (p.day >= c.dailyPnlTarget) return `daily PnL target reached (${p.day.toFixed(2)})`;
+  if (!a.labPreset) {
+    const us = await accountSettings(a.id, c, a.settings);
+    const hit = dailyLimitHit(us, p.day);
+    if (hit) {
+      await prisma.account.update({ where: { id: a.id }, data: { paused: true, pauseReason: `auto-paused: ${hit}` } });
+      await log('warn', `account auto-paused: ${hit}`, a.id);
+      return hit;
+    }
+    if (!withinTradingHours(us)) return `outside your trading hours (${us.tradingStart}–${us.tradingEnd} ${us.timezone})`;
+  }
   return null;
 }
 
@@ -157,13 +187,17 @@ export async function scanTick(): Promise<string> {
 
     const weights = await getWeights();
     const ranked = rankCandidates([...pairs.values()], c, weights);
-    for (const r of ranked) mem.prices.set(r.mint, r.priceUsd);
+    for (const r of ranked) { mem.prices.set(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
     const eligible = ranked.filter((r) => !r.rejected);
     mem.candidates = ranked.slice(0, c.scanTopN);
     await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
 
-    const qualified = eligible.filter((r) => r.composite >= c.minCompositeScore).sort((a, b) => b.composite - a.composite);
-    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${c.minCompositeScore}`;
+    const accounts = await prisma.account.findMany({ where: { labPreset: null, OR: [{ isOperator: true }, { user: { is: { walletSetupAt: { not: null } } } }] } });
+    // Each account may pick its own aggression (Config page): audit anything that clears the loosest account threshold.
+    let minScore = c.minCompositeScore;
+    for (const a of accounts) minScore = Math.min(minScore, effectiveConfig(c, await accountSettings(a.id, c, a.settings)).minCompositeScore);
+    const qualified = eligible.filter((r) => r.composite >= minScore).sort((a, b) => b.composite - a.composite);
+    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore}`;
 
     if (!isWithinSchedule(c)) {
       summary += ' — outside trading schedule, no entries';
@@ -171,12 +205,11 @@ export async function scanTick(): Promise<string> {
       return (mem.lastScanSummary = summary);
     }
 
-    const accounts = await prisma.account.findMany({ where: { OR: [{ isOperator: true }, { user: { is: { walletSetupAt: { not: null } } } }] } });
     let opened = 0;
     for (const cand of qualified.slice(0, c.auditTopN)) {
       const audit = await auditToken(cand.mint, {
         priceUsd: cand.priceUsd, sizeUsd: Math.min(c.maxPositionSizeUsd, 1000),
-        params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct },
+        params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
         rugcheckApiKey: c.rugcheckApiKey, jupiterBase: c.jupiterBaseUrl, jupiterApiKey: c.jupiterApiKey,
       });
       const mc = mem.candidates.find((x) => x.mint === cand.mint);
@@ -188,6 +221,7 @@ export async function scanTick(): Promise<string> {
       for (const a of accounts) if (await tryEnter(a, cand, audit, c)) opened++;
     }
     summary += `, opened ${opened} position(s)`;
+    if (c.enablePresetLab) summary += await presetLabTick([...pairs.values()], weights, c);
     await log('info', summary);
     return (mem.lastScanSummary = summary);
   } catch (e) {
@@ -198,18 +232,28 @@ export async function scanTick(): Promise<string> {
   }
 }
 
-async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, c: Config): Promise<boolean> {
+async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config): Promise<boolean> {
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
+  const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
+  const c = us ? effectiveConfig(serverCfg, us) : serverCfg;
+  if (cand.composite < c.minCompositeScore) return false;
   const blocked = await entryBlockReason(a, c);
   if (blocked) return false;
   const { equity, exposure, open } = await accountEquity(a);
-  if (open.length >= c.maxOpenPositions) return false;
+  const narrative = narrativeOf(cand.symbol, cand.name);
+  const creator = audit.creator ?? null;
+  const pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
+  if (!pre.allowed) { if (!pre.reasons.some((r) => r.startsWith('max open') || r.startsWith('duplicate'))) await log('info', `portfolio cap blocked ${cand.symbol}: ${pre.reasons.join('; ')}`, a.id); return false; }
 
   const size = computePositionSize(
     { equityUsd: equity, cashUsd: a.cashUsd, openExposureUsd: exposure, cumulativePnl: a.realizedPnl, recoveryMode: a.recoveryMode },
     c,
   );
-  if (size.sizeUsd <= 0) return false;
+  if (us && us.positionSizePct !== null) { size.sizeUsd = Math.min(sizeFromPct(us, equity, size.sizeUsd), a.cashUsd); size.notes.push(`${us.positionSizePct}% of equity (your setting)`); }
+  const eqCap = capByEquityPct(size.sizeUsd, equity, c.maxPositionPctOfEquity);
+  if (eqCap.capped) { size.sizeUsd = eqCap.sizeUsd; size.notes.push(`capped at ${c.maxPositionPctOfEquity}% of equity`); }
+  if (size.sizeUsd > pre.maxSizeUsd) { size.sizeUsd = pre.maxSizeUsd; size.notes.push(`capped by ${c.maxTotalExposurePct}% portfolio exposure`); }
+  if (size.sizeUsd < c.minTradeUsd) return false;
 
   const history = await prisma.position.findMany({
     where: { accountId: a.id, OR: [{ status: 'open' }, { closedAt: { gte: new Date(Date.now() - Math.max(c.secWashTradeWindowMin, 5) * 60_000) } }, { openedAt: { gte: new Date(Date.now() - 5 * 60_000) } }] },
@@ -252,8 +296,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       return false;
     }
   } else {
-    const impact = liquidity && liquidity > 0 ? Math.min(c.slippageTolerance, sizeUsd / liquidity) : c.slippageTolerance;
-    fillPrice = cand.priceUsd * (1 + impact);
+    fillPrice = simFillPrice('buy', cand.priceUsd, sizeUsd, liquidity, c.slippageTolerance);
     tokenAmount = sizeUsd / fillPrice;
     fees = (sizeUsd * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
   }
@@ -263,7 +306,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       data: {
         accountId: a.id, mint: cand.mint, symbol: cand.symbol, pairAddress: cand.pairAddress, simulated: !live,
         entryPrice: fillPrice, sizeUsd, tokenAmount, feesUsd: fees, highestPrice: fillPrice, lastPrice: cand.priceUsd,
-        compositeScore: cand.composite, signals: JSON.stringify(cand.signals), tier: size.tier, entryTx,
+        compositeScore: cand.composite, signals: JSON.stringify(cand.signals), tier: size.tier, entryTx, narrative, creator,
       },
     }),
     prisma.account.update({ where: { id: a.id }, data: { cashUsd: { decrement: sizeUsd + fees } } }),
@@ -272,7 +315,82 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   return true;
 }
 
+// ─── Preset lab: paper-only accounts that trade each market-cap preset side by side ─────────
+
+export async function ensureLabAccount(preset: McapPreset) {
+  const c = getConfig();
+  return prisma.account.upsert({
+    where: { labPreset: preset },
+    create: { name: `Paper lab: ${MCAP_PRESETS[preset].label}`, labPreset: preset, startingBalance: c.simStartingBalanceUsd, cashUsd: c.simStartingBalanceUsd, peakEquity: c.simStartingBalanceUsd },
+    update: {},
+  });
+}
+
+async function presetLabTick(pairs: DexPair[], weights: Record<SignalName, number>, c: Config): Promise<string> {
+  const parts: string[] = [];
+  for (const preset of Object.keys(MCAP_PRESETS) as McapPreset[]) {
+    try {
+      const band = MCAP_PRESETS[preset];
+      const lab = await ensureLabAccount(preset);
+      const ranked = rankCandidates(pairs, { ...c, minMarketCap: band.min, maxMarketCap: band.max }, weights);
+      const q = ranked.filter((r) => !r.rejected && r.composite >= c.minCompositeScore).sort((a, b) => b.composite - a.composite).slice(0, c.auditTopN);
+      let n = 0;
+      for (const cand of q) {
+        const audit = await auditToken(cand.mint, {
+          priceUsd: cand.priceUsd, sizeUsd: Math.min(c.maxPositionSizeUsd, 1000),
+          params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
+          rugcheckApiKey: c.rugcheckApiKey, jupiterBase: c.jupiterBaseUrl, jupiterApiKey: c.jupiterApiKey,
+        });
+        if (audit.passed && (await tryEnter(lab, cand, audit, { ...c, mode: 'simulation' }))) n++;
+      }
+      parts.push(`${preset.toLowerCase()} ${ranked.filter((r) => !r.rejected).length}/${n}`);
+    } catch (e) { parts.push(`${preset.toLowerCase()} err`); await log('warn', `preset lab ${preset}: ${(e as Error).message}`); }
+  }
+  return `; lab (eligible/opened): ${parts.join(', ')}`;
+}
+
 // ─── Monitoring & exits ──────────────────────────────────────────────────────
+
+/** Jupiter Price v3 (near real-time) for up to 50 mints per call; DexScreener is the fallback. */
+async function fetchFastPrices(mints: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  for (let i = 0; i < mints.length; i += 50) {
+    try {
+      const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${mints.slice(i, i + 50).join(',')}`, { signal: AbortSignal.timeout(5000), cache: 'no-store' });
+      if (!r.ok) continue;
+      const j = (await r.json()) as Record<string, { usdPrice?: number }>;
+      for (const [m, v] of Object.entries(j)) if (v?.usdPrice && v.usdPrice > 0) out.set(m, v.usdPrice);
+    } catch { /* fall back below */ }
+  }
+  return out;
+}
+
+async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
+  const c = effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg));
+  const highest = Math.max(p.highestPrice, price);
+  if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
+  const reason = killSwitch ? 'kill_switch' : exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
+  if (reason) { await closePosition(p.id, price, reason); return; }
+  const partial = partialTakeProfit(p, price, c.tpLadder, p.partialsTaken, c.takeProfitPct);
+  if (partial) await partialClose(p.id, price, partial.fraction, partial.rung, partial.gainPct);
+}
+
+const fastChecks = new Map<string, number>();
+/** Called from the Helius WebSocket when a position's pool account changes: re-price that token now. */
+async function onPoolChange(mint: string) {
+  const now = Date.now();
+  if (now - (fastChecks.get(mint) ?? 0) < Number(process.env.WS_EXIT_DEBOUNCE_MS ?? 1000)) return;
+  fastChecks.set(mint, now);
+  try {
+    const c = getConfig();
+    const st = await getEngineState();
+    const px = (await fetchFastPrices([mint])).get(mint);
+    if (!px) return;
+    mem.prices.set(mint, px);
+    const open = await prisma.position.findMany({ where: { status: 'open', mint } });
+    await mapLimit(open, 4, (p) => evaluatePosition(p, px, st.killSwitch, c));
+  } catch { /* polling is the backstop */ }
+}
 
 export async function monitorTick(): Promise<void> {
   if (mem.monitoring) return;
@@ -281,26 +399,70 @@ export async function monitorTick(): Promise<void> {
   try {
     const st = await getEngineState();
     const open = await prisma.position.findMany({ where: { status: 'open' } });
+    // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
+    const { syncPoolSubscriptions } = await import('./helius');
+    syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m) => void onPoolChange(m));
     if (!open.length) return;
     const mints = [...new Set(open.map((p) => p.mint))];
-    try {
-      const pairs = await fetchPairsForMints(mints);
-      for (const [m, p] of pairs) if (Number(p.priceUsd) > 0) mem.prices.set(m, Number(p.priceUsd));
-    } catch (e) {
-      await log('warn', `price refresh failed: ${(e as Error).message}`);
+    const fast = await fetchFastPrices(mints);
+    for (const [m, v] of fast) mem.prices.set(m, v);
+    const missing = mints.filter((m) => !fast.has(m));
+    const needLiq = mints.filter((m) => !mem.liquidity.has(m));
+    if (missing.length || needLiq.length || mem.monitorTicks % 10 === 0) {
+      try {
+        const pairs = await fetchPairsForMints([...new Set([...missing, ...needLiq, ...(mem.monitorTicks % 10 === 0 ? mints : [])])]);
+        for (const [m, p] of pairs) {
+          if (!fast.has(m) && Number(p.priceUsd) > 0) mem.prices.set(m, Number(p.priceUsd));
+          if (p.liquidity?.usd) mem.liquidity.set(m, p.liquidity.usd);
+        }
+      } catch (e) {
+        await log('warn', `price refresh failed: ${(e as Error).message}`);
+      }
     }
-    for (const p of open) {
-      const price = mem.prices.get(p.mint) ?? p.lastPrice;
-      const highest = Math.max(p.highestPrice, price);
-      if (price !== p.lastPrice || highest !== p.highestPrice) await prisma.position.update({ where: { id: p.id }, data: { lastPrice: price, highestPrice: highest } });
-      const reason = st.killSwitch ? 'kill_switch' : exitDecision({ entryPrice: p.entryPrice, highestPrice: p.highestPrice, openedAt: p.openedAt }, price, { ...c });
-      if (reason) await closePosition(p.id, price, reason);
-    }
+    mem.monitorTicks++;
+    // Evaluate every open position concurrently (bounded so live sells don't flood the RPC).
+    await mapLimit(open, Number(process.env.EXIT_CONCURRENCY ?? 8), (p) => evaluatePosition(p, mem.prices.get(p.mint) ?? p.lastPrice, st.killSwitch, c));
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
   } finally {
     mem.monitoring = false;
   }
+}
+
+/** Sell `fraction` of the remaining position at a take-profit rung; the rest keeps running. */
+export async function partialClose(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
+  const c = getConfig();
+  const p = await prisma.position.findUnique({ where: { id: positionId } });
+  if (!p || p.status !== 'open' || p.partialsTaken >= rung) return;
+  const st = await getEngineState();
+  const sellTokens = p.tokenAmount * fraction;
+  const costPortion = p.sizeUsd * fraction;
+  let proceeds: number, fee: number, tx: string | null = null;
+  if (!p.simulated) {
+    try {
+      const { executeSwap, tokenBalanceRaw, SOL_MINT } = await import('./executor');
+      const bal = await tokenBalanceRaw(c, p.mint);
+      const raw = (bal.raw * BigInt(Math.round(fraction * 10_000))) / 10_000n;
+      if (raw === 0n) throw new Error('nothing to sell');
+      const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: raw, slippageBps: st.slippageBps, priorityFeeLamports: st.priorityFeeLamports });
+      proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice; fee = (st.priorityFeeLamports / 1e9) * mem.solPrice; tx = r.signature;
+      await heal('ok');
+    } catch (e) {
+      await heal(classifyError(e), (e as Error).message);
+      await log('error', `LIVE partial sell failed ${p.symbol}: ${(e as Error).message}`, p.accountId);
+      return;
+    }
+  } else {
+    const exitPrice = simFillPrice('sell', price, sellTokens * price, mem.liquidity.get(p.mint), c.slippageTolerance);
+    proceeds = sellTokens * exitPrice;
+    fee = (proceeds * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
+  }
+  const pnl = proceeds - fee - costPortion;
+  await prisma.$transaction([
+    prisma.position.update({ where: { id: p.id }, data: { tokenAmount: p.tokenAmount - sellTokens, sizeUsd: p.sizeUsd - costPortion, partialCostUsd: p.partialCostUsd + costPortion, partialPnlUsd: p.partialPnlUsd + pnl, partialsTaken: rung, lastPrice: price } }),
+    prisma.account.update({ where: { id: p.accountId }, data: { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } } }),
+  ]);
+  await log('trade', `${p.simulated ? 'PAPER' : 'LIVE'} PARTIAL TP${rung} ${p.symbol}: sold ${(fraction * 100).toFixed(0)}% at +${gainPct}% rung, PnL ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}${tx ? ` tx ${tx}` : ''}`, p.accountId);
 }
 
 export async function closePosition(positionId: string, price: number, reason: string) {
@@ -329,26 +491,28 @@ export async function closePosition(positionId: string, price: number, reason: s
       return;
     }
   } else {
-    const impact = Math.min(c.slippageTolerance, 0.01); // conservative simulated exit impact
-    exitPrice = price * (1 - impact);
+    // Realistic: fill at the observed (possibly gapped) price, minus pool price impact for our size.
+    exitPrice = simFillPrice('sell', price, p.tokenAmount * price, mem.liquidity.get(p.mint), c.slippageTolerance);
     proceeds = p.tokenAmount * exitPrice;
     exitFees = (proceeds * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
   }
 
-  const pnlUsd = proceeds - exitFees - p.sizeUsd - p.feesUsd;
-  const pnlPct = (pnlUsd / p.sizeUsd) * 100;
+  const remainderPnl = proceeds - exitFees - p.sizeUsd - p.feesUsd;
+  const pnlUsd = remainderPnl + p.partialPnlUsd; // whole-trade P&L incl. partial take-profits
+  const pnlPct = (pnlUsd / (p.sizeUsd + p.partialCostUsd)) * 100;
   const won = pnlUsd > 0;
 
   await prisma.position.update({ where: { id: p.id }, data: { status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason, exitTx, lastPrice: price, feesUsd: p.feesUsd + exitFees } });
 
   // Account bookkeeping, drawdown & recovery mode.
-  const updated = await prisma.account.update({ where: { id: a.id }, data: { cashUsd: { increment: proceeds - exitFees }, realizedPnl: { increment: pnlUsd }, consecutiveWins: won ? { increment: 1 } : 0 } });
+  const updated = await prisma.account.update({ where: { id: a.id }, data: { cashUsd: { increment: proceeds - exitFees }, realizedPnl: { increment: remainderPnl }, consecutiveWins: won ? { increment: 1 } : 0, consecutiveLosses: won ? 0 : { increment: 1 } } });
   const { equity } = await accountEquity(updated);
   const peak = Math.max(updated.peakEquity, equity);
   const dd = peak > 0 ? ((peak - equity) / peak) * 100 : 0;
   const data: Partial<Account> = { peakEquity: peak };
   if (c.enableRecoveryMode && !updated.recoveryMode && dd >= c.maxDrawdownPct / 2) { data.recoveryMode = true; await log('warn', `recovery mode ON (drawdown ${dd.toFixed(1)}%) — sizes x${c.recoveryMultiplier}`, a.id); }
   if (updated.recoveryMode && updated.consecutiveWins >= c.recoveryExitWins) { data.recoveryMode = false; await log('info', `recovery mode OFF after ${updated.consecutiveWins} wins`, a.id); }
+  if (!won && lossStreakPause(updated.consecutiveLosses, c.maxConsecutiveLosses) && !updated.paused) { data.paused = true; data.pauseReason = `${updated.consecutiveLosses} losses in a row (MAX_CONSECUTIVE_LOSSES=${c.maxConsecutiveLosses})`; await log('warn', `account AUTO-PAUSED: ${data.pauseReason}`, a.id); }
   if (dd >= c.maxDrawdownPct) { data.paused = true; data.pauseReason = `max drawdown ${dd.toFixed(1)}% >= ${c.maxDrawdownPct}%`; await log('warn', `account PAUSED: ${data.pauseReason}`, a.id); }
   await prisma.account.update({ where: { id: a.id }, data });
 
@@ -364,7 +528,6 @@ export async function closePosition(positionId: string, price: number, reason: s
       await prisma.signalWeight.update({ where: { name: k }, data: { weight: w[k], trials: active ? { increment: 1 } : undefined, wins: active && won ? { increment: 1 } : undefined } });
     }
   }
-  void import('./journal').then((j) => j.journalTrade(p.id));
   void import('./journal').then((j) => j.writeTradeReflection(p.id, before, after));
   await log('trade', `${live ? 'LIVE' : 'PAPER'} SELL ${p.symbol} (${reason}) @ ${exitPrice.toPrecision(6)} PnL ${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlPct.toFixed(2)}%)`, a.id);
 }
@@ -387,6 +550,8 @@ export async function startEngine() {
   await getEngineState();
   await getWeights();
   await ensureOperatorAccount();
+  const { startRpcHealthChecks } = await import('./rpc-pool');
+  startRpcHealthChecks();
   if (c.mode === 'live') {
     const { getOperatorPublicKey } = await import('./wallet');
     if (!getOperatorPublicKey()) await setKillSwitch(true, 'live mode but the trading wallet could not be loaded');
@@ -404,14 +569,4 @@ export async function startEngine() {
   mem.timers.push(setInterval(runDaily, 60 * 60_000));
   setTimeout(runDaily, 60_000);
   setTimeout(() => void scanTick(), 3000);
-  // World events + self-reflection (Brain context only; never affects execution).
-  if (process.env.NEWS_DISABLED !== 'true') {
-    const { refreshNews } = await import('./news');
-    const newsMs = Math.max(5, Number(process.env.NEWS_REFRESH_MINUTES) || 15) * 60_000;
-    setTimeout(() => void refreshNews().catch(() => undefined), 5000);
-    mem.timers.push(setInterval(() => void refreshNews().catch(() => undefined), newsMs));
-  }
-  const { dailyReflections } = await import('./journal');
-  mem.timers.push(setInterval(() => void dailyReflections().catch(() => undefined), 60 * 60_000));
-  setTimeout(() => void dailyReflections().catch(() => undefined), 60_000);
 }

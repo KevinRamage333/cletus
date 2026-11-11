@@ -2,8 +2,13 @@ import { prisma } from '../db';
 import { getConfig } from '../config';
 import { TOOL_DECLARATIONS, runTool, selfSnapshot, type ToolContext, type ToolDecl } from './tools';
 import { buildSystemInstruction } from './persona';
-import { chatWithTools, generate, toContents } from './gemini';
-import { mockBrainAnswer } from './mock';
+import { chatWithTools, generate, toContents, activeGeminiModel } from './gemini';
+import { mockBrainAnswer, detectIntent } from './mock';
+import { providerOrder, withFallback, type Provider } from '../providers';
+import { xaiChat } from './xai-chat';
+import { xaiConfig } from '../xai';
+
+export const isActionRequest = (q: string) => detectIntent(q) === 'execute';
 
 export function geminiKey(): string | null {
   const c = getConfig();
@@ -31,7 +36,7 @@ async function latestJournalText(accountId: string): Promise<string | null> {
   return j.length ? j.map((x) => `- [${x.kind} ${x.createdAt.toISOString()}] ${x.title}: ${x.content.slice(0, 400)}`).join('\n') : null;
 }
 
-export interface BrainReply { conversationId: string; answer: string; source: 'gemini' | 'mock'; model?: string; tools: string[]; error?: string }
+export interface BrainReply { conversationId: string; answer: string; source: 'gemini' | 'gemini-grounded' | 'xai' | 'xai-web' | 'mock'; provider?: Provider; model?: string; tools: string[]; sources: Array<{ title?: string; uri?: string; url?: string }>; refused?: string; error?: string }
 
 export async function brainChat(opts: { userId: string; accountId: string; isAdmin: boolean; message: string; conversationId?: string | null }): Promise<BrainReply> {
   let conv = opts.conversationId ? await prisma.conversation.findFirst({ where: { id: opts.conversationId, userId: opts.userId } }) : null;
@@ -41,25 +46,38 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
 
   const ctx: ToolContext = { userId: opts.userId, accountId: opts.accountId, isAdmin: opts.isAdmin };
   const key = geminiKey();
-  let reply: Omit<BrainReply, 'conversationId'>;
-  if (key) {
-    try {
-      const system = buildSystemInstruction({ snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId) });
+  const xaiKey = getConfig().enableAiBrain ? xaiConfig().key : null;
+  const refused = isActionRequest(opts.message) ? 'execute' : undefined;
+  // Single switch: BRAIN_PROVIDER=gemini (default) | xai | mock. Fallback chain: preferred -> other -> mock.
+  const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xaiKey), enableAiBrain: getConfig().enableAiBrain });
+  let system: string | null = null;
+  const getSystem = async () => (system ??= buildSystemInstruction({ snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId) }));
+  const { provider, result, errors } = await withFallback(order, async (p): Promise<Omit<BrainReply, 'conversationId'>> => {
+    if (p === 'gemini' && key) {
+      const sources: BrainReply['sources'] = [];
       const r = await chatWithTools({
-        apiKey: key, model: getConfig().geminiModel, system, functions: [...TOOL_DECLARATIONS, SEARCH_TOOL],
+        apiKey: key, model: getConfig().geminiModel, system: await getSystem(), functions: [...TOOL_DECLARATIONS, SEARCH_TOOL],
         contents: [...toContents(history), { role: 'user', parts: [{ text: opts.message }] }],
-        runTool: async (name, args) => (name === 'search_web' ? groundedSearch(String(args.query ?? ''), key) : runTool(name, args, ctx)),
+        runTool: async (name, args) => {
+          if (name !== 'search_web') return runTool(name, args, ctx);
+          const g = await groundedSearch(String(args.query ?? ''), key);
+          sources.push(...g.sources.map((x) => ({ ...x, url: x.uri })));
+          return g;
+        },
       });
-      reply = { answer: r.text, source: 'gemini', model: getConfig().geminiModel, tools: r.trace.map((t) => t.name) };
-    } catch (e) {
-      const m = await mockBrainAnswer(opts.message, (n, a) => runTool(n, a, ctx), history);
-      reply = { answer: m.text, source: 'mock', tools: m.tools, error: (e as Error).message };
+      return { answer: r.text, source: sources.length ? 'gemini-grounded' : 'gemini', model: activeGeminiModel(getConfig().geminiModel), tools: r.trace.map((t) => t.name), sources };
     }
-  } else {
+    if (p === 'xai' && xaiKey) {
+      const r = await xaiChat({ system: await getSystem(), history, message: opts.message, decls: TOOL_DECLARATIONS, runTool: (name, args) => runTool(name, args, ctx) });
+      return { answer: r.text, source: r.sources.length ? 'xai-web' : 'xai', model: r.model, tools: r.tools, sources: r.sources };
+    }
     const m = await mockBrainAnswer(opts.message, (n, a) => runTool(n, a, ctx), history);
-    reply = { answer: m.text, source: 'mock', tools: m.tools };
-  }
-  await prisma.chatMessage.create({ data: { conversationId: conv.id, role: 'model', content: reply.answer, meta: JSON.stringify({ source: reply.source, model: reply.model, tools: reply.tools, error: reply.error }) } });
+    return { answer: m.text, source: 'mock', tools: m.tools, sources: [] };
+  });
+  const reply: Omit<BrainReply, 'conversationId'> = { ...result, provider };
+  if (errors.length) reply.error = errors.map((e) => `${e.provider}: ${e.error}`).join('; ');
+  if (refused) reply.refused = refused;
+  await prisma.chatMessage.create({ data: { conversationId: conv.id, role: 'model', content: reply.answer, meta: JSON.stringify({ source: reply.source, model: reply.model, tools: reply.tools, sources: reply.sources, refused: reply.refused, error: reply.error }) } });
   await prisma.conversation.update({ where: { id: conv.id }, data: { updatedAt: new Date() } });
   return { conversationId: conv.id, ...reply };
 }

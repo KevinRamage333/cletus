@@ -11,3 +11,5 @@ next-env.d.ts
 prisma/*.db
 prisma/*.db-journal
 dev.log
+.env*.local
+screenshot-error.png

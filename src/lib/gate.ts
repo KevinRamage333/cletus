@@ -21,7 +21,9 @@ const STEP_APIS: Array<[string, Step]> = [
   ['/api/onboarding/wallet', 'wallet'],
 ];
 
-const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt'];
+const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+  // Public brand assets (landing hero, Open Graph image, logo/avatar)
+  '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 
 export function requiredStep(s: SessionClaims | null, currentTermsVersion: string, currentRiskVersion = currentTermsVersion): Step {
   if (!s) return 'signup';

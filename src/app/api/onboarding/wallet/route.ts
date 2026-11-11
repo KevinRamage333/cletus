@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     prisma.user.update({ where: { id: u.id }, data: { walletPublicKey: v.publicKey, walletSource: v.source, walletSetupAt: now } }),
     prisma.acceptance.create({ data: { userId: u.id, kind: 'wallet', version: TERMS_VERSION, userAgent: req.headers.get('user-agent')?.slice(0, 300) } }),
   ]);
-  const res = NextResponse.json({ ok: true, next: '/' });
+  const res = NextResponse.json({ ok: true, next: '/app' });
   await setSessionCookie(res, user);
   return res;
 }

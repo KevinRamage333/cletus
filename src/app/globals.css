@@ -1,16 +1,19 @@
-:root { --bg:#0b0f17; --panel:#121826; --panel2:#182033; --border:#243049; --text:#e6ebf5; --muted:#8a96b0; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --blue:#60a5fa; --accent:#eab308; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { --bg:#07080b; --panel:#111015; --panel2:#1a1712; --border:#2e2717; --text:#e6ebf5; --muted:#8a96b0; --green:#22c55e; --red:#ef4444; --amber:#F59E0B; --blue:#60a5fa; --accent:#D4AF37; --gold:#D4AF37; --glow:#F59E0B; }
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size:14px; }
-a { color: var(--blue); }
+a { color: var(--gold); }
 h1,h2,h3 { margin: 0 0 8px; }
 h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .muted { color: var(--muted); }
 .green { color: var(--green); } .red { color: var(--red); } .amber { color: var(--amber); }
 .btn { background: var(--panel2); color: var(--text); border:1px solid var(--border); padding: 8px 14px; border-radius: 8px; cursor:pointer; font-weight:600; }
-.btn:hover:not(:disabled) { border-color: var(--blue); }
+.btn:hover:not(:disabled) { border-color: var(--glow); box-shadow: 0 0 12px rgba(245,158,11,.25); }
 .btn:disabled { opacity:.4; cursor:not-allowed; }
-.btn.primary { background: var(--accent); color:#111; border-color: var(--accent); }
+.btn.primary { background: linear-gradient(135deg, var(--gold), var(--glow)); color:#111; border-color: var(--gold); }
 .btn.danger { background: var(--red); border-color: var(--red); color:#fff; }
 .btn.small { padding: 4px 10px; font-size: 12px; }
 input, textarea, select { background: var(--bg); color: var(--text); border:1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size:14px; width:100%; }
@@ -63,3 +66,32 @@ th { color: var(--muted); font-weight: 600; }
 .md p { margin: 4px 0; } .md ul { margin: 4px 0; padding-left: 18px; }
 .scorecard { display:grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .scorecard .k { font-size: 11px; color: var(--muted); } .scorecard .v2 { font-size: 16px; font-weight: 600; }
+
+/* ── Gold brand / landing ─────────────────────────────── */
+h1 { background: linear-gradient(90deg, var(--gold), var(--glow)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand { display:flex; align-items:center; gap:10px; }
+.brand img { width: 34px; height: 34px; border-radius: 50%; box-shadow: 0 0 14px rgba(245,158,11,.45); }
+.landing { min-height: 100vh; position: relative; display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.25fr); align-items: center; gap: 24px; padding: 40px 5vw; overflow: hidden; }
+.landing::before { content:''; position:absolute; inset:0; background: url('/cletus-hero.jpg') right center / cover no-repeat; z-index:0; }
+.landing::after { content:''; position:absolute; inset:0; background: linear-gradient(90deg, rgba(7,8,11,.97) 0%, rgba(7,8,11,.88) 38%, rgba(7,8,11,.35) 70%, rgba(7,8,11,.15) 100%); z-index:0; }
+.landing > * { position: relative; z-index: 1; }
+.landing .hero-copy h1 { font-size: 52px; line-height: 1.05; margin-bottom: 12px; }
+.landing .tag { color: #f3e3b3; font-size: 18px; max-width: 520px; }
+.landing .stack { display:flex; flex-wrap:wrap; gap:6px; margin: 14px 0; }
+.landing .stack span { border:1px solid rgba(212,175,55,.45); color: #f3e3b3; border-radius:999px; padding: 3px 10px; font-size: 12px; background: rgba(0,0,0,.4); }
+.landing form.card { background: rgba(17,16,21,.85); backdrop-filter: blur(6px); border-color: rgba(212,175,55,.35); max-width: 440px; }
+@media (max-width: 860px) { .landing { grid-template-columns: 1fr; } .landing::after { background: linear-gradient(180deg, rgba(7,8,11,.6), rgba(7,8,11,.95) 55%); } .landing .hero-copy h1 { font-size: 38px; } }
+.m .avatar { width: 22px; height: 22px; border-radius: 50%; vertical-align: middle; margin-right: 6px; box-shadow: 0 0 8px rgba(245,158,11,.5); }
+
+/* ── Scoped preflight for the Tailwind pages (/app/*). Zero-specificity so Tailwind utilities win. ── */
+:where(.tw) *, :where(.tw) *::before, :where(.tw) *::after { border-width: 0; border-style: solid; border-color: rgba(255,255,255,.1); }
+:where(.tw) h1, :where(.tw) h2, :where(.tw) h3, :where(.tw) h4, :where(.tw) p { margin: 0; font-size: inherit; font-weight: inherit; text-transform: none; letter-spacing: normal; color: inherit; }
+:where(.tw) a { color: inherit; text-decoration: inherit; }
+:where(.tw) button { background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; line-height: inherit; }
+:where(.tw) input, :where(.tw) textarea, :where(.tw) select { width: auto; padding: 0; border-radius: 0; background: transparent; font: inherit; color: inherit; }
+:where(.tw) input[type=range] { width: 100%; }
+:where(.tw) img, :where(.tw) svg { display: block; max-width: 100%; }
+:where(.tw) ol, :where(.tw) ul { margin: 0; padding: 0; list-style: none; }
+:where(.tw) label { margin: 0; color: inherit; font-size: inherit; }
+.tw { font-size: 14px; line-height: 1.5; }
+.tw .gold-text { background: linear-gradient(135deg, #D4AF37, #F59E0B); -webkit-background-clip: text; background-clip: text; color: transparent; }

@@ -49,7 +49,7 @@ export default function Dashboard() {
     <div className="dash">
       <div className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0 }}>Cletus</h1>
+          <span className="brand"><img src="/cletus-logo.png" alt="Cletus" /><h1 style={{ margin: 0 }}>Cletus</h1></span>
           <span className={`badge ${c.mode === 'live' ? 'live' : 'sim'}`}>{c.mode === 'live' ? 'LIVE TRADING' : 'SIMULATION · PAPER'}</span>
           {c.betaMode && <span className="badge warn">BETA</span>}
           <span className="badge">{c.preset === 'NONE' ? 'no preset' : c.preset}</span>
@@ -68,6 +68,7 @@ export default function Dashboard() {
           )}
           {s.user.isAdmin && <button className="btn small" disabled={busy} onClick={() => post('/api/engine/scan', {})}>Scan now</button>}
           {a.paused ? <button className="btn small" onClick={() => post('/api/account', { action: 'resume' })}>Resume</button> : <button className="btn small" onClick={() => post('/api/account', { action: 'pause' })}>Pause</button>}
+          <a className="btn small primary" href="/app">Open app</a>
           <a className="btn small" href="/brain">Talk to Cletus</a>
           <a className="btn small" href="/feedback">Feedback / Bug</a>
           <a className="btn small" href="/api/auth/logout">Sign out</a>
@@ -83,15 +84,41 @@ export default function Dashboard() {
         <div className="card stat"><div className="muted">Equity ({a.isOperator ? 'operator' : 'paper'})</div><div className="v">{usd(a.equity)}</div><div className="muted">start {usd(a.startingBalance, 0)}</div></div>
         <div className="card stat"><div className="muted">Total PnL</div><div className={`v ${cls(totalPnl)}`}>{usd(totalPnl)}</div><div className="muted">realized <span className={cls(a.realizedPnl)}>{usd(a.realizedPnl)}</span> · open <span className={cls(a.unrealizedPnl)}>{usd(a.unrealizedPnl)}</span></div></div>
         <div className="card stat"><div className="muted">Today / Week</div><div className={`v ${cls(a.pnl.day)}`}>{usd(a.pnl.day)}</div><div className="muted">week <span className={cls(a.pnl.week)}>{usd(a.pnl.week)}</span></div></div>
-        <div className="card stat"><div className="muted">Trades / Win rate</div><div className="v">{a.closedTrades} · {a.winRate === null ? '—' : `${(a.winRate * 100).toFixed(0)}%`}</div><div className="muted">{s.open.length} open / max {c.maxOpenPositions}</div></div>
+        <div className="card stat"><div className="muted">Trades / Win rate</div><div className="v">{a.closedTrades} · {a.winRate === null ? '—' : `${(a.winRate * 100).toFixed(0)}%`}</div><div className="muted">{s.open.length} of {c.maxOpenPositions} open</div></div>
         <div className="card stat"><div className="muted">Sizing tier</div><div className="v">T{a.tier} · {a.tierMultiplier}x</div><div className="muted">exposure {usd(a.exposure, 0)}</div></div>
-        <div className="card stat"><div className="muted">Engine</div><div className="v" style={{ fontSize: 15 }}>{e.scanCount} scans · {ago(e.lastScanAt)}</div><div className="muted">fee {e.priorityFeeLamports.toLocaleString()} lamports · slip {e.slippageBps}bps · fails {e.consecutiveFailures}</div></div>
+        <div className="card stat"><div className="muted">Engine</div><div className="v" style={{ fontSize: 15 }}>{e.scanCount} scans · {ago(e.lastScanAt)}</div><div className="muted">fee {e.priorityFeeLamports.toLocaleString()} lamports · slip {e.slippageBps}bps · fails {e.consecutiveFailures}</div>
+          <div className="muted" title={s.rpc?.lastSwitchReason ?? ''}>RPC: <b className={s.rpc?.active === 'helius' ? 'green' : 'amber'}>{s.rpc?.active ?? '—'}</b>{s.rpc?.endpoints?.map((x: any) => ` · ${x.name} ${x.latencyMs ?? '—'}ms${x.failures ? ` ✗${x.failures}` : ''}`).join('')}{s.rpc?.switches ? ` · ${s.rpc.switches} switch(es)` : ''}</div>
+          <div className="muted">Helius WS: {s.heliusWs?.connected ? <span className="green">live</span> : 'idle'} · {s.heliusWs?.subscriptions ?? 0} pools · {s.heliusWs?.events ?? 0} events</div></div>
       </div>
 
       <div className="cols">
         <div className="grid">
           <div className="card">
-            <h2>Open positions</h2>
+            <h2>Performance scorecard</h2>
+            <div className="scorecard">
+              <div><div className="k">Win rate</div><div className="v2">{s.scorecard.winRate === null ? '—' : `${(s.scorecard.winRate * 100).toFixed(0)}%`}</div><div className="k">{s.scorecard.wins}W / {s.scorecard.losses}L</div></div>
+              <div><div className="k">Avg win / avg loss</div><div className="v2"><span className="green">{usd(s.scorecard.avgWinUsd)}</span> / <span className="red">{usd(s.scorecard.avgLossUsd)}</span></div><div className="k">payoff {s.scorecard.payoffRatio?.toFixed(2) ?? '—'} · PF {s.scorecard.profitFactor?.toFixed(2) ?? '—'}</div></div>
+              <div><div className="k">Max drawdown</div><div className="v2 red">{usd(s.scorecard.maxDrawdownUsd)}</div><div className="k">{s.scorecard.maxDrawdownPct.toFixed(2)}% from peak</div></div>
+              <div><div className="k">Sharpe (per trade)</div><div className="v2">{s.scorecard.sharpePerTrade?.toFixed(2) ?? '—'}</div><div className="k">annualised {s.scorecard.sharpeAnnualised?.toFixed(1) ?? '—'} (noisy on few trades)</div></div>
+            </div>
+            <h2 style={{ marginTop: 12 }}>Preset lab (paper): {c.mcapPreset} active</h2>
+            <div className="scroll">
+              <table>
+                <thead><tr><th>Preset</th><th>Equity</th><th>Open</th><th>Trades</th><th>Win %</th><th>Avg W / L</th><th>Max DD</th><th>Sharpe</th></tr></thead>
+                <tbody>
+                  {(s.presetComparison ?? []).map((r: any) => (
+                    <tr key={r.preset} style={r.preset === c.mcapPreset ? { color: 'var(--accent)' } : undefined}><td><b>{r.label}</b></td><td>{usd(r.equity)}</td><td>{r.open}</td><td>{r.scorecard?.trades ?? 0}</td>
+                      <td>{r.scorecard?.winRate == null ? '—' : `${(r.scorecard.winRate * 100).toFixed(0)}%`}</td>
+                      <td>{usd(r.scorecard?.avgWinUsd)} / {usd(r.scorecard?.avgLossUsd)}</td><td>{r.scorecard ? `${r.scorecard.maxDrawdownPct.toFixed(1)}%` : '—'}</td><td>{r.scorecard?.sharpePerTrade?.toFixed(2) ?? '—'}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>Risk limits: daily loss {usd(c.dailyLossLimit, 0)} or {c.maxDailyLossPct}% · max position {c.maxPositionPctOfEquity}% of equity · auto-pause after {c.maxConsecutiveLosses} losses in a row (now {a.consecutiveLosses}) · partial TPs {c.tpLadder.map((r: any) => `+${r.gainPct}%→${r.sellPct}%`).join(', ') || 'off'} · stale exit {c.stalePositionMinutes}m ±{c.staleBandPct}% · submit: {c.submissionMode}</div>
+          </div>
+
+          <div className="card">
+            <h2>Open positions: {s.open.length} of {c.maxOpenPositions} · exposure {usd(a.exposure, 0)} / {c.maxTotalExposurePct}% cap · max {c.maxPositionsPerCluster} per narrative/dev</h2>
             <div className="scroll">
               <table>
                 <thead><tr><th>Token</th><th>Size</th><th>Entry</th><th>Last</th><th>PnL</th><th>Score</th><th>Opened</th><th></th></tr></thead>
@@ -124,7 +151,7 @@ export default function Dashboard() {
           </div>
 
           <div className="card">
-            <h2>Scanner — ${c.minMarketCap / 1000}k–${c.maxMarketCap / 1000}k mcap, ranked by volume / market cap</h2>
+            <h2>Scanner: {c.mcapPreset} ${c.minMarketCap.toLocaleString()}–${c.maxMarketCap.toLocaleString()} mcap · liq ≥ ${c.minLiquidityUsd.toLocaleString()} · vol ≥ {(c.minVolumeMcapRatio * 100).toFixed(0)}% mcap · age ≥ {c.minTokenAgeHours}h · ranked by vol/mcap</h2>
             <div className="muted" style={{ marginBottom: 6 }}>{e.lastScanSummary}</div>
             <div className="scroll">
               <table>
@@ -146,7 +173,7 @@ export default function Dashboard() {
           <div className="card">
             <h2>Brain</h2>
             <BrainChat account={view === 'operator' ? 'operator' : undefined} />
-            <div className="muted" style={{ fontSize: 11 }}>{c.hasGeminiKey ? `Gemini model: ${c.geminiModel} · Google Search grounding` : 'No GEMINI_API_KEY, so answers come offline from live data'}</div>
+            <div className="muted" style={{ fontSize: 11 }}>{c.hasGeminiKey ? `Gemini model: ${s.geminiModelActive ?? c.geminiModel} · Google Search grounding` : 'No GEMINI_API_KEY, so answers come offline from live data'}</div>
           </div>
           <NewsPanel isAdmin={s.user.isAdmin} />
           <JournalPanel account={view === 'operator' ? 'operator' : undefined} />

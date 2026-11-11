@@ -15,6 +15,10 @@ export interface RugcheckReport {
   markets?: Array<{ pubkey?: string; marketType?: string; lp?: { lpLockedPct?: number; lpLockedUSD?: number } }>;
   totalMarketLiquidity?: number;
   transferFee?: { pct?: number };
+  creator?: string | null;
+  creatorBalance?: number | null;
+  token?: { supply?: number; decimals?: number };
+  detectedAt?: string;
 }
 
 export interface SellQuote { routeFound: boolean; priceImpactPct: number | null; error?: string }
@@ -25,13 +29,20 @@ export interface AuditParams {
   minLpLockedPct: number;
   maxAuditRiskScore: number; // 0..100 (RugCheck normalised)
   maxSellPriceImpactPct: number;
+  maxTop10HolderPct?: number; // combined % held by the top 10 non-pool holders
+  devSellCheck?: boolean;
+  blockIfDevExited?: boolean; // strict: block young tokens whose creator holds 0
+  devExitLookbackHours?: number;
 }
 
 export interface AuditCheck { name: string; passed: boolean; detail: string }
-export interface AuditResult { passed: boolean; checks: AuditCheck[]; liquidityUsd: number | null; riskScore: number | null; topHolderPct: number | null; auditedAt: string }
+export interface AuditResult { creator?: string | null; passed: boolean; checks: AuditCheck[]; liquidityUsd: number | null; riskScore: number | null; topHolderPct: number | null; auditedAt: string }
 
 /** Pure evaluation (unit-tested). A missing report fails closed. */
-export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | null, p: AuditParams): AuditResult {
+export interface OnchainHolderData { top1Pct: number; top10Pct: number; holders: number | null }
+
+/** `onchain` (Helius) overrides RugCheck's holder list for the concentration checks when present. */
+export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | null, p: AuditParams, onchain?: OnchainHolderData | null): AuditResult {
   const checks: AuditCheck[] = [];
   const add = (name: string, passed: boolean, detail: string) => checks.push({ name, passed, detail });
 
@@ -55,8 +66,25 @@ export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | n
   const isProgramAccount = (h: { address?: string; owner?: string }) =>
     Boolean((h.owner && known[h.owner]) || (h.address && known[h.address]) || (report.markets ?? []).some((m) => m.pubkey && (m.pubkey === h.owner || m.pubkey === h.address)));
   const holders = (report.topHolders ?? []).filter((h) => !isProgramAccount(h));
-  const topPct = holders.length ? Math.max(...holders.map((h) => h.pct ?? 0)) : 0;
-  add('holder_concentration', topPct / 100 <= p.maxHolderConcentration, `top non-pool holder ${topPct.toFixed(2)}% (max ${(p.maxHolderConcentration * 100).toFixed(0)}%)`);
+  const topPct = onchain ? onchain.top1Pct : holders.length ? Math.max(...holders.map((h) => h.pct ?? 0)) : 0;
+  const srcLabel = onchain ? `on-chain via Helius${onchain.holders ? `, ${onchain.holders >= 1000 ? '1000+' : onchain.holders} holders` : ''}` : 'RugCheck';
+  add('holder_concentration', topPct / 100 <= p.maxHolderConcentration, `top non-pool holder ${topPct.toFixed(2)}% (max ${(p.maxHolderConcentration * 100).toFixed(0)}%, ${srcLabel})`);
+
+  if (p.maxTop10HolderPct !== undefined && p.maxTop10HolderPct > 0) {
+    const top10 = onchain ? onchain.top10Pct : holders.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)).slice(0, 10).reduce((s, h) => s + (h.pct ?? 0), 0);
+    add('top10_concentration', top10 <= p.maxTop10HolderPct, `top 10 non-pool holders ${top10.toFixed(1)}% (max ${p.maxTop10HolderPct}%, ${srcLabel})`);
+  }
+
+  // Dev wallet selling: RugCheck risk flags about the creator selling/dumping, plus an optional
+  // strict rule that blocks young tokens whose creator wallet already holds zero.
+  if (p.devSellCheck) {
+    const devFlags = (report.risks ?? []).filter((r) => /(creator|dev|deployer)/i.test(`${r.name} ${r.description ?? ''}`) && /(sold|sell|dump|rug|history)/i.test(`${r.name} ${r.description ?? ''}`));
+    const ageH = report.detectedAt ? (Date.now() - new Date(report.detectedAt).getTime()) / 3_600_000 : null;
+    const devExited = report.creator && report.creatorBalance === 0;
+    const strictFail = Boolean(p.blockIfDevExited && devExited && ageH !== null && ageH < (p.devExitLookbackHours ?? 24));
+    add('dev_selling', devFlags.length === 0 && !strictFail,
+      devFlags.length ? `creator risk: ${devFlags.map((r) => r.name).join('; ')}` : strictFail ? `creator wallet sold out within ${Math.round(ageH ?? 0)}h of launch` : devExited ? 'creator holds 0 (allowed; BLOCK_IF_DEV_EXITED=false)' : 'no dev-selling flags');
+  }
 
   const risk = report.score_normalised ?? null;
   add('risk_score', risk === null ? true : risk <= p.maxAuditRiskScore, risk === null ? 'no score' : `RugCheck score ${risk} (max ${p.maxAuditRiskScore})`);
@@ -78,24 +106,17 @@ export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | n
     liquidityUsd: report.totalMarketLiquidity ?? null,
     riskScore: risk,
     topHolderPct: topPct,
+    creator: report.creator ?? null,
     auditedAt: new Date().toISOString(),
   };
 }
 
 const SOL = 'So11111111111111111111111111111111111111112';
 
-export async function fetchRugcheck(mint: string, apiKey: string | null): Promise<RugcheckReport | null> {
-  try {
-    const res = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, {
-      headers: { accept: 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
-      signal: AbortSignal.timeout(12000),
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as RugcheckReport;
-  } catch {
-    return null;
-  }
+export async function fetchRugcheck(mint: string, _apiKey?: string | null): Promise<RugcheckReport | null> {
+  // Auth (X-API-KEY / shield / public fallback) and base URL come from src/lib/rugcheck.ts (RUGCHECK_* env).
+  const { rugcheckGet } = await import('./rugcheck');
+  return rugcheckGet<RugcheckReport>(`/tokens/${mint}/report`);
 }
 
 /** Quote selling `tokenAmountRaw` of the token for SOL via Jupiter (no transaction). */
@@ -127,7 +148,9 @@ export async function auditToken(
   const tokens = opts.priceUsd > 0 ? opts.sizeUsd / opts.priceUsd : 0;
   const raw = BigInt(Math.max(1, Math.floor(tokens * 10 ** decimals)));
   const sell = await checkSellRoute(mint, raw, opts.jupiterBase, opts.jupiterApiKey);
-  const result = evaluateAudit(report, sell, opts.params);
+  const { onchainHolders } = await import('./helius');
+  const onchain = report ? await onchainHolders(mint) : null;
+  const result = evaluateAudit(report, sell, opts.params, onchain);
   cache.set(mint, { at: Date.now(), result });
   return result;
 }

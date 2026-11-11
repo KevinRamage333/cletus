@@ -3,9 +3,11 @@
  * is an env var. Resolution order (later wins):
  *   built-in defaults -> AGGRESSION_LEVEL table -> TRADING_PRESET -> explicit env vars
  *
- * Safety defaults: TRADING_MODE=simulation. In live mode with no preset chosen,
- * the CONSERVATIVE_EARNER preset is applied.
+ * Safety defaults: TRADING_MODE=simulation and the CONSERVATIVE_EARNER preset in every mode
+ * (set TRADING_PRESET=NONE to opt out). Explicit env vars always win over the preset.
  */
+import { parseTpLadder, type TpRung } from './exits';
+import { parseSubmissionMode, type SubmissionMode } from './submission';
 
 export type Env = Record<string, string | undefined>;
 export type AggressionLevel = 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE' | 'MAXIMUM';
@@ -92,6 +94,18 @@ export const PRESETS: Record<Exclude<PresetName, 'NONE'>, Env> = {
   },
 };
 
+/** Market-cap band presets. BALANCED is the default; set MCAP_PRESET to switch (MIN/MAX_MARKET_CAP still override). */
+export type McapPreset = 'DEGEN' | 'BALANCED' | 'SAFER';
+export const MCAP_PRESETS: Record<McapPreset, { min: number; max: number; label: string }> = {
+  DEGEN: { min: 10_000, max: 500_000, label: 'Degen $10k-$500k' },
+  BALANCED: { min: 250_000, max: 5_000_000, label: 'Balanced $250k-$5M' },
+  SAFER: { min: 5_000_000, max: 50_000_000, label: 'Safer $5M-$50M' },
+};
+export function parseMcapPreset(v: string | undefined): McapPreset {
+  const s = (v ?? '').trim().toUpperCase();
+  return s === 'DEGEN' || s === 'SAFER' ? s : 'BALANCED';
+}
+
 export interface SizingTier { tier: number; threshold: number; multiplier: number }
 
 export interface Config {
@@ -114,8 +128,10 @@ export interface Config {
   // signals
   enableDynamicWeights: boolean; initialWeights: Record<SignalName, number>; winAmplify: number; lossDampen: number; minSignalWeight: number;
   // risk
+  maxPositionsPerCluster: number;
   riskPerTradePct: number; maxTotalExposurePct: number; equityProtectionLevel: number; minTradeUsd: number;
   // scanner / filters
+  mcapPreset: McapPreset; minVolumeMcapRatio: number; enablePresetLab: boolean;
   minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; volumeSpikeMcapPct: number; breakout5mPct: number; buyPressureRatio: number; minLiquidityUsd: number; nanoCapMax: number;
   minTokenAgeHours: number; maxHolderConcentration: number; maxHourlyPriceMovement: number; requireLiquidityLock: boolean; minLpLockedPct: number;
   scanTopN: number; auditTopN: number;
@@ -132,6 +148,14 @@ export interface Config {
   // AI
   enableAiBrain: boolean; geminiModel: string; hasGeminiKey: boolean;
   enableKillSwitch: boolean;
+  // hard risk limits
+  maxDailyLossPct: number; maxPositionPctOfEquity: number; maxConsecutiveLosses: number;
+  // exits
+  tpLadder: TpRung[]; stalePositionMinutes: number; staleBandPct: number;
+  // extra audit checks
+  maxTop10HolderPct: number; devSellCheck: boolean; blockIfDevExited: boolean; devExitLookbackHours: number;
+  // live submission path
+  submissionMode: SubmissionMode; privateRpcUrl: string | null; jitoBlockEngineUrl: string; jitoTipLamports: number;
 }
 
 const num = (v: string | undefined, d: number) => {
@@ -182,6 +206,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
   ];
 
   const slippageTolerance = lv('slippageTolerance', 'SLIPPAGE_TOLERANCE');
+  const mcapPreset = parseMcapPreset(env.MCAP_PRESET);
 
   return {
     mode, requestedMode, liveBlockedReason, preset, aggression,
@@ -194,11 +219,14 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     pauseOnWeekends: bool(env.PAUSE_ON_WEEKENDS, true),
     minCompositeScore: lv('minCompositeScore', 'MIN_COMPOSITE_SCORE'),
     maxPositionSizeUsd: lv('maxPositionSizeUsd', 'MAX_POSITION_SIZE_USD'),
-    maxOpenPositions: lv('maxOpenPositions', 'MAX_OPEN_POSITIONS'),
+    // Up to 20 concurrent positions by default; the portfolio exposure cap and per-position cap bound the risk.
+    maxOpenPositions: num(rawEnv.MAX_OPEN_POSITIONS, 20),
+    maxPositionsPerCluster: num(env.MAX_POSITIONS_PER_CLUSTER, 3),
     slippageTolerance,
     priorityFeeLamports: lv('priorityFeeLamports', 'PRIORITY_FEE_LAMPORTS'),
     tradeFrequencySeconds: Math.max(10, lv('tradeFrequencySeconds', 'TRADE_FREQUENCY_SECONDS')),
-    positionMonitorSeconds: Math.max(5, num(env.POSITION_MONITOR_SECONDS, 20)),
+    // Fast exit checks: poll open-position prices every 3s by default (min 2s) so stops don't gap far past their level.
+    positionMonitorSeconds: Math.max(2, num(env.POSITION_MONITOR_SECONDS, 3)),
     holdTimeMinutes: lv('holdTimeMinutes', 'HOLD_TIME_MINUTES'),
     stopLossPct: num(env.STOP_LOSS_PERCENTAGE, 10),
     takeProfitPct: num(env.TAKE_PROFIT_PERCENTAGE, 25),
@@ -222,20 +250,23 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     lossDampen: num(env.LOSS_SIGNAL_DAMPEN_FACTOR, 0.85),
     minSignalWeight: num(env.MIN_SIGNAL_WEIGHT, 0.02),
     riskPerTradePct: num(env.RISK_PER_TRADE_PERCENTAGE, 2),
-    maxTotalExposurePct: num(env.MAX_TOTAL_EXPOSURE_PERCENTAGE, 25),
+    maxTotalExposurePct: num(rawEnv.MAX_TOTAL_EXPOSURE_PERCENTAGE, 60),
     equityProtectionLevel: num(env.EQUITY_PROTECTION_LEVEL, 10000),
     minTradeUsd: num(env.MIN_TRADE_USD, 10),
-    minMarketCap: num(env.MIN_MARKET_CAP, 10000),
-    maxMarketCap: num(env.MAX_MARKET_CAP, 500000),
+    mcapPreset,
+    minMarketCap: num(env.MIN_MARKET_CAP, MCAP_PRESETS[mcapPreset].min),
+    maxMarketCap: num(env.MAX_MARKET_CAP, MCAP_PRESETS[mcapPreset].max),
+    minVolumeMcapRatio: num(env.MIN_VOLUME_MCAP_RATIO, 0.2),
+    enablePresetLab: bool(env.ENABLE_PRESET_LAB, true),
     // Fixed: USD (not "SOL"), per-token 24h volume floor. Level MIN_VOLUME_USD acts as a lower bound too.
     minVolume24hUsd: Math.max(num(env.MIN_MARKET_VOLUME_24H, 10000), num(env.MIN_VOLUME_USD, num(env[`${aggression}_MIN_VOLUME_USD`], L.minVolumeUsd))),
     // Spec signal rules: volume spike = 5m volume > 5% of mcap; breakout = >5% price rise in 5m; buy pressure = buys > 70% of 5m txns.
     volumeSpikeMcapPct: num(env.VOLUME_SPIKE_5M_MCAP_PCT, 5),
     breakout5mPct: num(env.BREAKOUT_5M_PRICE_PCT, 5),
     buyPressureRatio: num(env.BUY_PRESSURE_RATIO, 0.7),
-    minLiquidityUsd: num(env.MIN_LIQUIDITY_USD, 3000),
+    minLiquidityUsd: num(env.MIN_LIQUIDITY_USD, 50000),
     nanoCapMax: num(env.NANO_CAP_MAX_USD, 100000),
-    minTokenAgeHours: num(env.MIN_TOKEN_AGE_HOURS, 1),
+    minTokenAgeHours: num(env.MIN_TOKEN_AGE_HOURS, 6),
     maxHolderConcentration: num(env.MAX_HOLDER_CONCENTRATION, 0.3),
     maxHourlyPriceMovement: num(env.MAX_HOURLY_PRICE_MOVEMENT, 50),
     requireLiquidityLock: bool(env.REQUIRE_LIQUIDITY_LOCK, true),
@@ -257,7 +288,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     jupiterBaseUrl: str(env.JUPITER_BASE_URL, env.JUPITER_API_KEY && !env.JUPITER_API_KEY.startsWith('your_') ? 'https://api.jup.ag/swap/v1' : 'https://lite-api.jup.ag/swap/v1'),
     rpcUrl: str(env.HELIUS_RPC_URL && !env.HELIUS_RPC_URL.includes('your_') ? env.HELIUS_RPC_URL : env.RPC_URL, 'https://api.mainnet-beta.solana.com'),
     secMaxVolumeShare: num(env.SEC_MAX_VOLUME_SHARE, 0.05),
-    secMaxLiquidityShare: num(env.SEC_MAX_LIQUIDITY_SHARE, 0.1),
+    secMaxLiquidityShare: num(env.SEC_MAX_LIQUIDITY_SHARE, 0.02), // max position = 2% of pool liquidity
     secWashTradeWindowMin: num(env.SEC_WASH_TRADE_WINDOW_MINUTES, 60),
     secMaxTradesPer5Min: num(env.SEC_MAX_TRADES_PER_5MIN, 8),
     simStartingBalanceUsd: num(env.SIM_STARTING_BALANCE_USD, 10000),
@@ -267,6 +298,20 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     geminiModel: str(env.GEMINI_MODEL, 'gemini-2.5-flash'),
     hasGeminiKey: Boolean(env.GEMINI_API_KEY && !env.GEMINI_API_KEY.startsWith('AIzaSyDxxx') && !env.GEMINI_API_KEY.startsWith('your_')),
     enableKillSwitch: bool(env.ENABLE_KILL_SWITCH, true),
+    maxDailyLossPct: num(env.MAX_DAILY_LOSS_PCT, 5),
+    maxPositionPctOfEquity: num(env.MAX_POSITION_PCT_OF_EQUITY, 5),
+    maxConsecutiveLosses: num(env.MAX_CONSECUTIVE_LOSSES, 4),
+    tpLadder: parseTpLadder(str(env.PARTIAL_TAKE_PROFITS, '10:33,18:50')),
+    stalePositionMinutes: num(env.STALE_POSITION_MINUTES, 45),
+    staleBandPct: num(env.STALE_BAND_PCT, 2),
+    maxTop10HolderPct: num(env.MAX_TOP10_HOLDER_PCT, 30),
+    devSellCheck: bool(env.DEV_SELL_CHECK, true),
+    blockIfDevExited: bool(env.BLOCK_IF_DEV_EXITED, false),
+    devExitLookbackHours: num(env.DEV_EXIT_LOOKBACK_HOURS, 24),
+    submissionMode: parseSubmissionMode(env.SWAP_SUBMISSION_MODE),
+    privateRpcUrl: env.PRIVATE_RPC_URL && !env.PRIVATE_RPC_URL.includes('your_') ? env.PRIVATE_RPC_URL : null,
+    jitoBlockEngineUrl: str(env.JITO_BLOCK_ENGINE_URL, 'https://mainnet.block-engine.jito.wtf'),
+    jitoTipLamports: num(env.JITO_TIP_LAMPORTS, 10000),
   };
 }
 
@@ -278,8 +323,8 @@ export function getConfig(): Config {
 
 /** Config safe to send to the browser (no secrets; there are none in Config, but keep it explicit). */
 export function publicConfig(c: Config = getConfig()) {
-  const { rugcheckApiKey, jupiterApiKey, rpcUrl, ...rest } = c;
-  return { ...rest, hasRugcheckKey: Boolean(rugcheckApiKey), hasJupiterKey: Boolean(jupiterApiKey), rpc: rpcUrl.includes('helius') ? 'helius' : 'public' };
+  const { rugcheckApiKey, jupiterApiKey, rpcUrl, privateRpcUrl, ...rest } = c;
+  return { ...rest, hasPrivateRpc: Boolean(privateRpcUrl), hasRugcheckKey: Boolean(rugcheckApiKey), hasJupiterKey: Boolean(jupiterApiKey), rpc: rpcUrl.includes('helius') ? 'helius' : 'public' };
 }
 
 /** Is the bot allowed to open new trades right now per the operating schedule? */

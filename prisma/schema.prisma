@@ -25,6 +25,12 @@ model User {
   account         Account?
   feedback        Feedback[]
   conversations   Conversation[]
+  displayName     String?
+  bio             String?
+  banned          Boolean      @default(false)
+  trialStartedAt  DateTime?    // 30-day trial flag (informational; no billing)
+  taxAckAt        DateTime?    // tax-responsibility acknowledgment (no tax IDs are collected)
+  communityMessages CommunityMessage[]
 }
 
 // Immutable audit trail of every onboarding acceptance.
@@ -46,6 +52,7 @@ model Account {
   user            User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   isOperator      Boolean    @default(false)
+  labPreset       String?    @unique // paper-only preset-comparison account (DEGEN | BALANCED | SAFER)
   startingBalance Float
   cashUsd         Float
   realizedPnl     Float      @default(0)
@@ -54,6 +61,8 @@ model Account {
   pauseReason     String?
   recoveryMode    Boolean    @default(false)
   consecutiveWins Int        @default(0)
+  consecutiveLosses Int      @default(0)
+  settings        String?    // JSON AccountSettings from the Config page (src/lib/user-settings.ts)
   createdAt       DateTime   @default(now())
   positions       Position[]
   logs            LogEntry[]
@@ -85,6 +94,11 @@ model Position {
   exitReason     String?
   entryTx        String?
   exitTx         String?
+  partialsTaken  Int       @default(0)
+  narrative      String?
+  creator        String?   // dev/creator wallet from RugCheck (correlation cap)
+  partialPnlUsd  Float     @default(0)
+  partialCostUsd Float     @default(0) // cost basis already sold via partial take-profits
 
   @@index([accountId, status])
   @@index([accountId, mint])
@@ -204,4 +218,16 @@ model JournalEntry {
 
   @@index([accountId, createdAt])
   @@unique([kind, accountId, dayKey])
+}
+
+model CommunityMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  kind      String   @default("user") // user | audit | system
+  hidden    Boolean  @default(false)
+  hiddenBy  String?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
 }

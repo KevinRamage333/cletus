@@ -9,6 +9,15 @@ import { log } from './logger';
 import { fetchPairsForMints } from './dexscreener';
 import { generate } from './brain/gemini';
 import { SYSTEM_PROMPT } from './brain/persona';
+import { providerOrder } from './providers';
+
+/** Should we spend an AI call on a new briefing? (pure; unit-tested) */
+export function shouldResummarise(o: { lastAiAt: Date | null; newItems: number; now: Date; cacheMinutes: number; minNewItems: number }): boolean {
+  if (!o.lastAiAt) return true;
+  const ageMin = (o.now.getTime() - o.lastAiAt.getTime()) / 60_000;
+  if (ageMin >= o.cacheMinutes) return true;
+  return o.newItems >= o.minNewItems && ageMin >= Math.min(15, o.cacheMinutes);
+}
 
 export type NewsCategory = 'crypto' | 'macro' | 'world' | 'fed';
 export interface Feed { source: string; category: NewsCategory; url: string }
@@ -90,7 +99,7 @@ const RISK_OFF = /\b(hack|exploit|crash|plunge|selloff|sell-off|lawsuit|sues|cha
 const RISK_ON = /\b(rally|surge|soar|record high|inflow|approv|etf|rate cut|cuts rates|easing|adoption|partnership|upgrade|beats|growth)/i;
 
 /** Deterministic briefing used without a Gemini key (pure; unit-tested). */
-export function heuristicBriefing(items: Array<Pick<ParsedItem, 'source' | 'category' | 'title' | 'publishedAt'>>, m: MarketContext): string {
+export function heuristicBriefing(items: Array<{ source: string; category: string; title: string; publishedAt: Date | null }>, m: MarketContext): string {
   const by = (c: NewsCategory) => items.filter((i) => i.category === c).slice(0, 4);
   const on = items.filter((i) => RISK_ON.test(i.title)).length;
   const off = items.filter((i) => RISK_OFF.test(i.title)).length;
@@ -130,6 +139,26 @@ export async function refreshNewsAndBriefing(): Promise<{ newItems: number; feed
     let sources: unknown[] = [];
     const c = getConfig();
     const key = c.enableAiBrain && c.hasGeminiKey ? process.env.GEMINI_API_KEY : null;
+    const xaiKey = c.enableAiBrain && process.env.XAI_API_KEY ? process.env.XAI_API_KEY : null;
+    // Free-tier friendly: reuse the last AI summary unless it is stale or enough new headlines arrived.
+    const lastAi = await prisma.briefing.findFirst({ where: { source: { not: 'heuristic' } }, orderBy: { createdAt: 'desc' } });
+    const reuse = lastAi && !shouldResummarise({ lastAiAt: lastAi.createdAt, newItems: fresh.length, now: new Date(), cacheMinutes: Number(process.env.NEWS_SUMMARY_CACHE_MINUTES ?? 60), minNewItems: Number(process.env.NEWS_SUMMARY_MIN_NEW_ITEMS ?? 8) });
+    if (reuse && lastAi) {
+      await log('debug', 'briefing: reusing cached AI summary (free-tier cache)');
+      return { newItems: fresh.length, feedsOk, briefingSource: `${lastAi.source} (cached)` };
+    }
+    const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xaiKey) }).filter((p) => p !== 'mock');
+    for (const prov of order) {
+      if (source !== 'heuristic') break;
+      if (prov === 'xai') {
+        try {
+          const { xaiWebSearch } = await import('./xai');
+          const headlines = recent.slice(0, 30).map((i) => `- [${i.category}] ${i.title} (${i.source})`).join('\n');
+          const r = await xaiWebSearch(`Write my world briefing for today. RSS headlines for reference:\n${headlines}`, `${SYSTEM_PROMPT}\n\nYou are writing your own internal "world briefing": a concise (<= 250 words) markdown digest of what matters for Solana micro-cap trading risk today. Sections: Tone, Crypto, Fed & macro, World, What it means for me. Use web search for the latest facts. No price predictions, no advice.`);
+          content = r.text; source = 'xai-web'; sources = r.sources.slice(0, 8);
+        } catch (e) { await log('warn', `briefing: xAI failed (${(e as Error).message})`); }
+        continue;
+      }
     if (key) {
       try {
         const headlines = recent.slice(0, 40).map((i) => `- [${i.category}] ${i.title} (${i.source}${i.publishedAt ? `, ${i.publishedAt.toISOString()}` : ''})`).join('\n');
@@ -142,6 +171,7 @@ export async function refreshNewsAndBriefing(): Promise<{ newItems: number; feed
       } catch (e) {
         await log('warn', `briefing: Gemini failed, using heuristic (${(e as Error).message})`);
       }
+    }
     }
     await prisma.briefing.create({ data: { content, source, itemsCount: recent.length, sources: JSON.stringify(sources) } });
     await log('info', `news refresh: ${feedsOk}/${FEEDS.length} feeds ok, ${fresh.length} new items, briefing via ${source}`);

@@ -10,7 +10,8 @@ const GREETING: Msg = { role: 'model', content: "I'm Cletus. Ask me about my pos
 
 function metaLabel(m: any) {
   if (!m) return '';
-  const src = m.source === 'gemini-grounded' ? `Gemini · ${m.model} · web-grounded` : m.source === 'gemini' ? `Gemini · ${m.model}` : m.refused ? 'guardrail: advisory only' : 'offline mock';
+  const src = m.source === 'gemini-grounded' ? `Gemini · ${m.model} · web-grounded` : m.source === 'gemini' ? `Gemini · ${m.model}`
+    : m.source === 'xai-web' ? `Grok · ${m.model} · web search` : m.source === 'xai' ? `Grok · ${m.model}` : m.refused ? 'guardrail: advisory only' : 'offline mock';
   return `${src}${m.tools?.length ? ` · read: ${m.tools.join(', ')}` : ''}`;
 }
 
@@ -79,12 +80,12 @@ export default function BrainChat({ account, full = false }: { account?: string;
         <div className="msgs">
           {msgs.map((m, i) => (
             <div key={i} className={`m ${m.role === 'user' ? 'me' : ''}`}>
-              {m.role === 'user' ? m.content : <div className="md"><ReactMarkdown>{m.content}</ReactMarkdown></div>}
+              {m.role === 'user' ? m.content : <div className="md"><img className="avatar" src="/cletus-avatar.png" alt="Cletus" /><ReactMarkdown>{m.content}</ReactMarkdown></div>}
               {m.meta && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{metaLabel(m.meta)}</div>}
               {m.meta?.sources?.length > 0 && <div style={{ fontSize: 11, marginTop: 2 }}>{m.meta.sources.slice(0, 5).map((s: any, k: number) => <a key={k} href={s.url} target="_blank" rel="noreferrer" style={{ marginRight: 8 }}>[{k + 1}] {s.title}</a>)}</div>}
             </div>
           ))}
-          {busy && <div className="m muted">Cletus is thinking…</div>}
+          {busy && <div className="m muted"><img className="avatar" src="/cletus-avatar.png" alt="" />Cletus is thinking…</div>}
           <div ref={end} />
         </div>
         <form onSubmit={send}>

@@ -98,6 +98,8 @@ export interface ScanCandidate {
   liquidityUsd: number | null;
   ageHours: number | null;
   priceChangeH1: number;
+  priceChangeH24?: number;
+  quoteSymbol?: string;
   volMcap: number;
   signals: SignalBreakdown;
   composite: number;
@@ -107,6 +109,7 @@ export interface ScanCandidate {
 export interface ScanFilters {
   volumeSpikeMcapPct?: number; breakout5mPct?: number; buyPressureRatio?: number;
   minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; minTokenAgeHours: number; maxHourlyPriceMovement: number; nanoCapMax: number;
+  minLiquidityUsd?: number; minVolumeMcapRatio?: number; requireKnownAge?: boolean;
 }
 
 /** Scanner: keep $minMcap-$maxMcap tokens, rank by volume-to-market-cap. */
@@ -121,12 +124,15 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
     const c: ScanCandidate = {
       mint: p.baseToken.address, symbol: p.baseToken.symbol, name: p.baseToken.name, pairAddress: p.pairAddress, dexId: p.dexId, url: p.url,
       priceUsd: price, marketCap: mcap, volume24h: v24, liquidityUsd: p.liquidity?.usd ?? null, ageHours,
-      priceChangeH1: p.priceChange?.h1 ?? 0, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: compositeScore(signals, weights),
+      priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: compositeScore(signals, weights),
     };
     if (!(price > 0)) c.rejected = 'no price';
     else if (mcap < f.minMarketCap || mcap > f.maxMarketCap) c.rejected = `mcap outside $${f.minMarketCap}-$${f.maxMarketCap}`;
     else if (v24 < f.minVolume24hUsd) c.rejected = `24h volume < $${f.minVolume24hUsd}`;
+    else if (f.minVolumeMcapRatio && c.volMcap < f.minVolumeMcapRatio) c.rejected = `24h volume < ${(f.minVolumeMcapRatio * 100).toFixed(0)}% of mcap`;
+    else if (f.minLiquidityUsd && !((c.liquidityUsd ?? 0) >= f.minLiquidityUsd)) c.rejected = `pool liquidity < $${f.minLiquidityUsd.toLocaleString()}`;
     else if (ageHours !== null && ageHours < f.minTokenAgeHours) c.rejected = `younger than ${f.minTokenAgeHours}h`;
+    else if (f.requireKnownAge && ageHours === null && f.minTokenAgeHours > 0) c.rejected = 'token age unknown';
     else if (Math.abs(c.priceChangeH1) > f.maxHourlyPriceMovement) c.rejected = `1h move > ${f.maxHourlyPriceMovement}%`;
     out.push(c);
   }

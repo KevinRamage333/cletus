@@ -1,15 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { onFailure, onSuccess, isPaused } from '@/lib/healer';
+import { onFailure, onSuccess, isPaused, type HealState } from '@/lib/healer';
 import { exitDecision } from '@/lib/exits';
 import { buildConfig, isWithinSchedule } from '@/lib/config';
 import { redactSecrets } from '@/lib/redact';
-import { mockAnswer } from '@/lib/brain';
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 describe('self-healing', () => {
   const P = { basePriorityFee: 100000, baseSlippageBps: 500, escalation: 1.5, maxPriorityFee: 400000, widenStepBps: 100, maxSlippageBps: 800, maxConsecutiveFailures: 3, pauseMinutes: 15 };
-  const s0 = { priorityFeeLamports: 100000, slippageBps: 500, consecutiveFailures: 0, pausedUntil: null };
+  const s0: HealState = { priorityFeeLamports: 100000, slippageBps: 500, consecutiveFailures: 0, pausedUntil: null };
   it('raises priority fee on dropped tx, widens slippage on slippage errors, both capped', () => {
     expect(onFailure(s0, 'tx_dropped', P).priorityFeeLamports).toBe(150000);
     expect(onFailure(s0, 'slippage', P).slippageBps).toBe(600);
@@ -48,8 +47,8 @@ describe('config & presets', () => {
     const c = buildConfig({});
     expect(c.mode).toBe('simulation');
     expect(c.minVolume24hUsd).toBe(10000);
-    expect(c.minMarketCap).toBe(10000);
-    expect(c.maxMarketCap).toBe(500000);
+    expect(c.minMarketCap).toBe(250000); // BALANCED mcap preset is the default now
+    expect(c.maxMarketCap).toBe(5000000);
     expect(c.geminiModel).toBe('gemini-2.5-flash');
     expect(c.tiers[4].multiplier).toBe(3.0);
   });
@@ -78,17 +77,12 @@ describe('config & presets', () => {
   });
 });
 
-describe('secret hygiene & brain fallback', () => {
+describe('secret hygiene', () => {
   it('redacts secret keys in any format', () => {
     const kp = Keypair.generate();
     const b58 = bs58.encode(kp.secretKey);
     expect(redactSecrets(`key=${b58}`)).not.toContain(b58);
     expect(redactSecrets(JSON.stringify(Array.from(kp.secretKey)))).toBe('[REDACTED]');
     expect(redactSecrets(kp.publicKey.toBase58())).toBe(kp.publicKey.toBase58());
-  });
-  it('mock brain answers without a Gemini key', () => {
-    const ctx = { mode: 'simulation', preset: 'NONE', aggression: 'MODERATE', killSwitch: false, equity: 10000, cash: 9000, realizedPnl: 12, unrealizedPnl: -3, winRate: 0.5, closedTrades: 2, openPositions: [], weights: { momentum: 0.2 }, topCandidates: [], lastScan: 'x' };
-    expect(mockAnswer('what is my pnl?', ctx)).toMatch(/Realized PnL \$12\.00/);
-    expect(mockAnswer('kill switch?', ctx)).toMatch(/kill switch/i);
   });
 });
