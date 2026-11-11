@@ -22,14 +22,18 @@ const fmt = (v: WeightSetVersion) => `${v.id} thr ${v.threshold.toFixed(3)} [${O
 
 let appliedId: string | null = null;
 
-/** Apply the registry's active set (or clear overrides for "default"). Returns the version applied. */
+/** Apply the registry's active set (or clear overrides for "default"). Returns the version applied.
+ *  A promoted threshold can raise the live bar, but never lower it below MIN_COMPOSITE_SCORE (env/preset). */
 export function applyActiveWeightSet(log: Log): WeightSetVersion {
-  const v = activeVersion(readRegistry(baseThreshold()));
+  const floor = baseThreshold();
+  const v = activeVersion(readRegistry(floor));
+  const effective = v.id === 'default' ? floor : Math.max(floor, v.threshold);
   if (v.id === 'default') { setLiquidityWeights(null); setMinCompositeScoreOverride(null); }
-  else { setLiquidityWeights(v.weights); setMinCompositeScoreOverride(v.threshold); }
+  else { setLiquidityWeights(v.weights); setMinCompositeScoreOverride(effective); }
   if (appliedId !== v.id) {
-    log('info', `retrained weights: active set ${fmt(v.id === 'default' ? { ...v, threshold: baseThreshold() } : v)}`);
-    logDecision('load', { id: v.id, threshold: v.threshold, weights: v.weights, pid: process.pid });
+    const floored = v.id !== 'default' && v.threshold < floor;
+    log('info', `retrained weights: active set ${fmt({ ...v, threshold: effective })}${floored ? ` (env floor ${floor.toFixed(3)}; retrained was ${v.threshold.toFixed(3)})` : ''}`);
+    logDecision('load', { id: v.id, threshold: effective, retrainedThreshold: v.threshold, weights: v.weights, pid: process.pid });
   }
   appliedId = v.id;
   return v;

@@ -70,9 +70,24 @@ describe('scorer parity and overrides', () => {
   it('threshold override applies to getConfig and clears', () => {
     const base = getConfig().minCompositeScore;
     setMinCompositeScoreOverride(0.66);
-    expect(getConfig().minCompositeScore).toBe(0.66);
+    expect(getConfig().minCompositeScore).toBe(Math.max(base, 0.66));
     setMinCompositeScoreOverride(null);
     expect(getConfig().minCompositeScore).toBe(base);
+  });
+  it('threshold override cannot drop the bar below the env/preset value', () => {
+    const prev = process.env.MIN_COMPOSITE_SCORE;
+    try {
+      process.env.MIN_COMPOSITE_SCORE = '0.65';
+      setMinCompositeScoreOverride(null);
+      expect(getConfig().minCompositeScore).toBe(0.65);
+      setMinCompositeScoreOverride(0.60);
+      expect(getConfig().minCompositeScore).toBe(0.65);
+      setMinCompositeScoreOverride(0.72);
+      expect(getConfig().minCompositeScore).toBe(0.72);
+    } finally {
+      if (prev === undefined) delete process.env.MIN_COMPOSITE_SCORE; else process.env.MIN_COMPOSITE_SCORE = prev;
+      setMinCompositeScoreOverride(null);
+    }
   });
 });
 
@@ -184,12 +199,36 @@ describe('worker runtime load / rollback', () => {
     const logs: string[] = []; const lg = (_: string, m: string) => { logs.push(m); };
     expect(applyActiveWeightSet(lg).id).toBe('ws-1');
     expect(activeLiquidityWeights().liquidityBuild).toBeCloseTo(w.liquidityBuild, 12);
-    expect(getConfig().minCompositeScore).toBe(0.63);
+    expect(getConfig().minCompositeScore).toBe(Math.max(base, 0.63));
     r = rollback(r)!; writeRegistry(r);
     expect(applyActiveWeightSet(lg).id).toBe('default');
     expect(activeLiquidityWeights()).toBe(LIQUIDITY_WEIGHTS);
     expect(getConfig().minCompositeScore).toBe(base);
     expect(logs.length).toBe(2);
     expect(fs.readFileSync(process.env.RETRAIN_LOG_PATH!, 'utf8').trim().split('\n').length).toBe(2);
+  });
+  it('floors a retrained threshold at MIN_COMPOSITE_SCORE but allows a higher bar', async () => {
+    const { applyActiveWeightSet } = await import('../src/lib/retrain/runtime');
+    const prev = process.env.MIN_COMPOSITE_SCORE;
+    try {
+      process.env.MIN_COMPOSITE_SCORE = '0.65';
+      setMinCompositeScoreOverride(null);
+      const floor = getConfig().minCompositeScore;
+      expect(floor).toBe(0.65);
+      const w = boundStep(DEFAULT_WEIGHTS, { ...DEFAULT_WEIGHTS, liquidityBuild: 0.45, dipInUptrend: 0 }, 0.05);
+      let r = promote(readRegistry(floor), { id: 'ws-low', createdAt: 'x', source: 'retrain', weights: w, threshold: 0.60, parentId: 'default' });
+      writeRegistry(r);
+      const logs: string[] = []; const lg = (_: string, m: string) => { logs.push(m); };
+      expect(applyActiveWeightSet(lg).id).toBe('ws-low');
+      expect(getConfig().minCompositeScore).toBe(0.65);
+      expect(logs.some((m) => m.includes('env floor 0.650') && m.includes('retrained was 0.600'))).toBe(true);
+      r = promote(r, { id: 'ws-high', createdAt: 'x', source: 'retrain', weights: w, threshold: 0.70, parentId: 'ws-low' });
+      writeRegistry(r);
+      expect(applyActiveWeightSet(lg).id).toBe('ws-high');
+      expect(getConfig().minCompositeScore).toBe(0.70);
+    } finally {
+      if (prev === undefined) delete process.env.MIN_COMPOSITE_SCORE; else process.env.MIN_COMPOSITE_SCORE = prev;
+      setMinCompositeScoreOverride(null);
+    }
   });
 });

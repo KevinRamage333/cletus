@@ -348,7 +348,8 @@ export function setMinCompositeScoreOverride(v: number | null): void {
 export function getConfig(): Config {
   if (!cached) {
     cached = buildConfig(process.env);
-    if (minScoreOverride !== null) cached.minCompositeScore = minScoreOverride;
+    // Retrained weights may raise the bar, never lower it below MIN_COMPOSITE_SCORE / the preset.
+    if (minScoreOverride !== null) cached.minCompositeScore = Math.max(cached.minCompositeScore, minScoreOverride);
   }
   return cached;
 }
