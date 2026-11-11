@@ -38,6 +38,9 @@ export STALE_BAND_PCT=3
 # Poll dev/whale flow for the open position every 2 min (fast exit only, never a buy trigger).
 export WHALE_POSITION_INTERVAL_SECONDS=120
 export ENGINE_DISABLED=false
+# Opt-in (off by default; see docs/FAST_DATA_PRIVATE_ROUTE.md). Uncomment, then do one controlled restart.
+# export FAST_PRICE_WS=on        # on-chain position price from each swap via Helius logsSubscribe (Jupiter Price fallback)
+# export PRIVATE_ROUTE=dryrun    # log a simulated Jito bundle beside each live swap; nothing extra is sent
 export CLETUS_DEMO=0
 export NEXT_RUNTIME=nodejs
 
