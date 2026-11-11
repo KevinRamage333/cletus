@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import PublicLiveFeed from '@/components/PublicLiveFeed';
 export const metadata = { title: 'Cletus, the golden goose (demo)' };
 export default function DemoHome({ searchParams }: { searchParams: { soon?: string } }) {
   const soon = searchParams?.soon;
@@ -25,6 +26,7 @@ export default function DemoHome({ searchParams }: { searchParams: { soon?: stri
         </div>
         <img src="/cletus-hero.jpg" alt="Cletus the golden goose" className="w-full rounded-2xl border border-amber-500/30" />
       </section>
+      <PublicLiveFeed compact />
       <section className="grid md:grid-cols-3 gap-4">
         {[
           ['Scanner + 8 signals', 'Volume spikes, breakouts, buy pressure, momentum, velocity, liquidity build, cap heat and vol/mcap, combined into one score.'],

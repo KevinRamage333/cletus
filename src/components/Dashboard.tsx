@@ -4,6 +4,8 @@ import BrainChat from './BrainChat';
 import NewsPanel from './NewsPanel';
 import JournalPanel from './JournalPanel';
 import OwnerPlanCard from './OwnerPlanCard';
+import LiveWatch from './LiveWatch';
+import { liveWatchFromAccountStatus } from '@/lib/live-watch';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Status = any;
@@ -80,6 +82,19 @@ export default function Dashboard() {
       </div>
 
       <div className="disclaimer-bar">Not financial advice. No guaranteed gains — losses, including total loss, can occur. {c.mode !== 'live' ? 'Simulation: real DexScreener market data, paper fills, no transactions are signed.' : 'LIVE: real funds at risk.'}</div>
+
+      <LiveWatch
+        watch={liveWatchFromAccountStatus(s, { scope: s.account?.isOperator ? 'owner' : 'user', label: s.account?.isOperator ? 'Cletus (house)' : 'Your trades', chartApiBase: '/api/tokens/chart' })}
+        actions={s.account?.isOperator ? undefined : {
+          sellAllLabel: 'Sell all / stop my trades',
+          resumeLabel: 'Resume my trading',
+          pauseLabel: 'Pause new trades',
+          onSellAll: () => post('/api/protected/trade/stop', {}, 'Close your open paper positions and stop new entries? Live positions are not force-sold from this button.'),
+          onResume: () => post('/api/protected/trade/resume', {}),
+          onPause: () => post('/api/protected/trade/pause', {}, 'Pause new entries? Open positions will still be managed (stops and take-profits still fire).'),
+          busy,
+        }}
+      />
 
       <div className="stats">
         <div className="card stat"><div className="muted">Equity ({a.isOperator ? 'operator' : 'paper'})</div><div className="v">{usd(a.equity)}</div><div className="muted">start {usd(a.startingBalance, 0)}</div></div>

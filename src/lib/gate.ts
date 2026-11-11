@@ -21,9 +21,10 @@ const STEP_APIS: Array<[string, Step]> = [
   ['/api/onboarding/wallet', 'wallet'],
 ];
 
-const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/owner', '/live', '/_next/', '/favicon', '/icon', '/robots.txt',
   // Public brand assets (landing hero, Open Graph image, logo/avatar)
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
+PUBLIC_PREFIXES.push('/whitepaper', '/cletus-whitepaper.pdf');
 
 export function requiredStep(s: SessionClaims | null, currentTermsVersion: string, currentRiskVersion = currentTermsVersion): Step {
   if (!s) return 'signup';
@@ -58,13 +59,14 @@ export function gateDecision(pathname: string, s: SessionClaims | null, currentT
 }
 
 /** Demo-mode gate (public preview without a database). Pure; unit-tested. */
-const DEMO_PUBLIC = ['/demo', '/legal', '/api/demo/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+const DEMO_PUBLIC = ['/demo', '/live', '/owner', '/legal', '/api/demo/', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
+DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf');
 export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
 export function demoGateDecision(pathname: string): DemoDecision {
   if (pathname === '/' || pathname === '/signup') return { action: 'redirect', to: '/demo' };
   if (DEMO_PUBLIC.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
-  if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest)$/.test(pathname)) return { action: 'next' };
+  if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest|pdf)$/.test(pathname)) return { action: 'next' };
   if (pathname.startsWith('/api/')) return { action: 'soon' };
   return { action: 'redirect', to: `/demo?soon=${encodeURIComponent(pathname)}` };
 }

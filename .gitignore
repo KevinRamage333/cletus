@@ -16,3 +16,8 @@ screenshot-error.png
 prisma/sqlite/
 .vercel
 data/backtest/
+
+# owner live sync (local)
+logs/
+data/owner-state.json
+data/owner-snapshot.json

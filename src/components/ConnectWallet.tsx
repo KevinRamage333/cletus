@@ -5,7 +5,7 @@ import { useWallet, type Wallet } from '@solana/wallet-adapter-react';
 import { WalletReadyState, type WalletName } from '@solana/wallet-adapter-base';
 import { SUPPORTED_WALLETS, WALLET_CONNECT_COPY, isMobileUserAgent, inWalletBrowser, type SupportedWallet } from '@/lib/connect-wallets';
 
-export type ConnectMode = 'onboarding' | 'demo' | 'settings';
+export type ConnectMode = 'onboarding' | 'demo' | 'settings' | 'owner';
 
 type Props = {
   mode: ConnectMode;
@@ -50,21 +50,24 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
     }
     setBusy(true); setErr(null);
     try {
-      const ch = await fetch(`/api/onboarding/wallet/challenge?publicKey=${encodeURIComponent(pk)}`, { credentials: 'include' });
+      const challengeUrl = mode === 'owner'
+        ? `/api/owner/challenge?publicKey=${encodeURIComponent(pk)}`
+        : `/api/onboarding/wallet/challenge?publicKey=${encodeURIComponent(pk)}`;
+      const ch = await fetch(challengeUrl, { credentials: 'include' });
       const cj = await ch.json().catch(() => ({}));
       if (!ch.ok) throw new Error(cj.error ?? 'could not start sign-in');
       if (!signMessage) throw new Error('this wallet cannot sign a message');
       const sig = await signMessage(new TextEncoder().encode(cj.message as string));
       const signature = Buffer.from(sig).toString('base64');
-      const endpoint = mode === 'settings' ? '/api/onboarding/wallet' : '/api/onboarding/wallet';
+      const endpoint = mode === 'owner' ? '/api/owner/login' : '/api/onboarding/wallet';
       const r = await fetch(endpoint, {
         method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ source: 'connected', publicKey: pk, message: cj.message, signature, challenge: cj.challenge }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error ?? 'could not record wallet');
+      if (!r.ok) throw new Error(j.error ?? (mode === 'owner' ? 'this wallet is not the owner wallet' : 'could not record wallet'));
       onConnected?.(pk);
-      if (mode === 'onboarding' && j.next) window.location.href = j.next;
+      if ((mode === 'onboarding' || mode === 'owner') && j.next) window.location.href = j.next;
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -81,7 +84,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
   }, [wallet, connected, connecting, connect]);
 
   useEffect(() => {
-    if (connected && publicKey && !siwsStarted.current && (mode === 'onboarding' || mode === 'settings' || mode === 'demo')) {
+    if (connected && publicKey && !siwsStarted.current && (mode === 'onboarding' || mode === 'settings' || mode === 'demo' || mode === 'owner')) {
       // Demo: optional preview connect without an account. Onboarding/settings: SIWS.
       if (mode === 'settings' && currentPublicKey === publicKey.toBase58()) return;
       siwsStarted.current = true;
@@ -148,8 +151,10 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-        <div className="font-semibold text-amber-300">{WALLET_CONNECT_COPY.headline}</div>
-        <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{WALLET_CONNECT_COPY.body}</p>
+        <div className="font-semibold text-amber-300">{mode === 'owner' ? 'Owner login' : WALLET_CONNECT_COPY.headline}</div>
+        <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{mode === 'owner'
+          ? 'Connect the Jupiter wallet you registered as the payout wallet and sign a message to prove you control it. This signature is not a transaction and does not give Cletus permission to move funds or to trade.'
+          : WALLET_CONNECT_COPY.body}</p>
       </div>
 
       {shownKey && (
@@ -164,7 +169,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
       {!shownKey && (
         <>
           <div>
-            <div className="text-xs uppercase tracking-wider text-white/40 mb-2">Connect a wallet (optional)</div>
+            <div className="text-xs uppercase tracking-wider text-white/40 mb-2">{mode === 'owner' ? 'Connect your owner wallet' : 'Connect a wallet (optional)'}</div>
             <div className="grid gap-2">
               {SUPPORTED_WALLETS.map((w) => {
                 const found = byName.get(w.adapterName);
@@ -192,6 +197,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
             )}
           </div>
 
+          {mode !== 'owner' && (
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="font-semibold">Just watch — paper mode</div>
             <p className="text-sm text-white/60 mt-1">{WALLET_CONNECT_COPY.paper}</p>
@@ -199,6 +205,7 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
               Continue without connecting
             </button>
           </div>
+          )}
         </>
       )}
 

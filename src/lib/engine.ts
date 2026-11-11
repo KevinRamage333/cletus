@@ -657,4 +657,7 @@ export async function startEngine() {
   mem.timers.push(setInterval(runDaily, 60 * 60_000));
   setTimeout(runDaily, 60_000);
   setTimeout(() => void scanTick(), 3000);
+  const ownerSync = () => import('./owner-sync').then((m) => m.syncHaltAndPublishSnapshot()).catch(() => undefined);
+  setTimeout(ownerSync, 1500);
+  mem.timers.push(setInterval(ownerSync, 4000));
 }

@@ -1,7 +1,7 @@
 import { COMPANY_LEGAL } from '@/lib/company';
 import WalletProviders from '@/components/WalletProviders';
 import Link from 'next/link';
-const NAV = [['/demo', 'Home'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/wallet', 'Wallet'], ['/demo/dashboard', 'Dashboard'], ['/demo/disclaimer', 'Terms & risk'], ['/legal', 'Legal']];
+const NAV = [['/demo', 'Home'], ['/live', 'Live'], ['/demo/chart', 'Live charts'], ['/demo/brain', 'Ask Cletus'], ['/demo/wallet', 'Wallet'], ['/demo/dashboard', 'Dashboard'], ['/demo/disclaimer', 'Terms & risk'], ['/legal', 'Legal']];
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="tw bg-black text-white min-h-screen">

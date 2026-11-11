@@ -5,6 +5,8 @@ import ConnectWallet from '@/components/ConnectWallet';
 import ApprovalQueue from '@/components/ApprovalQueue';
 import LivePortfolio from '@/components/LivePortfolio';
 import { demoPortfolio } from '@/lib/demo-dashboard';
+import LiveWatch from '@/components/LiveWatch';
+import { liveWatchFromAccountStatus } from '@/lib/live-watch';
 
 function DemoDash() {
   const data = useMemo(() => demoPortfolio(), []);
@@ -29,6 +31,14 @@ function DemoDash() {
         onConnected={setConnected}
         onDisconnected={() => setConnected(null)}
         onPaper={() => setConnected(null)}
+      />
+      <LiveWatch
+        watch={liveWatchFromAccountStatus({
+          config: { mode: 'simulation', stopLossPct: 5, takeProfitPct: 20 },
+          account: { equity: data.equity, cash: data.cash, realizedPnl: data.realizedPnl, unrealizedPnl: data.unrealizedPnl, startingBalance: data.startingBalance, pnl: { day: data.closed.filter((t) => Date.now() - Date.parse(t.closedAt) < 86400_000).reduce((s, t) => s + t.pnlUsd, 0) } },
+          open: data.open,
+          closed: data.closed,
+        }, { scope: 'demo', label: 'Illustrative preview (not recorded results)', chartApiBase: '/api/demo/chart' })}
       />
       <ApprovalQueue approvals={data.approvals} demo />
       <LivePortfolio

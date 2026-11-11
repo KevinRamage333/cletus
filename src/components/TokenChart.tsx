@@ -13,7 +13,7 @@ const REFRESH: Record<string, number> = { '1H': 15_000, '4H': 20_000, '1D': 30_0
 const fmt = (p?: number | null) => (p === null || p === undefined ? '—' : p < 0.0001 ? p.toExponential(3) : p < 1 ? p.toFixed(6) : p.toFixed(4));
 const big = (n?: number | null) => (n === null || n === undefined ? '—' : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`);
 
-export default function TokenChart({ address, pool: poolHint, height = 420, compact = false, initialView = 'native', apiBase = '/api/tokens/chart' }: { apiBase?: string; address: string; pool?: string | null; height?: number; compact?: boolean; initialView?: View }) {
+export default function TokenChart({ address, pool: poolHint, height = 420, compact = false, initialView = 'native', apiBase = '/api/tokens/chart', levels }: { apiBase?: string; address: string; pool?: string | null; height?: number; compact?: boolean; initialView?: View; levels?: { entry?: number | null; stopLoss?: number | null; takeProfit?: number | null } }) {
   const box = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<{ candles: any; volume: any } | null>(null);
@@ -82,8 +82,19 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
       time: snap(m.time), position: m.side === 'buy' ? 'belowBar' : 'aboveBar', color: m.side === 'buy' ? '#38bdf8' : '#e879f9', shape: 'circle', text: `whale ${m.side} $${k(m.usd)}`,
     }));
     s.candles.setMarkers([...markers, ...whales].sort((a: any, b: any) => a.time - b.time));
+    const prevLines = (s as any).lines as any[] | undefined;
+    if (prevLines) for (const line of prevLines) { try { s.candles.removePriceLine(line); } catch { /* gone */ } }
+    const nextLines: any[] = [];
+    const add = (price: number | null | undefined, color: string, title: string) => {
+      if (price == null || !Number.isFinite(price) || price <= 0) return;
+      nextLines.push(s.candles.createPriceLine({ price, color, lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title }));
+    };
+    add(levels?.entry, '#F59E0B', 'Entry');
+    add(levels?.stopLoss, '#ef4444', 'SL');
+    add(levels?.takeProfit, '#22c55e', 'TP');
+    (s as any).lines = nextLines;
     chartRef.current?.timeScale().fitContent();
-  }, [data]);
+  }, [data, levels]);
 
   const chg = data?.change24h;
   return (
