@@ -86,10 +86,18 @@ export function liquidityTerms(s: SignalBreakdown, p: DexPair): Record<Liquidity
   };
 }
 
+/**
+ * Promoted retrained weights (src/lib/retrain, flag RETRAINED_WEIGHTS=on). null = the hand-built LIQUIDITY_WEIGHTS.
+ * Only the live worker sets this, from data/weight-sets/registry.json; nothing else changes it.
+ */
+let liquidityOverride: Record<LiquidityTerm, number> | null = null;
+export function setLiquidityWeights(w: Record<LiquidityTerm, number> | null): void { liquidityOverride = w ? { ...w } : null; }
+export function activeLiquidityWeights(): Readonly<Record<LiquidityTerm, number>> { return liquidityOverride ?? LIQUIDITY_WEIGHTS; }
+
 export function liquidityScore(s: SignalBreakdown, p: DexPair): number {
   const t = liquidityTerms(s, p);
   let tot = 0, acc = 0;
-  for (const [k, w] of Object.entries(LIQUIDITY_WEIGHTS) as Array<[LiquidityTerm, number]>) { tot += w; acc += w * clamp(t[k]); }
+  for (const [k, w] of Object.entries(activeLiquidityWeights()) as Array<[LiquidityTerm, number]>) { tot += w; acc += w * clamp(t[k]); }
   return tot > 0 ? acc / tot : 0;
 }
 

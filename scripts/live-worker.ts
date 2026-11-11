@@ -36,12 +36,23 @@ async function main() {
     console.error(`[cletus] live worker refused to start: mode=${cfg.mode} reason=${cfg.liveBlockedReason ?? 'unknown'}`);
     process.exit(1);
   }
+  // Nightly self-retraining (flags default off): load the promoted weight set + threshold before the first scan.
+  const rt = await import('../src/lib/retrain/runtime');
+  const { log } = await import('../src/lib/logger');
+  const rlog = (level: 'info' | 'warn', msg: string) => log(level, msg).catch(() => console.log(`[cletus] ${msg}`));
+  const rf = rt.retrainFlags();
+  if (rf.load) {
+    if (cfg.signalWeightSet !== 'liquidity') rlog('warn', `RETRAINED_WEIGHTS=on but SIGNAL_WEIGHT_SET=${cfg.signalWeightSet}; the retrained liquidity weights only affect the liquidity set (threshold still applies)`);
+    try { rt.applyActiveWeightSet(rlog); } catch (e) { rlog('warn', `retrained weights: load failed (${(e as Error).message}); using the hand-built set`); }
+  }
+  rlog('info', `retrain flags: RETRAINED_WEIGHTS=${rf.load ? 'on' : 'off'} WEIGHTS_HOT_RELOAD=${rf.hotReload ? 'on' : 'off'} RETRAIN_SCHEDULE=${rf.schedule ? 'on' : 'off'}`);
   const { startEngine } = await import('../src/lib/engine');
   const { startCollector } = await import('../src/lib/market-data');
   const { startFlowCollectors } = await import('../src/lib/flow-collector');
   await startEngine();
   startCollector();
   startFlowCollectors();
+  rt.startRetrainTasks(rlog);
   console.log('[cletus] live worker running (box only; public deploy stays simulation)');
 }
 

@@ -339,8 +339,17 @@ export function buildConfig(rawEnv: Env = process.env): Config {
 }
 
 let cached: Config | null = null;
+/** Score threshold from a promoted retrained weight set (src/lib/retrain, flag RETRAINED_WEIGHTS=on); null = env/preset value. */
+let minScoreOverride: number | null = null;
+export function setMinCompositeScoreOverride(v: number | null): void {
+  minScoreOverride = v !== null && Number.isFinite(v) ? v : null;
+  cached = null; // rebuilt from the same env on the next getConfig()
+}
 export function getConfig(): Config {
-  if (!cached) cached = buildConfig(process.env);
+  if (!cached) {
+    cached = buildConfig(process.env);
+    if (minScoreOverride !== null) cached.minCompositeScore = minScoreOverride;
+  }
   return cached;
 }
 
