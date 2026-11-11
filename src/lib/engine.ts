@@ -5,6 +5,7 @@
  * Simulation mode (default): real DexScreener/RugCheck/Jupiter-quote data, paper fills, nothing signed.
  * Live mode: only the operator account trades, via Jupiter, signed with the server wallet.
  */
+import { simBuy, simSell, simFeesUsd } from './sim-quote';
 import type { Account, Position } from '@prisma/client';
 import { prisma } from './db';
 import { log } from './logger';
@@ -296,9 +297,11 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       return false;
     }
   } else {
-    fillPrice = simFillPrice('buy', cand.priceUsd, sizeUsd, liquidity, c.slippageTolerance);
+    // Realistic paper fill from a keyless Jupiter V2 /order quote (impact + feeBps incl. 50 bps new-token fee); model fallback.
+    const q = await simBuy({ mint: cand.mint, sizeUsd, mid: cand.priceUsd, solPriceUsd: (mem.solPrice || c.solPriceFallbackUsd), liquidityUsd: liquidity, fallbackImpact: c.slippageTolerance, ageHours: cand.ageHours });
+    fillPrice = q.fillPrice;
     tokenAmount = sizeUsd / fillPrice;
-    fees = (sizeUsd * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
+    fees = simFeesUsd(sizeUsd, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
 
   await prisma.$transaction([
@@ -353,16 +356,11 @@ async function presetLabTick(pairs: DexPair[], weights: Record<SignalName, numbe
 
 /** Jupiter Price v3 (near real-time) for up to 50 mints per call; DexScreener is the fallback. */
 async function fetchFastPrices(mints: string[]): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
-  for (let i = 0; i < mints.length; i += 50) {
-    try {
-      const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${mints.slice(i, i + 50).join(',')}`, { signal: AbortSignal.timeout(5000), cache: 'no-store' });
-      if (!r.ok) continue;
-      const j = (await r.json()) as Record<string, { usdPrice?: number }>;
-      for (const [m, v] of Object.entries(j)) if (v?.usdPrice && v.usdPrice > 0) out.set(m, v.usdPrice);
-    } catch { /* fall back below */ }
-  }
-  return out;
+  // Jupiter Price API V3 via the shared, rate-limited Jupiter client; skipped (DexScreener fallback below) if the bucket is busy.
+  try {
+    const { jupPrices } = await import('./jupiter');
+    return new Map(Object.entries(await jupPrices(mints, { maxWaitMs: 3000 })));
+  } catch { return new Map(); }
 }
 
 async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
@@ -453,9 +451,9 @@ export async function partialClose(positionId: string, price: number, fraction: 
       return;
     }
   } else {
-    const exitPrice = simFillPrice('sell', price, sellTokens * price, mem.liquidity.get(p.mint), c.slippageTolerance);
-    proceeds = sellTokens * exitPrice;
-    fee = (proceeds * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
+    const q = await simSell({ mint: p.mint, tokenAmount: sellTokens, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance });
+    proceeds = sellTokens * q.fillPrice;
+    fee = simFeesUsd(proceeds, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
   const pnl = proceeds - fee - costPortion;
   await prisma.$transaction([
@@ -492,9 +490,10 @@ export async function closePosition(positionId: string, price: number, reason: s
     }
   } else {
     // Realistic: fill at the observed (possibly gapped) price, minus pool price impact for our size.
-    exitPrice = simFillPrice('sell', price, p.tokenAmount * price, mem.liquidity.get(p.mint), c.slippageTolerance);
+    const q = await simSell({ mint: p.mint, tokenAmount: p.tokenAmount, mid: price, liquidityUsd: mem.liquidity.get(p.mint), fallbackImpact: c.slippageTolerance });
+    exitPrice = q.fillPrice;
     proceeds = p.tokenAmount * exitPrice;
-    exitFees = (proceeds * c.simFeeBps) / 10000 + (st.priorityFeeLamports / 1e9) * (mem.solPrice || c.solPriceFallbackUsd);
+    exitFees = simFeesUsd(proceeds, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
 
   const remainderPnl = proceeds - exitFees - p.sizeUsd - p.feesUsd;

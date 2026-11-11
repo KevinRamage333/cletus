@@ -56,3 +56,15 @@ export function gateDecision(pathname: string, s: SessionClaims | null, currentT
   if (isApi) return { action: 'deny', status: s ? 403 : 401, step };
   return { action: 'redirect', to: STEP_PAGES[step as Exclude<Step, 'done'>] };
 }
+
+/** Demo-mode gate (public preview without a database). Pure; unit-tested. */
+const DEMO_PUBLIC = ['/demo', '/legal', '/api/demo/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+  '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
+export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
+export function demoGateDecision(pathname: string): DemoDecision {
+  if (pathname === '/' || pathname === '/signup') return { action: 'redirect', to: '/demo' };
+  if (DEMO_PUBLIC.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest)$/.test(pathname)) return { action: 'next' };
+  if (pathname.startsWith('/api/')) return { action: 'soon' };
+  return { action: 'redirect', to: `/demo?soon=${encodeURIComponent(pathname)}` };
+}

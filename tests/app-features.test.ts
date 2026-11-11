@@ -102,3 +102,20 @@ describe('Community safety + trial', () => {
     expect(trialInfo({ createdAt: new Date(now - 40 * 86_400_000), trialStartedAt: null }, now).trialActive).toBe(false);
   });
 });
+
+import { demoGateDecision } from '@/lib/gate';
+describe('demo gate (public preview, no DB)', () => {
+  it('sends / and /signup to the demo landing', () => {
+    expect(demoGateDecision('/')).toEqual({ action: 'redirect', to: '/demo' });
+    expect(demoGateDecision('/signup')).toEqual({ action: 'redirect', to: '/demo' });
+  });
+  it('allows demo pages, legal, demo APIs and assets', () => {
+    for (const p of ['/demo', '/demo/chart', '/legal', '/api/demo/chart', '/api/health', '/cletus-logo.png', '/_next/static/x.js']) expect(demoGateDecision(p)).toEqual({ action: 'next' });
+  });
+  it('account pages say coming soon; account APIs answer 503', () => {
+    expect(demoGateDecision('/app/config')).toEqual({ action: 'redirect', to: '/demo?soon=%2Fapp%2Fconfig' });
+    expect(demoGateDecision('/api/auth/signup')).toEqual({ action: 'soon' });
+    expect(demoGateDecision('/api/protected/trade/start')).toEqual({ action: 'soon' });
+    expect(demoGateDecision('/api/tokens/chart')).toEqual({ action: 'soon' });
+  });
+});

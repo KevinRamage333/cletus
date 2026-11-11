@@ -77,7 +77,8 @@ export interface MarketContext { solPriceUsd: number | null; solChange24h: numbe
 export async function fetchMarketContext(): Promise<MarketContext> {
   let solPriceUsd: number | null = null, solChange24h: number | null = null;
   try {
-    const r = await fetch('https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112', { signal: AbortSignal.timeout(8000), cache: 'no-store' });
+    const { jupFetch, JUP_PRICE_BASE } = await import('./jupiter');
+    const r = await jupFetch(`${JUP_PRICE_BASE()}?ids=So11111111111111111111111111111111111111112`, { maxWaitMs: 8000, timeoutMs: 8000 });
     const j = await r.json();
     const s = j['So11111111111111111111111111111111111111112'];
     solPriceUsd = s?.usdPrice ?? null;

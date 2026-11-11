@@ -67,12 +67,13 @@ export async function fetchPairsForMints(mints: string[]): Promise<Map<string, D
   return out;
 }
 
+let solCache: { at: number; v: number } | null = null;
 export async function fetchSolPriceUsd(fallback: number): Promise<number> {
+  if (solCache && Date.now() - solCache.at < 30_000) return solCache.v;
   try {
-    const r = await getJson<Record<string, { usdPrice: number }>>('https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112', 6000);
-    const p = r['So11111111111111111111111111111111111111112']?.usdPrice;
-    return p && p > 0 ? p : fallback;
-  } catch {
-    return fallback;
-  }
+    const { jupPrices, SOL_MINT } = await import('./jupiter');
+    const p = (await jupPrices([SOL_MINT], { maxWaitMs: 4000 }))[SOL_MINT];
+    if (p && p > 0) { solCache = { at: Date.now(), v: p }; return p; }
+  } catch { /* fall through */ }
+  return solCache?.v ?? fallback;
 }

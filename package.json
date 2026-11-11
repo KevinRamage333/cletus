@@ -13,7 +13,7 @@
     "screenshot": "node scripts/screenshot.mjs",
     "postinstall": "prisma generate",
     "db:migrate": "node --env-file=.env.local node_modules/prisma/build/index.js migrate deploy",
-    "db:migrate:new": "node --env-file=.env.local node_modules/prisma/build/index.js migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script",
+    "db:migrate:new": "node --env-file=.env.local node_modules/prisma/build/index.js migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script",
     "db:init": "scripts/db-init.sh",
     "db:backup": "scripts/db-backup.sh",
     "db:restore": "scripts/db-restore.sh",

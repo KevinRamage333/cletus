@@ -13,7 +13,7 @@ const REFRESH: Record<string, number> = { '1H': 15_000, '4H': 20_000, '1D': 30_0
 const fmt = (p?: number | null) => (p === null || p === undefined ? '—' : p < 0.0001 ? p.toExponential(3) : p < 1 ? p.toFixed(6) : p.toFixed(4));
 const big = (n?: number | null) => (n === null || n === undefined ? '—' : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`);
 
-export default function TokenChart({ address, pool: poolHint, height = 420, compact = false, initialView = 'native' }: { address: string; pool?: string | null; height?: number; compact?: boolean; initialView?: View }) {
+export default function TokenChart({ address, pool: poolHint, height = 420, compact = false, initialView = 'native', apiBase = '/api/tokens/chart' }: { apiBase?: string; address: string; pool?: string | null; height?: number; compact?: boolean; initialView?: View }) {
   const box = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<{ candles: any; volume: any } | null>(null);
@@ -27,13 +27,13 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
     try {
       const qs = new URLSearchParams({ address, range });
       if (poolHint) qs.set('pool', poolHint);
-      const r = await fetch(`/api/tokens/chart?${qs}`, { cache: 'no-store' });
+      const r = await fetch(`${apiBase}?${qs}`, { cache: 'no-store' });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? 'chart unavailable');
       setData(d); setErr(null); setUpdated(new Date());
       if (view === 'native' && !d.candles?.length && !d.rateLimited) setView('gecko');
     } catch (e) { setErr((e as Error).message); }
-  }, [address, range, poolHint, view]);
+  }, [address, range, poolHint, view, apiBase]);
 
   useEffect(() => { load(); const t = setInterval(load, REFRESH[range] ?? 30_000); return () => clearInterval(t); }, [load, range]);
 

@@ -1,3 +1,4 @@
+import { expectedFeeBps, feePenalty } from './jupiter';
 import type { DexPair } from './dexscreener';
 import { SIGNAL_NAMES, type SignalName } from './config';
 
@@ -103,6 +104,8 @@ export interface ScanCandidate {
   volMcap: number;
   signals: SignalBreakdown;
   composite: number;
+  /** Expected Jupiter fee per side (bps): 50 for tokens < 24 h old, else 10. Already netted out of `composite`. */
+  estFeeBps?: number;
   rejected?: string;
 }
 
@@ -126,6 +129,9 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
       priceUsd: price, marketCap: mcap, volume24h: v24, liquidityUsd: p.liquidity?.usd ?? null, ageHours,
       priceChangeH1: p.priceChange?.h1 ?? 0, priceChangeH24: p.priceChange?.h24 ?? 0, quoteSymbol: p.quoteToken?.symbol, volMcap: mcap > 0 ? v24 / mcap : 0, signals, composite: compositeScore(signals, weights),
     };
+    // Fee-aware score: Jupiter charges 50 bps/side on tokens < 24 h old (vs 10), so a round trip costs 80 bps more.
+    c.estFeeBps = expectedFeeBps(ageHours);
+    c.composite = Math.max(0, c.composite - feePenalty(c.estFeeBps));
     if (!(price > 0)) c.rejected = 'no price';
     else if (mcap < f.minMarketCap || mcap > f.maxMarketCap) c.rejected = `mcap outside $${f.minMarketCap}-$${f.maxMarketCap}`;
     else if (v24 < f.minVolume24hUsd) c.rejected = `24h volume < $${f.minVolume24hUsd}`;

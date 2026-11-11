@@ -21,7 +21,7 @@ export interface RugcheckReport {
   detectedAt?: string;
 }
 
-export interface SellQuote { routeFound: boolean; priceImpactPct: number | null; error?: string }
+export interface SellQuote { routeFound: boolean; priceImpactPct: number | null; error?: string; feeBps?: number; router?: string }
 
 export interface AuditParams {
   maxHolderConcentration: number; // fraction, e.g. 0.30
@@ -119,15 +119,13 @@ export async function fetchRugcheck(mint: string, _apiKey?: string | null): Prom
   return rugcheckGet<RugcheckReport>(`/tokens/${mint}/report`);
 }
 
-/** Quote selling `tokenAmountRaw` of the token for SOL via Jupiter (no transaction). */
-export async function checkSellRoute(mint: string, tokenAmountRaw: bigint, jupiterBase: string, apiKey: string | null): Promise<SellQuote> {
+/** Quote selling `tokenAmountRaw` of the token for SOL via Jupiter Swap API V2 /order (quote-only: no taker, no transaction). */
+export async function checkSellRoute(mint: string, tokenAmountRaw: bigint, _jupiterBase?: string, _apiKey?: string | null): Promise<SellQuote> {
   try {
-    const url = `${jupiterBase}/quote?inputMint=${mint}&outputMint=${SOL}&amount=${tokenAmountRaw.toString()}&slippageBps=500`;
-    const res = await fetch(url, { headers: apiKey ? { 'x-api-key': apiKey } : {}, signal: AbortSignal.timeout(10000), cache: 'no-store' });
-    if (!res.ok) return { routeFound: false, priceImpactPct: null, error: `HTTP ${res.status}` };
-    const q = (await res.json()) as { outAmount?: string; priceImpactPct?: string; error?: string };
-    if (!q.outAmount || q.outAmount === '0') return { routeFound: false, priceImpactPct: null, error: q.error };
-    return { routeFound: true, priceImpactPct: Number(q.priceImpactPct ?? 0) * 100 };
+    const { getOrder } = await import('./jupiter');
+    const q = await getOrder({ inputMint: mint, outputMint: SOL, amount: tokenAmountRaw }, { maxWaitMs: 15_000 });
+    if (!(Number(q.outAmount) > 0)) return { routeFound: false, priceImpactPct: null, error: 'no route' };
+    return { routeFound: true, priceImpactPct: q.priceImpactPct * 100, feeBps: q.feeBps, router: q.router };
   } catch (e) {
     return { routeFound: false, priceImpactPct: null, error: String((e as Error).message) };
   }

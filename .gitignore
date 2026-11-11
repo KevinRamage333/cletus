@@ -14,3 +14,4 @@ dev.log
 .env*.local
 screenshot-error.png
 prisma/sqlite/
+.vercel

@@ -233,3 +233,19 @@ model CommunityMessage {
   createdAt DateTime @default(now())
   @@index([createdAt])
 }
+
+/// Owner withdrawals from the operator trading wallet (every attempt, including simulated and refused ones).
+model Withdrawal {
+  id              String   @id @default(cuid())
+  userId          String
+  toAddress       String
+  lamports        String   // integer lamports as a string (avoids float/BigInt JSON issues)
+  mode            String   // simulation | live
+  status          String   // simulated | sent | failed | refused
+  signature       String?
+  closedPositions Int      @default(0)
+  error           String?
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}

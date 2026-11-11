@@ -23,7 +23,7 @@
 Keeping them separate lets each have its own role and privileges, backup cadence, and retention. A bug in the public app can never read or write the LLC's records.
 
 ### `app` (Prisma-managed)
-- `prisma/schema.prisma` uses `provider = "postgresql"`, with `DATABASE_URL=postgresql://cletus_app:…@127.0.0.1:5432/cletus?schema=app&sslmode=require`. The initial migration is `prisma/migrations/20261111000000_init`, applied with `npm run db:migrate` (`prisma migrate deploy`). New migrations are generated with `npm run db:migrate:new > prisma/migrations/<stamp>_<name>/migration.sql`; no shadow DB or CREATEDB privilege is needed. Prisma's `multiSchema` preview can map models to schemas later if `app` needs to join `market_data`.
+- `prisma/schema.prisma` uses `provider = "postgresql"`, with `DATABASE_URL=postgresql://cletus_app:…@127.0.0.1:5432/cletus?schema=app&sslmode=require`. The initial migration is `prisma/migrations/20261111000000_init`, applied with `npm run db:migrate` (`prisma migrate deploy`). New migrations are generated with `npm run -s db:migrate:new > prisma/migrations/<stamp>_<name>/migration.sql` (diffs the live DB against the schema; no shadow DB or CREATEDB privilege is needed). Prisma's `multiSchema` preview can map models to schemas later if `app` needs to join `market_data`.
 - No floating-point money shortcuts beyond today: PnL is stored as double precision in dev. For production, consider `Decimal` columns for cash and PnL.
 
 ### `llc_records` (draft DDL in `docs/sql/schemas.sql`)

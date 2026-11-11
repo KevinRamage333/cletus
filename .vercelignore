@@ -1,0 +1,16 @@
+# Never upload secrets, local DBs, backups or build artefacts
+.env
+.env.*
+!.env.example
+.secrets/
+prisma/*.db
+prisma/*.db-journal
+prisma/sqlite/
+node_modules/
+.next/
+dev.log
+*.log
+/*.png
+cletus-backups/
+tsconfig.tsbuildinfo
+.vercel/

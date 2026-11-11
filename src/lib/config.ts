@@ -285,7 +285,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     maxConsecutiveFailures: num(env.MAX_CONSECUTIVE_FAILURES, 3),
     failurePauseMinutes: num(env.FAILURE_PAUSE_MINUTES, 15),
     jupiterApiKey: env.JUPITER_API_KEY && !env.JUPITER_API_KEY.startsWith('your_') ? env.JUPITER_API_KEY : null,
-    jupiterBaseUrl: str(env.JUPITER_BASE_URL, env.JUPITER_API_KEY && !env.JUPITER_API_KEY.startsWith('your_') ? 'https://api.jup.ag/swap/v1' : 'https://lite-api.jup.ag/swap/v1'),
+    jupiterBaseUrl: str(env.JUPITER_SWAP_BASE, 'https://api.jup.ag/swap/v2'), // Swap API V2 (/order + /execute); see src/lib/jupiter.ts
     rpcUrl: str(env.HELIUS_RPC_URL && !env.HELIUS_RPC_URL.includes('your_') ? env.HELIUS_RPC_URL : env.RPC_URL, 'https://api.mainnet-beta.solana.com'),
     secMaxVolumeShare: num(env.SEC_MAX_VOLUME_SHARE, 0.05),
     secMaxLiquidityShare: num(env.SEC_MAX_LIQUIDITY_SHARE, 0.02), // max position = 2% of pool liquidity

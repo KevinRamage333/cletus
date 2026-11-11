@@ -49,6 +49,23 @@ try {
   await page.fill('input[placeholder="Wallet or token address"]', 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263');
   await page.click('button:has-text("Inspect")'); await page.waitForTimeout(9000);
   await page.screenshot({ path: 'dev-wallet.png', fullPage: true }); console.log('saved dev-wallet.png');
+  // Wallet + owner Withdraw (simulation: validated and logged, nothing is sent). Destination is a fresh throwaway address.
+  await page.goto(BASE + '/app/wallet'); await page.waitForTimeout(3000);
+  if (await page.locator('[data-testid=withdraw-panel]').count()) {
+    const { Keypair } = await import('@solana/web3.js');
+    await page.fill('input[placeholder="Recipient wallet address"]', Keypair.generate().publicKey.toBase58());
+    await page.getByRole('button', { name: 'Max' }).click();
+    await page.getByLabel('Close all open positions first').check();
+    await page.getByRole('button', { name: 'Review withdrawal' }).click();
+    await page.waitForSelector('[data-testid=withdraw-confirm]', { timeout: 15000 });
+    await page.screenshot({ path: 'wallet-withdraw-confirm.png', fullPage: true }); console.log('saved wallet-withdraw-confirm.png');
+    await page.fill('[data-testid=withdraw-confirm] input', 'WITHDRAW');
+    await page.getByRole('button', { name: 'Confirm withdrawal' }).click();
+    await page.waitForTimeout(4000);
+    const msg = await page.locator('[data-testid=withdraw-panel] p.text-sm').allInnerTexts();
+    console.log('withdraw result:', msg.join(' | '));
+  } else console.log('withdraw panel not available:', await page.locator('[data-testid=withdraw-unavailable]').innerText().catch(() => 'n/a'));
+  await page.screenshot({ path: 'wallet.png', fullPage: true }); console.log('saved wallet.png');
   await shot('/app/community', 'community.png', 4000);
   await page.setViewportSize({ width: 390, height: 844 });
   await shot('/app', 'dashboard-mobile.png', 6000);

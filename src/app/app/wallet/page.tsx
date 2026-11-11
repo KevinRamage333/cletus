@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import WithdrawPanel from '@/components/WithdrawPanel';
 
 type WalletState = {
   address: string | null;
@@ -236,6 +237,9 @@ export default function CletusWalletPage() {
               </div>
             </div>
           </div>
+
+          {/* Owner-only withdraw (operator wallet; box worker only) */}
+          <WithdrawPanel />
 
           {/* Fund instructions */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
