@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { providerOrder, withFallback } from '@/lib/providers';
-import { parseChatSSE, parseResponsesOutput, xaiConfig, XAI_DEFAULT_MODEL } from '@/lib/xai';
+import { parseChatSSE, parseChatCompletion, parseResponsesOutput, xaiConfig, XAI_DEFAULT_MODEL } from '@/lib/xai';
 import { toJsonSchema } from '@/lib/brain/xai-chat';
 import { checkLimit, newLimiterState, recordCall, record429, recordSuccess, parseRetryDelayMs } from '@/lib/brain/ratelimit';
 import { narrativeOf, portfolioCheck, mapLimit } from '@/lib/portfolio';
@@ -32,6 +32,10 @@ describe('xAI client', () => {
     expect(xaiConfig({}).key).toBeNull();
     expect(xaiConfig({}).model).toBe(XAI_DEFAULT_MODEL);
     expect(xaiConfig({ XAI_API_KEY: 'k', XAI_MODEL: 'grok-x' })).toMatchObject({ key: 'k', model: 'grok-x' });
+    expect(XAI_DEFAULT_MODEL).toBe('grok-4-fast-non-reasoning');
+    expect(parseChatCompletion({ choices: [{ message: { content: '  pong  ' } }], model: 'grok-4-fast-non-reasoning' })).toEqual({ text: 'pong', model: 'grok-4-fast-non-reasoning' });
+    expect(parseChatCompletion({})).toEqual({ text: '', model: undefined });
+
   });
   it('parses streamed content and tool-call deltas', () => {
     const sse = [

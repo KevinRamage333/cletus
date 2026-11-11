@@ -5,7 +5,7 @@
  * The API key is sent only in the Authorization header and never logged.
  */
 export const XAI_BASE_URL = 'https://api.x.ai/v1';
-export const XAI_DEFAULT_MODEL = 'grok-4.7';
+export const XAI_DEFAULT_MODEL = 'grok-4-fast-non-reasoning';
 
 export interface ChatMsg { role: 'system' | 'user' | 'assistant' | 'tool'; content: string | null; tool_calls?: ToolCall[]; tool_call_id?: string }
 export interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
@@ -14,6 +14,30 @@ export interface FnTool { type: 'function'; function: { name: string; descriptio
 export function xaiConfig(env: Record<string, string | undefined> = process.env) {
   const key = env.XAI_API_KEY && !env.XAI_API_KEY.startsWith('your_') && !env.XAI_API_KEY.startsWith('xai-xxx') ? env.XAI_API_KEY : null;
   return { key, model: (env.XAI_MODEL || XAI_DEFAULT_MODEL).trim(), baseUrl: (env.XAI_BASE_URL || XAI_BASE_URL).replace(/\/$/, ''), webSearch: env.XAI_WEB_SEARCH !== 'false' };
+}
+
+
+/** Parse a non-streaming Chat Completions response (pure; unit-tested). */
+export function parseChatCompletion(j: any): { text: string; model?: string } { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const text = j?.choices?.[0]?.message?.content;
+  return { text: typeof text === 'string' ? text.trim() : '', model: typeof j?.model === 'string' ? j.model : undefined };
+}
+
+/** One non-streaming chat completion (no tools). Used by the public demo Brain fallback. */
+export async function xaiComplete(messages: ChatMsg[], opts: { maxTokens?: number; temperature?: number; timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  const c = xaiConfig();
+  if (!c.key) throw new Error('XAI_API_KEY not configured');
+  const f = opts.fetchImpl ?? fetch;
+  const res = await f(`${c.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${c.key}` },
+    body: JSON.stringify({ model: c.model, messages, stream: false, max_tokens: opts.maxTokens ?? 800, temperature: opts.temperature ?? 0.6 }),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 30_000),
+  });
+  if (!res.ok) throw new Error(`xAI HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+  const out = parseChatCompletion(await res.json());
+  if (!out.text) throw new Error('empty xAI response');
+  return { text: out.text, model: out.model || c.model };
 }
 
 /** Parse an OpenAI-style SSE stream into final content + tool calls (pure over the text; unit-tested). */

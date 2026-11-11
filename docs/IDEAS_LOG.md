@@ -28,6 +28,7 @@ A dated record of feature ideas and design decisions, kept for the owner's recor
 | 2026-11-11 | Self-reflection journal after every closed trade and daily | Visible in the UI and to the Brain |
 | 2026-11-11 | Extra risk controls (daily loss limit, loss-streak pause, max % of equity per position, top-10 holder cap, dev-exit check, partial take-profits, stale exits, Jito / private submission) and a performance scorecard | Added by a parallel work stream; see `.env.example` |
 | 2026-11-11 | Brain providers behind one switch: `BRAIN_PROVIDER=gemini` (default, free tier) → xAI Grok → mock | Grok uses streaming chat completions, function calling and `web_search`; Gemini has free-tier rate limiting, 429 back-off and a news-summary cache |
+| 2026-11-11 | Public demo Brain falls back to xAI Grok when Gemini is rate-limited; default `XAI_MODEL` is `grok-4-fast-non-reasoning` | Cost-efficient fast variant available on the owner's key; Gemini stays first |
 | 2026-11-11 | Gemini model auto-fallback when the configured model is retired | 2.5 Flash returns 404 for new keys, so it falls back to `gemini-3.5-flash` |
 | 2026-11-11 | Market-cap presets: Degen $10k–$500k, **Balanced $250k–$5M (default)**, Safer $5M–$50M | Plus filters: liquidity ≥ $50k, position ≤ 2% of pool, age ≥ 6h, vol ≥ 20% mcap, top-10 < 30% |
 | 2026-11-11 | "Preset lab": paper accounts trade all three presets side by side and the scorecard compares them | |
