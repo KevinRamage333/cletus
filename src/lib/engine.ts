@@ -24,6 +24,7 @@ import { parseSettings, effectiveConfig, withinTradingHours, dailyLimitHit, size
 import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
+import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, type TickFence } from './watchdog';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
 interface EngineMemory {
@@ -43,15 +44,26 @@ interface EngineMemory {
   sellFailures: Map<string, SellFailureState>;
   /** Where the last self-heal failure came from; a clean scan only clears scan/API failures. */
   lastFailureSource: 'scan' | 'swap' | null;
+  /** Watchdog: where each loop is right now, when it last finished, and the generation fence. */
+  scanStage: string; monitorStage: string;
+  lastScanDoneAt: number | null; lastMonitorDoneAt: number | null;
+  scanFence: TickFence; monitorFence: TickFence;
+  /** Positions with a sell in flight (monitor, WebSocket fast path and abandoned ticks can't double-sell). */
+  selling: InFlight;
 }
 const g = globalThis as unknown as { __cletusEngine?: EngineMemory };
 export const mem: EngineMemory = (g.__cletusEngine ??= {
   started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(), liquidity: new Map(), monitorTicks: 0,
   priceAt: new Map(), sellFailures: new Map(), lastFailureSource: null,
+  scanStage: 'idle', monitorStage: 'idle', lastScanDoneAt: null, lastMonitorDoneAt: null, scanFence: { gen: 0 }, monitorFence: { gen: 0 }, selling: new InFlight(),
 });
 mem.priceAt ??= new Map();
 mem.sellFailures ??= new Map();
 mem.lastFailureSource ??= null;
+mem.scanStage ??= 'idle'; mem.monitorStage ??= 'idle';
+mem.lastScanDoneAt ??= null; mem.lastMonitorDoneAt ??= null;
+mem.scanFence ??= { gen: 0 }; mem.monitorFence ??= { gen: 0 };
+mem.selling ??= new InFlight();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const envNum = (k: string, d: number) => { const v = Number(process.env[k]); return process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(v) ? v : d; };
@@ -236,19 +248,47 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
 
 // ─── Scan & entries ───────────────────────────────────────────────────────────
 
+/** Longest a scan / monitor tick may hold its loop before the watchdog abandons it (ms). */
+export const scanDeadlineMs = () => envNum('SCAN_TICK_DEADLINE_MS', 150_000);
+export const monitorDeadlineMs = () => envNum('MONITOR_TICK_DEADLINE_MS', 45_000);
+
 export async function scanTick(): Promise<string> {
   if (mem.scanning) return 'scan already running';
   mem.scanning = true;
-  const c = getConfig();
+  const gen = nextGen(mem.scanFence);
+  const started = Date.now();
   try {
+    const out = await withDeadline(scanTickInner(gen), scanDeadlineMs(), 'scan tick');
+    mem.lastScanDoneAt = Date.now();
+    return out;
+  } catch (e) {
+    if (e instanceof DeadlineError) {
+      nextGen(mem.scanFence); // fence off the stuck tick: it can no longer open positions
+      await log('warn', `watchdog: scan stuck ${Math.round((Date.now() - started) / 1000)}s at stage "${mem.scanStage}" — abandoned, scanning resumes next tick`).catch(() => undefined);
+      return (mem.lastScanSummary = `scan abandoned at ${mem.scanStage}`);
+    }
+    throw e;
+  } finally {
+    mem.scanning = false;
+  }
+}
+
+async function scanTickInner(gen: number): Promise<string> {
+  const c = getConfig();
+  const stage = (s: string) => { if (mem.scanFence.gen === gen) mem.scanStage = s; };
+  try {
+    stage('engine state');
     const st = await getEngineState();
     if (st.killSwitch) return (mem.lastScanSummary = 'kill switch active — scanning halted');
     if (isPaused({ ...st })) return (mem.lastScanSummary = `self-heal pause until ${st.pausedUntil?.toISOString()}`);
 
     let pairs: Map<string, DexPair>;
     try {
+      stage('dexscreener discovery');
       const mints = await discoverSolanaMints();
+      stage('dexscreener pairs');
       pairs = await fetchPairsForMints(mints);
+      stage('sol price');
       mem.solPrice = await fetchSolPriceUsd(c.solPriceFallbackUsd);
     } catch (e) {
       await heal('api', String((e as Error).message), 'scan');
@@ -257,6 +297,7 @@ export async function scanTick(): Promise<string> {
     // A clean scan only clears scan/API failures; swap failures are cleared by a successful swap.
     if (st.consecutiveFailures > 0 && mem.lastFailureSource !== 'swap') await heal('ok');
 
+    stage('rank');
     const weights = await getWeights();
     const ranked = rankCandidates([...pairs.values()], c, weights);
     for (const r of ranked) { setPrice(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
@@ -286,6 +327,7 @@ export async function scanTick(): Promise<string> {
         await log('info', `${verdict.mode === 'on' ? 'flow veto' : 'flow veto (shadow, not enforced)'} ${cand.symbol}: ${verdict.reasons.join(' | ')}`);
         if (verdict.mode === 'on') continue;
       }
+      stage(`audit ${cand.symbol}`);
       const audit = await auditToken(cand.mint, {
         priceUsd: cand.priceUsd, sizeUsd: auditSizeUsd(c),
         params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
@@ -297,17 +339,22 @@ export async function scanTick(): Promise<string> {
         await log('info', `audit FAILED ${cand.symbol} (${cand.mint.slice(0, 6)}…): ${audit.checks.filter((x) => !x.passed).map((x) => `${x.name}: ${x.detail}`).join(' | ')}`);
         continue;
       }
-      for (const a of accounts) if (await tryEnter(a, cand, audit, c)) opened++;
+      for (const a of accounts) {
+        stage(`enter ${cand.symbol}`);
+        assertCurrent(mem.scanFence, gen, 'scan');
+        if (await tryEnter(a, cand, audit, c, gen)) opened++;
+      }
     }
     summary += `, opened ${opened} position(s)`;
-    if (c.enablePresetLab) summary += await presetLabTick([...pairs.values()], weights, c);
+    stage('preset lab');
+    if (c.enablePresetLab) summary += await presetLabTick([...pairs.values()], weights, c, gen);
     await log('info', summary);
     return (mem.lastScanSummary = summary);
   } catch (e) {
     await log('error', `scanTick error: ${(e as Error).message}`);
     return (mem.lastScanSummary = `error: ${(e as Error).message}`);
   } finally {
-    mem.scanning = false;
+    stage('idle');
   }
 }
 
@@ -320,7 +367,7 @@ export function auditSizeUsd(c: Config): number {
   return Math.min(c.maxPositionSizeUsd, 1000);
 }
 
-async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config): Promise<boolean> {
+async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number): Promise<boolean> {
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
   const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
   const c = applyOwnerPlan(us ? effectiveConfig(serverCfg, us) : serverCfg, a.isOperator);
@@ -397,6 +444,8 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   const live = c.mode === 'live' && a.isOperator;
 
   let fillPrice: number, tokenAmount: number, fees: number, entryTx: string | null = null;
+  // A scan the watchdog abandoned must never spend: re-check the fence right before the swap.
+  if (scanGen !== undefined) assertCurrent(mem.scanFence, scanGen, 'scan');
   if (live) {
     let r: { signature: string; outAmount: string };
     try {
@@ -485,7 +534,7 @@ export async function ensureLabAccount(preset: McapPreset) {
   });
 }
 
-async function presetLabTick(pairs: DexPair[], weights: Record<SignalName, number>, c: Config): Promise<string> {
+async function presetLabTick(pairs: DexPair[], weights: Record<SignalName, number>, c: Config, scanGen?: number): Promise<string> {
   const parts: string[] = [];
   for (const preset of Object.keys(MCAP_PRESETS) as McapPreset[]) {
     try {
@@ -500,7 +549,7 @@ async function presetLabTick(pairs: DexPair[], weights: Record<SignalName, numbe
           params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
           rugcheckApiKey: c.rugcheckApiKey, jupiterBase: c.jupiterBaseUrl, jupiterApiKey: c.jupiterApiKey,
         });
-        if (audit.passed && (await tryEnter(lab, cand, audit, { ...c, mode: 'simulation' }))) n++;
+        if (audit.passed && (await tryEnter(lab, cand, audit, { ...c, mode: 'simulation' }, scanGen))) n++;
       }
       parts.push(`${preset.toLowerCase()} ${ranked.filter((r) => !r.rejected).length}/${n}`);
     } catch (e) { parts.push(`${preset.toLowerCase()} err`); await log('warn', `preset lab ${preset}: ${(e as Error).message}`); }
@@ -554,9 +603,28 @@ async function onPoolChange(mint: string) {
 export async function monitorTick(): Promise<void> {
   if (mem.monitoring) return;
   mem.monitoring = true;
-  const c = getConfig();
+  const gen = nextGen(mem.monitorFence);
+  const started = Date.now();
   try {
+    await withDeadline(monitorTickInner(gen), monitorDeadlineMs(), 'monitor tick');
+    mem.lastMonitorDoneAt = Date.now();
+  } catch (e) {
+    if (e instanceof DeadlineError) {
+      nextGen(mem.monitorFence);
+      await log('warn', `watchdog: monitor stuck ${Math.round((Date.now() - started) / 1000)}s at stage "${mem.monitorStage}" — abandoned, monitoring resumes next tick`).catch(() => undefined);
+    }
+  } finally {
+    mem.monitoring = false;
+  }
+}
+
+async function monitorTickInner(gen: number): Promise<void> {
+  const c = getConfig();
+  const stage = (s: string) => { if (mem.monitorFence.gen === gen) mem.monitorStage = s; };
+  try {
+    stage('engine state');
     const st = await getEngineState();
+    stage('open positions');
     const open = await prisma.position.findMany({ where: { status: 'open' } });
     // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
     const { syncPoolSubscriptions } = await import('./helius');
@@ -566,12 +634,14 @@ export async function monitorTick(): Promise<void> {
       return;
     }
     const mints = [...new Set(open.map((p) => p.mint))];
+    stage('jupiter prices');
     const fast = await fetchFastPrices(mints);
     for (const [m, v] of fast) setPrice(m, v);
     const missing = mints.filter((m) => !fast.has(m));
     const needLiq = mints.filter((m) => !mem.liquidity.has(m));
     if (missing.length || needLiq.length || mem.monitorTicks % 10 === 0) {
       try {
+        stage('dexscreener prices');
         const pairs = await fetchPairsForMints([...new Set([...missing, ...needLiq, ...(mem.monitorTicks % 10 === 0 ? mints : [])])]);
         for (const [m, p] of pairs) {
           if (!fast.has(m) && Number(p.priceUsd) > 0) setPrice(m, Number(p.priceUsd));
@@ -588,6 +658,7 @@ export async function monitorTick(): Promise<void> {
     const now = Date.now();
     const staleMs = envNum('LIVE_STALE_PRICE_MS', 120_000);
     for (const m of mints) if (!mem.priceAt.has(m)) mem.priceAt.set(m, now);
+    stage('evaluate positions');
     await mapLimit(open, Number(process.env.EXIT_CONCURRENCY ?? 8), async (p) => {
       if (!p.simulated && !st.killSwitch && isPriceStale(mem.priceAt.get(p.mint), now, staleMs)) {
         if (!mem.sellFailures.has(p.id)) await log('warn', `LIVE ${p.symbol}: price stale for ${Math.round((now - (mem.priceAt.get(p.mint) ?? now)) / 1000)}s — protective exit`, p.accountId);
@@ -598,12 +669,17 @@ export async function monitorTick(): Promise<void> {
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
   } finally {
-    mem.monitoring = false;
+    stage('idle');
   }
 }
 
 /** Sell `fraction` of the remaining position at a take-profit rung; the rest keeps running. */
 export async function partialClose(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
+  if (!mem.selling.tryAcquire(positionId)) return; // another path is already selling this position
+  try { await partialCloseInner(positionId, price, fraction, rung, gainPct); } finally { mem.selling.release(positionId); }
+}
+
+async function partialCloseInner(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
   const c = getConfig();
   const p = await prisma.position.findUnique({ where: { id: positionId } });
   if (!p || p.status !== 'open' || p.partialsTaken >= rung) return;
@@ -653,6 +729,11 @@ export async function partialClose(positionId: string, price: number, fraction: 
 }
 
 export async function closePosition(positionId: string, price: number, reason: string) {
+  if (!mem.selling.tryAcquire(positionId)) return; // another path is already selling this position
+  try { await closePositionInner(positionId, price, reason); } finally { mem.selling.release(positionId); }
+}
+
+async function closePositionInner(positionId: string, price: number, reason: string) {
   const c = getConfig();
   const p = await prisma.position.findUnique({ where: { id: positionId } });
   if (!p || p.status !== 'open') return;
@@ -804,6 +885,9 @@ export async function startEngine() {
   if (process.env.ENGINE_DISABLED === 'true') { mem.lastScanSummary = 'engine disabled (ENGINE_DISABLED=true)'; return; }
   mem.timers.push(setInterval(() => void scanTick(), c.tradeFrequencySeconds * 1000));
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));
+  // Heartbeat: proves both loops are alive (a silent log used to be the only symptom of a hang).
+  const hbMin = envNum('HEARTBEAT_MINUTES', 5);
+  if (hbMin > 0) mem.timers.push(setInterval(() => void log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})`).catch(() => undefined), hbMin * 60_000));
   // World events + daily journal
   const newsMin = Math.max(5, Number(process.env.NEWS_REFRESH_MINUTES ?? 30));
   const runNews = () => import('./news').then((n) => n.refreshNewsAndBriefing()).catch((e) => log('warn', `news refresh failed: ${e.message}`));

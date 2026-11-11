@@ -6,6 +6,7 @@ import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { loadTradingKeypair } from './wallet';
 import type { Config } from './config';
 import { activeRpc } from './rpc-pool';
+import { timedFetch } from './watchdog';
 
 export const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
@@ -14,10 +15,12 @@ export interface SwapResult { signature: string; inAmount: string; outAmount: st
 
 let conn: Connection | null = null;
 let connUrl = '';
-/** Connection to the currently active RPC (Helius primary, FluxRPC backup; see rpc-pool.ts). */
+/** Per-request RPC timeout (ms). web3.js has none by default, so one stuck request could freeze a tick. */
+export const rpcTimeoutMs = () => { const v = Number(process.env.RPC_REQUEST_TIMEOUT_MS); return Number.isFinite(v) && v > 0 ? v : 15_000; };
+/** Connection to the currently active RPC (Helius primary, FluxRPC backup; see rpc-pool.ts). Every request times out. */
 export function connection(cfg: Config) {
   const url = activeRpc()?.url ?? cfg.rpcUrl;
-  if (!conn || url !== connUrl) { conn = new Connection(url, 'confirmed'); connUrl = url; }
+  if (!conn || url !== connUrl) { conn = new Connection(url, { commitment: 'confirmed', fetch: timedFetch(rpcTimeoutMs()) as never }); connUrl = url; }
   return conn;
 }
 
