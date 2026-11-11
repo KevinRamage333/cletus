@@ -139,7 +139,9 @@ export async function auditToken(
   mint: string,
   opts: { priceUsd: number; sizeUsd: number; decimals?: number; params: AuditParams; rugcheckApiKey: string | null; jupiterBase: string; jupiterApiKey: string | null },
 ): Promise<AuditResult> {
-  const hit = cache.get(mint);
+  // Keyed by size too: the live $6-$10 audit must not reuse a paper-lab $1,000 sell-impact verdict.
+  const key = `${mint}:${Math.round(opts.sizeUsd)}`;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.result;
   const report = await fetchRugcheck(mint, opts.rugcheckApiKey);
   const decimals = opts.decimals ?? (report as { token?: { decimals?: number } } | null)?.token?.decimals ?? 6;
@@ -149,6 +151,6 @@ export async function auditToken(
   const { onchainHolders } = await import('./helius');
   const onchain = report ? await onchainHolders(mint) : null;
   const result = evaluateAudit(report, sell, opts.params, onchain);
-  cache.set(mint, { at: Date.now(), result });
+  cache.set(key, { at: Date.now(), result });
   return result;
 }

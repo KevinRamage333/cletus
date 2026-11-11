@@ -71,3 +71,14 @@ export async function solBalance(cfg: Config, pubkey: string): Promise<number | 
     return null;
   }
 }
+
+/** Decimals of an SPL mint, read from the mint account; null if unreadable. */
+export async function mintDecimals(cfg: Config, mint: string): Promise<number | null> {
+  try {
+    const info = await connection(cfg).getParsedAccountInfo(new PublicKey(mint));
+    const d = (info.value?.data as { parsed?: { info?: { decimals?: number } } } | undefined)?.parsed?.info?.decimals;
+    return typeof d === 'number' && Number.isFinite(d) ? d : null;
+  } catch {
+    return null;
+  }
+}

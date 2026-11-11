@@ -24,6 +24,7 @@ import { parseSettings, effectiveConfig, withinTradingHours, dailyLimitHit, size
 import { hardRiskBlock, capByEquityPct, lossStreakPause } from './risk';
 import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
+import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
 interface EngineMemory {
   started: boolean;
@@ -36,11 +37,25 @@ interface EngineMemory {
   prices: Map<string, number>;
   liquidity: Map<string, number>;
   monitorTicks: number;
+  /** When each mint's price was last refreshed (ms). Live positions exit if this goes stale. */
+  priceAt: Map<string, number>;
+  /** Per-position live sell failures (separate from the global self-heal counter). */
+  sellFailures: Map<string, SellFailureState>;
+  /** Where the last self-heal failure came from; a clean scan only clears scan/API failures. */
+  lastFailureSource: 'scan' | 'swap' | null;
 }
 const g = globalThis as unknown as { __cletusEngine?: EngineMemory };
 export const mem: EngineMemory = (g.__cletusEngine ??= {
   started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(), liquidity: new Map(), monitorTicks: 0,
+  priceAt: new Map(), sellFailures: new Map(), lastFailureSource: null,
 });
+mem.priceAt ??= new Map();
+mem.sellFailures ??= new Map();
+mem.lastFailureSource ??= null;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const envNum = (k: string, d: number) => { const v = Number(process.env[k]); return process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(v) ? v : d; };
+function setPrice(mint: string, price: number, at = Date.now()) { mem.prices.set(mint, price); mem.priceAt.set(mint, at); }
 
 const healParams = (c: Config): HealParams => ({
   basePriorityFee: c.priorityFeeLamports, baseSlippageBps: Math.round(c.slippageTolerance * 10000), escalation: c.priorityFeeEscalation,
@@ -57,8 +72,10 @@ export async function getEngineState() {
   });
 }
 
-async function heal(kind: 'ok' | FailureKind, err?: string) {
+async function heal(kind: 'ok' | FailureKind, err?: string, source: 'scan' | 'swap' = 'scan') {
   const c = getConfig();
+  if (kind !== 'ok') mem.lastFailureSource = source;
+  else mem.lastFailureSource = null;
   const st = await getEngineState();
   const s: HealState = { priorityFeeLamports: st.priorityFeeLamports, slippageBps: st.slippageBps, consecutiveFailures: st.consecutiveFailures, pausedUntil: st.pausedUntil };
   const next = kind === 'ok' ? onSuccess(s, healParams(c)) : onFailure(s, kind, healParams(c));
@@ -124,10 +141,10 @@ function startOfPeriod(period: 'day' | 'week' | 'month', tz: string, now = new D
   return start;
 }
 
-export async function periodPnl(accountId: string, tz: string) {
+export async function periodPnl(accountId: string, tz: string, opts: { liveOnly?: boolean } = {}) {
   const [d, w, m] = await Promise.all(
     (['day', 'week', 'month'] as const).map(async (p) => {
-      const agg = await prisma.position.aggregate({ where: { accountId, status: 'closed', closedAt: { gte: startOfPeriod(p, tz) } }, _sum: { pnlUsd: true } });
+      const agg = await prisma.position.aggregate({ where: { accountId, status: 'closed', closedAt: { gte: startOfPeriod(p, tz) }, ...(opts.liveOnly ? { simulated: false } : {}) }, _sum: { pnlUsd: true } });
       return agg._sum.pnlUsd ?? 0;
     }),
   );
@@ -157,11 +174,38 @@ export async function accountSettings(accountId: string, c: Config, raw?: string
 }
 export function invalidateAccountSettings(accountId: string) { settingsCache.delete(accountId); }
 
-/** Why an account may not open new trades right now (null = allowed). */
-async function entryBlockReason(a: Account, c: Config): Promise<string | null> {
+/** Operator trading wallet SOL balance in lamports (null when the key is not loaded). */
+async function operatorLamports(c: Config): Promise<number | null> {
+  const { connection } = await import('./executor');
+  const { getOperatorPublicKey } = await import('./wallet');
+  const { PublicKey } = await import('@solana/web3.js');
+  const op = getOperatorPublicKey();
+  if (!op) return null;
+  return connection(c).getBalance(new PublicKey(op));
+}
+
+/**
+ * Why an account may not open new trades right now (null = allowed).
+ * A LIVE operator account checks its loss limits against the on-chain wallet and real
+ * (simulated:false) trades only; the paper book on the same account is ignored.
+ */
+export async function entryBlockReason(a: Account, c: Config, deps: { getLamports?: () => Promise<number | bigint | null> } = {}): Promise<string | null> {
   if (a.paused) return `account paused: ${a.pauseReason ?? 'manual'}`;
-  const p = await periodPnl(a.id, c.timezone);
-  const { equity } = await accountEquity(a);
+  const liveOperator = c.mode === 'live' && a.isOperator;
+  const p = await periodPnl(a.id, c.timezone, { liveOnly: liveOperator });
+  let equity: number;
+  if (liveOperator) {
+    const open = await prisma.position.findMany({ where: { accountId: a.id, status: 'open', simulated: false } });
+    const bal = await resolveSizingBalances({
+      live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice,
+      liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0),
+      getLamports: deps.getLamports ?? (() => operatorLamports(c)),
+    });
+    if (!bal.ok) return `on-chain wallet balance unavailable (${bal.reason})`;
+    equity = bal.equityUsd;
+  } else {
+    equity = (await accountEquity(a)).equity;
+  }
   const hard = hardRiskBlock({ dayPnlUsd: p.day, equityUsd: equity, consecutiveLosses: a.consecutiveLosses }, { dailyLossLimitUsd: c.dailyLossLimit, maxDailyLossPct: c.maxDailyLossPct, maxPositionPctOfEquity: c.maxPositionPctOfEquity, maxConsecutiveLosses: c.maxConsecutiveLosses });
   if (hard) return hard;
   if (p.week <= c.weeklyLossLimit) return `weekly loss limit hit (${p.week.toFixed(2)})`;
@@ -197,14 +241,15 @@ export async function scanTick(): Promise<string> {
       pairs = await fetchPairsForMints(mints);
       mem.solPrice = await fetchSolPriceUsd(c.solPriceFallbackUsd);
     } catch (e) {
-      await heal('api', String((e as Error).message));
+      await heal('api', String((e as Error).message), 'scan');
       return (mem.lastScanSummary = `scan failed: ${(e as Error).message}`);
     }
-    if (st.consecutiveFailures > 0) await heal('ok');
+    // A clean scan only clears scan/API failures; swap failures are cleared by a successful swap.
+    if (st.consecutiveFailures > 0 && mem.lastFailureSource !== 'swap') await heal('ok');
 
     const weights = await getWeights();
     const ranked = rankCandidates([...pairs.values()], c, weights);
-    for (const r of ranked) { mem.prices.set(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
+    for (const r of ranked) { setPrice(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
     const eligible = ranked.filter((r) => !r.rejected);
     mem.candidates = ranked.slice(0, c.scanTopN);
     await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
@@ -214,7 +259,8 @@ export async function scanTick(): Promise<string> {
     let minScore = c.minCompositeScore;
     for (const a of accounts) minScore = Math.min(minScore, effectiveConfig(c, await accountSettings(a.id, c, a.settings)).minCompositeScore);
     const qualified = eligible.filter((r) => r.composite >= minScore).sort((a, b) => b.composite - a.composite);
-    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore}`;
+    const topScore = eligible.reduce((m, r) => Math.max(m, r.composite), 0);
+    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore} (top ${topScore.toFixed(3)})`;
 
     if (!isWithinSchedule(c)) {
       summary += ' — outside trading schedule, no entries';
@@ -231,7 +277,7 @@ export async function scanTick(): Promise<string> {
         if (verdict.mode === 'on') continue;
       }
       const audit = await auditToken(cand.mint, {
-        priceUsd: cand.priceUsd, sizeUsd: Math.min(c.maxPositionSizeUsd, 1000),
+        priceUsd: cand.priceUsd, sizeUsd: auditSizeUsd(c),
         params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
         rugcheckApiKey: c.rugcheckApiKey, jupiterBase: c.jupiterBaseUrl, jupiterApiKey: c.jupiterApiKey,
       });
@@ -253,6 +299,15 @@ export async function scanTick(): Promise<string> {
   } finally {
     mem.scanning = false;
   }
+}
+
+/**
+ * USD size the audit simulates the exit sell at. The live owner plan trades $6-$10, so checking
+ * sell impact on $1,000 rejected small coins we could exit fine; audit at ~2x the real size instead.
+ */
+export function auditSizeUsd(c: Config): number {
+  if (c.mode === 'live' && c.ownerPlan.enabled) return envNum('LIVE_AUDIT_SIZE_USD', 20);
+  return Math.min(c.maxPositionSizeUsd, 1000);
 }
 
 async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config): Promise<boolean> {
@@ -277,14 +332,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     bookCashUsd: a.cashUsd,
     liveOpenValueUsd: open.filter((p) => !p.simulated).reduce((s, p) => s + positionValue(p), 0),
     solPriceUsd: mem.solPrice,
-    getLamports: async () => {
-      const { connection } = await import('./executor');
-      const { getOperatorPublicKey } = await import('./wallet');
-      const { PublicKey } = await import('@solana/web3.js');
-      const op = getOperatorPublicKey();
-      if (!op) return null;
-      return connection(c).getBalance(new PublicKey(op));
-    },
+    getLamports: () => operatorLamports(c),
   });
   if (!bal.ok) {
     await log('warn', `LIVE entry skipped ${cand.symbol}: on-chain wallet balance unavailable (${bal.reason}); not sizing from the paper book`, a.id);
@@ -340,22 +388,28 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
 
   let fillPrice: number, tokenAmount: number, fees: number, entryTx: string | null = null;
   if (live) {
+    let r: { signature: string; outAmount: string };
     try {
       const { executeSwap, SOL_MINT } = await import('./executor');
       const lamports = BigInt(Math.floor((sizeUsd / mem.solPrice) * 1e9));
-      const r = await executeSwap(c, { inputMint: SOL_MINT, outputMint: cand.mint, amountRaw: lamports, slippageBps: st.slippageBps, priorityFeeLamports: st.priorityFeeLamports });
-      const { tokenBalanceRaw } = await import('./executor');
-      const bal = await tokenBalanceRaw(c, cand.mint);
-      tokenAmount = Number(bal.raw) / 10 ** bal.decimals;
-      fillPrice = tokenAmount > 0 ? sizeUsd / tokenAmount : cand.priceUsd;
-      fees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
-      entryTx = r.signature;
-      await heal('ok');
+      r = await executeSwap(c, { inputMint: SOL_MINT, outputMint: cand.mint, amountRaw: lamports, slippageBps: st.slippageBps, priorityFeeLamports: st.priorityFeeLamports });
+      await heal('ok', undefined, 'swap');
     } catch (e) {
-      await heal(classifyError(e), (e as Error).message);
+      await heal(classifyError(e), (e as Error).message, 'swap');
       await log('error', `LIVE buy failed ${cand.symbol}: ${(e as Error).message}`, a.id);
       return false;
     }
+    // The swap landed: from here on we must record the position, never drop it.
+    entryTx = r.signature;
+    fees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
+    const got = await resolveLiveFillAmount(c, cand.mint, r.outAmount);
+    if (got !== null) {
+      tokenAmount = got;
+    } else {
+      tokenAmount = sizeUsd / cand.priceUsd;
+      await log('warn', `LIVE buy ${cand.symbol}: could not read filled token amount (tx ${r.signature}); recording quote estimate ${tokenAmount.toPrecision(6)}`, a.id);
+    }
+    fillPrice = sizeUsd / tokenAmount;
   } else {
     // Realistic paper fill from a keyless Jupiter V2 /order quote (impact + feeBps incl. 50 bps new-token fee); model fallback.
     const chargeFee = await chargeOperatorFeeForAccount(a);
@@ -388,6 +442,26 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     } catch { /* trade log must never block a fill */ }
   }
   return true;
+}
+
+/**
+ * Tokens received by a live buy: swap outAmount with the mint's decimals, else an on-chain
+ * balance read retried a few times (RPC lag right after a swap). Null if nothing usable.
+ */
+export async function resolveLiveFillAmount(c: Config, mint: string, outAmountRaw: string | undefined): Promise<number | null> {
+  const { tokenBalanceRaw, mintDecimals } = await import('./executor');
+  let decimals: number | null = await mintDecimals(c, mint).catch(() => null);
+  const fromOut = liveFillTokenAmount(outAmountRaw, decimals, null);
+  if (fromOut !== null) return fromOut;
+  const tries = envNum('LIVE_FILL_READ_RETRIES', 4);
+  for (let i = 0; i < tries; i++) {
+    try {
+      const b = await tokenBalanceRaw(c, mint);
+      if (b.raw > 0n) { decimals = b.decimals; return liveFillTokenAmount(null, decimals, b.raw); }
+    } catch { /* retry */ }
+    await sleep(envNum('LIVE_FILL_READ_DELAY_MS', 1500));
+  }
+  return null;
 }
 
 // ─── Preset lab: paper-only accounts that trade each market-cap preset side by side ─────────
@@ -458,7 +532,7 @@ async function onPoolChange(mint: string) {
     const st = await getEngineState();
     const px = (await fetchFastPrices([mint])).get(mint);
     if (!px) return;
-    mem.prices.set(mint, px);
+    setPrice(mint, px);
     const open = await prisma.position.findMany({ where: { status: 'open', mint } });
     await mapLimit(open, 4, (p) => evaluatePosition(p, px, st.killSwitch, c));
   } catch { /* polling is the backstop */ }
@@ -480,14 +554,14 @@ export async function monitorTick(): Promise<void> {
     }
     const mints = [...new Set(open.map((p) => p.mint))];
     const fast = await fetchFastPrices(mints);
-    for (const [m, v] of fast) mem.prices.set(m, v);
+    for (const [m, v] of fast) setPrice(m, v);
     const missing = mints.filter((m) => !fast.has(m));
     const needLiq = mints.filter((m) => !mem.liquidity.has(m));
     if (missing.length || needLiq.length || mem.monitorTicks % 10 === 0) {
       try {
         const pairs = await fetchPairsForMints([...new Set([...missing, ...needLiq, ...(mem.monitorTicks % 10 === 0 ? mints : [])])]);
         for (const [m, p] of pairs) {
-          if (!fast.has(m) && Number(p.priceUsd) > 0) mem.prices.set(m, Number(p.priceUsd));
+          if (!fast.has(m) && Number(p.priceUsd) > 0) setPrice(m, Number(p.priceUsd));
           if (p.liquidity?.usd) mem.liquidity.set(m, p.liquidity.usd);
         }
       } catch (e) {
@@ -496,7 +570,18 @@ export async function monitorTick(): Promise<void> {
     }
     mem.monitorTicks++;
     // Evaluate every open position concurrently (bounded so live sells don't flood the RPC).
-    await mapLimit(open, Number(process.env.EXIT_CONCURRENCY ?? 8), (p) => evaluatePosition(p, mem.prices.get(p.mint) ?? p.lastPrice, st.killSwitch, c));
+    // A live position whose price hasn't refreshed in LIVE_STALE_PRICE_MS (default 2 min) is flying blind:
+    // the stop-loss can't fire on a frozen price, so attempt a protective exit.
+    const now = Date.now();
+    const staleMs = envNum('LIVE_STALE_PRICE_MS', 120_000);
+    for (const m of mints) if (!mem.priceAt.has(m)) mem.priceAt.set(m, now);
+    await mapLimit(open, Number(process.env.EXIT_CONCURRENCY ?? 8), async (p) => {
+      if (!p.simulated && !st.killSwitch && isPriceStale(mem.priceAt.get(p.mint), now, staleMs)) {
+        if (!mem.sellFailures.has(p.id)) await log('warn', `LIVE ${p.symbol}: price stale for ${Math.round((now - (mem.priceAt.get(p.mint) ?? now)) / 1000)}s — protective exit`, p.accountId);
+        return closePosition(p.id, p.lastPrice, 'stale_price');
+      }
+      return evaluatePosition(p, mem.prices.get(p.mint) ?? p.lastPrice, st.killSwitch, c);
+    });
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
   } finally {
@@ -564,20 +649,43 @@ export async function closePosition(positionId: string, price: number, reason: s
   let proceeds: number, exitFees: number, exitPrice: number, exitTx: string | null = null;
 
   if (live) {
+    const prev = mem.sellFailures.get(p.id);
+    if (prev && Date.now() < prev.nextAttemptAt) return; // backing off after a failed sell
+    const attempt = prev?.failures ?? 0;
     try {
       const { executeSwap, tokenBalanceRaw, SOL_MINT } = await import('./executor');
-      const bal = await tokenBalanceRaw(c, p.mint);
-      if (bal.raw === 0n) throw new Error('no on-chain token balance to sell');
-      const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: bal.raw, slippageBps: st.slippageBps, priorityFeeLamports: st.priorityFeeLamports });
-      proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice;
-      exitPrice = proceeds / p.tokenAmount;
-      exitFees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
-      exitTx = r.signature;
-      await heal('ok');
+      let bal = await tokenBalanceRaw(c, p.mint);
+      if (bal.raw === 0n) { await sleep(envNum('LIVE_ZERO_RECHECK_MS', 2000)); bal = await tokenBalanceRaw(c, p.mint); }
+      if (bal.raw === 0n) {
+        // Tokens are gone from the wallet (sold elsewhere, rugged/burned): close the book entry at zero.
+        await log('warn', `LIVE ${p.symbol}: wallet holds 0 tokens (confirmed twice) — closing as external_zero (was ${reason})`, a.id);
+        reason = 'external_zero';
+        proceeds = 0; exitPrice = 0; exitFees = 0;
+      } else {
+        const slippageBps = exitSlippageBps(reason, attempt, st.slippageBps, parseLadder(process.env.EXIT_SLIPPAGE_LADDER_BPS));
+        const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: bal.raw, slippageBps, priorityFeeLamports: st.priorityFeeLamports });
+        proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice;
+        exitPrice = safeExitPrice(proceeds, Number(bal.raw) / 10 ** bal.decimals, price);
+        exitFees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
+        exitTx = r.signature;
+        await heal('ok', undefined, 'swap');
+      }
+      mem.sellFailures.delete(p.id);
     } catch (e) {
-      await heal(classifyError(e), (e as Error).message);
-      await log('error', `LIVE sell failed ${p.symbol} (${reason}): ${(e as Error).message} — will retry next tick`, a.id);
-      return;
+      const msg = (e as Error).message ?? String(e);
+      const next = recordSellFailure(prev, msg);
+      mem.sellFailures.set(p.id, next);
+      const maxFail = envNum('LIVE_SELL_MAX_FAILURES', 8);
+      const maxNoRoute = envNum('LIVE_SELL_MAX_NO_ROUTE', 4);
+      if (!shouldWriteOff(next, maxFail, maxNoRoute)) {
+        await log('warn', `LIVE sell failed ${p.symbol} (${reason}) attempt ${next.failures}/${maxFail}: ${msg} — retry in ${Math.round((next.nextAttemptAt - Date.now()) / 1000)}s at wider slippage`, a.id);
+        return;
+      }
+      // Stuck: free the single position slot so the bot can keep trading. Any tokens stay in the wallet.
+      await log('warn', `LIVE sell STUCK ${p.symbol}: ${next.failures} failed attempts (${next.noRouteFailures} no-route), last: ${msg} — writing off in the book to free the slot; tokens (if any) remain in the wallet`, a.id);
+      mem.sellFailures.delete(p.id);
+      reason = 'stuck_written_off';
+      proceeds = 0; exitPrice = 0; exitFees = 0;
     }
   } else {
     // Realistic: fill at the observed (possibly gapped) price, minus pool price impact for our size.
