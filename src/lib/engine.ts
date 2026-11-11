@@ -480,6 +480,16 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   }
   const blocked = await entryBlockReason(a, c);
   if (blocked) return false;
+  // Re-entry cooldown (live owner): no re-buy within REENTRY_COOLDOWN_HOURS (24) of a losing live close of this coin.
+  if (c.mode === 'live' && a.isOperator) {
+    const { reentryBan, reentryCooldownHours } = await import('./reentry');
+    const hours = reentryCooldownHours();
+    if (hours > 0) {
+      const last = await prisma.position.findFirst({ where: { accountId: a.id, mint: cand.mint, simulated: false, status: 'closed' }, orderBy: { closedAt: 'desc' }, select: { closedAt: true, pnlUsd: true, exitReason: true } });
+      const ban = reentryBan(last, Date.now(), hours);
+      if (ban) { if (feedbackLogged(`reentry:${cand.mint}`)) await log('info', `re-entry cooldown: skipped ${cand.symbol} (last live close ${ban.why}; ${Math.floor(ban.minutesLeft / 60)}h${ban.minutesLeft % 60}m left)`, a.id); return false; }
+    }
+  }
   const { equity, exposure, open } = await accountEquity(a);
   const narrative = narrativeOf(cand.symbol, cand.name);
   const creator = audit.creator ?? null;
@@ -784,7 +794,23 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
   // Dev-dump / whale-exit fast exit: an EXIT signal for an open position only, never a buy trigger.
   const flow = killSwitch ? null : flowExitFor(p.mint);
   if (flow && !p.simulated) await log('warn', `LIVE ${p.symbol}: ${flow === 'dev_exit' ? 'dev wallet dumping' : 'tracked whales / smart money exiting'} — fast exit`, p.accountId);
-  const reason = killSwitch ? 'kill_switch' : flow ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
+  // Holder-sell exit (HOLDER_SELL_EXIT=on, live only): creator or a top-10 holder sold >= 20% of its bag or >= 1% of supply.
+  let holderReason: string | null = null;
+  if (!p.simulated && !killSwitch && !flow && process.env.HOLDER_SELL_EXIT) {
+    try {
+      const hw = await import('./holder-watch');
+      if (hw.holderSellOn()) {
+        const { getOperatorPublicKey } = await import('./wallet');
+        void hw.pollHolders({ id: p.id, mint: p.mint, creator: p.creator }, getOperatorPublicKey() ?? null, (m) => void log('info', `LIVE ${p.symbol}: ${m}`, p.accountId));
+        const hit = hw.takeHolderExit(p.id);
+        if (hit) {
+          holderReason = hit.reason;
+          await log('warn', `LIVE ${p.symbol}: ${hit.reason === 'dev_exit' ? 'creator wallet' : 'top-10 holder'} ${hit.wallet.slice(0, 6)}… sold ${(hit.soldFrac * 100).toFixed(0)}% of its holding (${hit.soldSupplyPct}% of supply) since entry — fast exit`, p.accountId);
+        }
+      }
+    } catch { /* holder watch must never block the monitor */ }
+  }
+  const reason = killSwitch ? 'kill_switch' : flow ?? holderReason ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
   if (reason) { await closePosition(p.id, price, reason); return; }
   const partial = partialTakeProfit(p, price, c.tpLadder, p.partialsTaken, c.takeProfitPct);
   if (partial) await partialClose(p.id, price, partial.fraction, partial.rung, partial.gainPct);
@@ -1106,6 +1132,7 @@ async function closePositionInner(positionId: string, price: number, reason: str
       const store = await import('./exit-plan-store');
       const low = Math.min(mem.lowest.get(p.id) ?? price, price);
       store.noteDrawdown(p.id, Math.max(0, (1 - low / p.entryPrice) * 100));
+      if (process.env.HOLDER_SELL_EXIT) void import('./holder-watch').then((h) => h.forgetPosition(p.id)).catch(() => undefined);
       store.recordOutcome(p.id, { mfePct: Math.max(0, (Math.max(p.highestPrice, price) / p.entryPrice - 1) * 100), pnlPct, reason });
       mem.lowest.delete(p.id);
     } catch { /* learning data must never block a close */ }

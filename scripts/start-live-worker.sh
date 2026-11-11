@@ -49,6 +49,9 @@ export RETRAIN_SCHEDULE=on      # run scripts/retrain-weights.ts --apply when >=
 export TRADE_JOURNAL=on          # logs/trade-journal.jsonl: why (score, 8 signals + 6 terms, mcap, liq, vol, mood, exit plan) + what (MFE/MAE, fees, slippage, P&L)
 export TRADE_REVIEW_SCHEDULE=on  # writes logs/reviews/YYYY-MM-DD.md + flags.json (yesterday if missing, else refresh after 20h)
 # export JOURNAL_FEEDBACK=on     # trade less of flagged setups: +0.025 score bar per flagged entry-time setup, max +0.05
+# Holder-sell exit: creator or a top-10 non-pool holder sells >= 20% of its bag (>= 0.1% of supply) or >= 1% of supply -> exit now.
+export HOLDER_SELL_EXIT=on       # 3-4 RPC calls per open position every HOLDER_WATCH_SEC (120 s); baseline in logs/holder-baselines.json
+# Re-entry cooldown is on by default in code: REENTRY_COOLDOWN_HOURS=24 after a losing live close (0 disables).
 export CLETUS_DEMO=0
 export NEXT_RUNTIME=nodejs
 
