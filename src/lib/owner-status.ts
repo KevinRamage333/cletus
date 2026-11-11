@@ -78,12 +78,14 @@ function withIsolatedBooks(
       ? { live: payload.publicLive, simulation: payload.publicLiveSimulation }
       : booksFromMaybeMixed(payload.publicLive ?? null);
   const isolated = isolateLiveWatch(mergeWatches(payload.watch, payload.simulationWatch), liveEquity);
+  const solPrice = payload.owner?.onchain?.solPriceUsd ?? payload.watch.solPriceUsd ?? null;
   return {
     ...payload,
     watch: isolated.live,
     simulationWatch: isolated.simulation,
     publicLive: books.live,
     publicLiveSimulation: books.simulation,
+    owner: { ...payload.owner, plan: planForLiveEquity(payload.owner.plan, liveEquity, solPrice) },
   };
 }
 
@@ -162,6 +164,24 @@ function fallbackPlan(equityUsd: number, openPositions: number, solPriceUsd: num
     feeReserveUsd: plan.feeReserveSol * solPriceUsd, currentBaseUsd: 0, nextSweepTargetUsd: plan.ladder.firstTargetUsd,
     totalPaidUsd: 0, paidTodayUsd: 0, openPositions, stopLossPct: plan.stopLossPct, takeProfitPct: plan.takeProfitPct,
     maxOpenPositions: plan.maxOpenPositions, mcapPreset: 'BALANCED', payouts: [],
+  };
+}
+
+/** Size the money-plan card off the live on-chain wallet, not leftover paper equity. */
+export function planForLiveEquity(plan: OwnerPlanStatusView | null, liveEquityUsd: number | null, solPriceUsd: number | null): OwnerPlanStatusView | null {
+  if (!plan || liveEquityUsd == null) return plan;
+  const cfg = parseOwnerPlanConfig(process.env);
+  const sized = tradeSizeForEquity(liveEquityUsd, cfg.sizeTiers, cfg.sizeStepUsd, cfg.sizeIncrementUsd);
+  const solPrice = solPriceUsd ?? (plan.feeReserveUsd && cfg.feeReserveSol ? plan.feeReserveUsd / cfg.feeReserveSol : 0);
+  const reserveUsd = cfg.feeReserveSol * solPrice;
+  const spendable = Math.max(0, liveEquityUsd - reserveUsd);
+  const tradeSizeUsd = Math.floor(Math.min(sized.sizeUsd, spendable) * 100) / 100;
+  return {
+    ...plan,
+    equityUsd: liveEquityUsd,
+    currentTier: sized.tier,
+    tradeSizeUsd: tradeSizeUsd >= cfg.minTradeUsd ? tradeSizeUsd : 0,
+    feeReserveUsd: reserveUsd,
   };
 }
 

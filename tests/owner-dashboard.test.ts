@@ -232,3 +232,26 @@ describe('owner live book isolation', () => {
     expect(simulation.totalPnl).toBeCloseTo(-274.83);
   });
 });
+
+import { planForLiveEquity } from '@/lib/owner-status';
+
+describe('owner plan card uses live equity, not the paper book', () => {
+  it('resizes the money plan from the $10 live wallet instead of leftover ~$10k paper equity', () => {
+    const paper = {
+      enabled: true, sweepArmed: true, sweepPausedReason: null,
+      payoutWallet: 'GJwtCupMcNGbhGX1vapg2ueK2pedx2tgMkzGjhugnxaA',
+      tradingWallet: 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq',
+      equityUsd: 9725.17, currentTier: { minEquityUsd: 20, sizeUsd: 7 }, tradeSizeUsd: 1947,
+      feeReserveSol: 0.01, feeReserveUsd: 1.8, currentBaseUsd: 0, nextSweepTargetUsd: 50,
+      totalPaidUsd: 0, paidTodayUsd: 0, openPositions: 0, stopLossPct: 5, takeProfitPct: 20,
+      maxOpenPositions: 1, mcapPreset: 'BALANCED' as const, payouts: [],
+    };
+    const live = planForLiveEquity(paper, 9.86, 85.11);
+    expect(live?.equityUsd).toBeCloseTo(9.86);
+    expect(live?.tradeSizeUsd).toBeLessThanOrEqual(9.86);
+    expect(live?.tradeSizeUsd).toBeGreaterThan(0);
+    expect(live?.tradeSizeUsd).not.toBe(1947);
+    expect(live?.currentTier?.minEquityUsd).toBeLessThan(20);
+    expect(live?.nextSweepTargetUsd).toBe(50);
+  });
+});
