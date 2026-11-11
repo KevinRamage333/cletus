@@ -361,6 +361,17 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     prisma.account.update({ where: { id: a.id }, data: { cashUsd: { decrement: sizeUsd + fees } } }),
   ]);
   await log('trade', `${live ? 'LIVE' : 'PAPER'} BUY ${cand.symbol} $${sizeUsd.toFixed(2)} @ ${fillPrice.toPrecision(6)} (score ${cand.composite.toFixed(3)}, mcap $${Math.round(cand.marketCap).toLocaleString()}, tier ${size.tier} ${size.multiplier}x; ${size.notes.join(', ')})`, a.id);
+  if (live) {
+    try {
+      const { appendLiveTrade } = await import('./live-trade-log');
+      const acc = await prisma.account.findUniqueOrThrow({ where: { id: a.id } });
+      const eq = await accountEquity(acc);
+      appendLiveTrade({
+        type: 'buy', side: 'buy', token: cand.symbol, symbol: cand.symbol, mint: cand.mint,
+        sizeUsd, price: fillPrice, entryPrice: fillPrice, signature: entryTx, equityUsd: eq.equity, simulated: false,
+      });
+    } catch { /* trade log must never block a fill */ }
+  }
   return true;
 }
 
@@ -514,6 +525,18 @@ export async function partialClose(positionId: string, price: number, fraction: 
     prisma.account.update({ where: { id: p.accountId }, data: { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } } }),
   ]);
   await log('trade', `${p.simulated ? 'PAPER' : 'LIVE'} PARTIAL TP${rung} ${p.symbol}: sold ${(fraction * 100).toFixed(0)}% at +${gainPct}% rung, PnL ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}${tx ? ` tx ${tx}` : ''}`, p.accountId);
+  if (!p.simulated) {
+    try {
+      const { appendLiveTrade } = await import('./live-trade-log');
+      const acc = await prisma.account.findUniqueOrThrow({ where: { id: p.accountId } });
+      const eq = await accountEquity(acc);
+      appendLiveTrade({
+        type: 'sell', side: 'sell', token: p.symbol, symbol: p.symbol, mint: p.mint,
+        sizeUsd: costPortion, price, exitPrice: price, pnlUsd: pnl, signature: tx, equityUsd: eq.equity,
+        reason: `partial_tp${rung}`, simulated: false,
+      });
+    } catch { /* trade log must never block a fill */ }
+  }
 }
 
 export async function closePosition(positionId: string, price: number, reason: string) {
@@ -583,6 +606,16 @@ export async function closePosition(positionId: string, price: number, reason: s
   }
   void import('./journal').then((j) => j.writeTradeReflection(p.id, before, after));
   await log('trade', `${live ? 'LIVE' : 'PAPER'} SELL ${p.symbol} (${reason}) @ ${exitPrice.toPrecision(6)} PnL ${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlPct.toFixed(2)}%)`, a.id);
+  if (live) {
+    try {
+      const { appendLiveTrade } = await import('./live-trade-log');
+      appendLiveTrade({
+        type: 'sell', side: 'sell', token: p.symbol, symbol: p.symbol, mint: p.mint,
+        sizeUsd: p.sizeUsd + p.partialCostUsd, price: exitPrice, entryPrice: p.entryPrice, exitPrice,
+        pnlUsd, pnlPct, signature: exitTx, equityUsd: equity, reason, simulated: false,
+      });
+    } catch { /* trade log must never block a fill */ }
+  }
   if (a.isOperator) void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
 }
 

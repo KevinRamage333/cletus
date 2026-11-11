@@ -32,9 +32,16 @@ export function loadTradingKeypair(): Keypair {
     throw new Error('No trading wallet configured');
   }
   if (secret.length !== 64) throw new Error('Trading wallet secret has an invalid length');
-  kp = Keypair.fromSecretKey(secret);
+  // @solana/web3.js Keypair.fromSecretKey keeps a reference to the given
+  // Uint8Array, so pass a copy and zero only the original buffer.
+  kp = Keypair.fromSecretKey(Uint8Array.from(secret));
   secret.fill(0);
   return kp;
+}
+
+/** Drop the cached keypair so the next load re-reads env. Tests only. */
+export function resetTradingKeypairCache(): void {
+  kp = null;
 }
 
 /** Public address of the operator wallet, or null if none is configured / readable. */

@@ -395,7 +395,18 @@ export async function maybeRunProfitSweep(): Promise<SweepResult | null> {
   try {
     const deps = await serverSweepDeps();
     if (!deps) return null;
-    return await executeProfitSweep(deps);
+    const result = await executeProfitSweep(deps);
+    if (result && (result.status === 'sent' || result.status === 'recovered')) {
+      try {
+        const { appendLiveTrade } = await import('./live-trade-log');
+        appendLiveTrade({
+          type: 'sweep', side: 'sweep', token: 'SOL', symbol: 'SOL', mint: null,
+          sizeUsd: result.amountUsd ?? null, signature: result.signature, reason: result.rungKey ?? result.message,
+          simulated: false,
+        });
+      } catch { /* trade log must never block a sweep */ }
+    }
+    return result;
   } catch (e) {
     await log('warn', `profit-sweep tick failed: ${(e as Error).message}`);
     return { status: 'failed', signature: null, message: (e as Error).message };
