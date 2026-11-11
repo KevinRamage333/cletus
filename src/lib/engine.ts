@@ -14,6 +14,7 @@ import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS
 import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
 import { rankCandidates, updateWeights, normaliseWeights, type ScanCandidate, type SignalBreakdown } from './signals';
 import { computePositionSize, computeOwnerTradeSize } from './sizing';
+import { ownerRecoverySize } from './owner-plan';
 import { resolveSizingBalances } from './live-sizing';
 import { complianceGate, concentrationCap } from './compliance';
 import { exitDecision, partialTakeProfit } from './exits';
@@ -222,6 +223,53 @@ export async function liveEquityForLog(c: Config, accountId: string, getLamports
     const bal = await resolveSizingBalances({ live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice, liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0), getLamports });
     return bal.ok ? Math.round(bal.equityUsd * 100) / 100 : null;
   } catch { return null; }
+}
+
+/**
+ * Live drawdown guard for the operator wallet: samples on-chain equity (SOL x price + open live positions),
+ * tracks a deposit-adjusted live peak (live-drawdown.ts) and, only on settled samples (no bot tx in flight):
+ * recovery mode ON at half of MAX_DRAWDOWN_PERCENTAGE, pause at the full value. When the owner resumes an
+ * account paused for live drawdown, the live peak is rebased to the current equity so it doesn't re-pause.
+ */
+let liveSampling = false;
+export async function sampleLiveEquity(deps: { getLamports?: () => Promise<number | bigint | null> } = {}): Promise<void> {
+  const c = getConfig();
+  if (c.mode !== 'live' || liveSampling) return;
+  liveSampling = true;
+  try {
+    const ld = await import('./live-drawdown');
+    const a = await prisma.account.findFirst({ where: { isOperator: true } });
+    if (!a) return;
+    const solPrice = mem.solPrice;
+    if (!(solPrice > 0)) return;
+    const lamRaw = await (deps.getLamports ?? (() => operatorLamports(c)))();
+    if (lamRaw === null || lamRaw === undefined) return;
+    const lamports = Number(lamRaw);
+    if (!Number.isFinite(lamports) || lamports < 0) return;
+    const open = await prisma.position.findMany({ where: { accountId: a.id, status: 'open', simulated: false } });
+    const equityUsd = (lamports / 1e9) * solPrice + open.reduce((s, x) => s + positionValue(x), 0);
+    const before = ld.loadState();
+    // Owner resumed after a live-drawdown pause: start a fresh peak from here.
+    if (before?.ddPausedAt && !a.paused) {
+      const r0 = ld.rebasePeak(equityUsd, lamports, Date.now());
+      await log('warn', `LIVE drawdown pause cleared by owner; live peak rebased to $${r0.peakUsd.toFixed(2)}`, a.id);
+    }
+    const r = ld.observeLive({ equityUsd, lamports, solPriceUsd: solPrice, at: Date.now() });
+    if (r.initialised) await log('info', `LIVE drawdown tracker started: ${ld.describeLive(r.state)}`, a.id);
+    if (r.flowUsd !== 0) await log('warn', `LIVE wallet ${r.flowUsd > 0 ? 'deposit' : 'withdrawal'} detected ${r.flowUsd > 0 ? '+' : '-'}$${Math.abs(r.flowUsd).toFixed(2)} (no bot tx): peak moved with it, not counted as ${r.flowUsd > 0 ? 'profit' : 'loss'}; ${ld.describeLive(r.state)}`, a.id);
+    if (!r.settled) return;
+    const dd = r.drawdownPct;
+    const data: Partial<Account> = {};
+    if (c.enableRecoveryMode && !a.recoveryMode && dd >= c.maxDrawdownPct / 2) { data.recoveryMode = true; await log('warn', `LIVE recovery mode ON (on-chain drawdown ${dd.toFixed(1)}% >= ${(c.maxDrawdownPct / 2).toFixed(1)}%) — trades drop to the base tier; ${ld.describeLive(r.state)}`, a.id); }
+    if (dd >= c.maxDrawdownPct && !a.paused) {
+      data.paused = true; data.pauseReason = `live max drawdown ${dd.toFixed(1)}% >= ${c.maxDrawdownPct}% (on-chain wallet)`;
+      ld.markDrawdownPause(Date.now());
+      await log('warn', `account PAUSED: ${data.pauseReason}; ${ld.describeLive(r.state)}`, a.id);
+    }
+    if (Object.keys(data).length) await prisma.account.update({ where: { id: a.id }, data });
+  } catch (e) {
+    await log('warn', `LIVE equity sample failed: ${(e as Error).message}`).catch(() => undefined);
+  } finally { liveSampling = false; }
 }
 
 /** Entry gating reads the wallet once per 10 s instead of once per candidate (sizing a real buy still reads fresh). */
@@ -443,6 +491,10 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       c.ownerPlan.sizeTiers, c.ownerPlan.sizeStepUsd, c.ownerPlan.sizeIncrementUsd,
     );
     size = { sizeUsd: o.sizeUsd, tier: 1, multiplier: 1, notes: o.notes };
+    if (a.recoveryMode && c.enableRecoveryMode) {
+      const base = ownerRecoverySize(c.ownerPlan.sizeTiers);
+      if (base !== null && size.sizeUsd > base) { size.sizeUsd = base; size.notes.push(`recovery mode: base tier $${base}`); }
+    }
   }
   if (us && us.positionSizePct !== null) { size.sizeUsd = Math.min(sizeFromPct(us, sizingEquity, size.sizeUsd), sizingCash); size.notes.push(`${us.positionSizePct}% of equity (your setting)`); }
   const eqCap = capByEquityPct(size.sizeUsd, sizingEquity, c.maxPositionPctOfEquity);
@@ -886,10 +938,13 @@ async function closePositionInner(positionId: string, price: number, reason: str
 
   // Account bookkeeping, drawdown & recovery mode.
   const updated = await prisma.account.update({ where: { id: a.id }, data: { cashUsd: { increment: proceeds - exitFees }, realizedPnl: { increment: remainderPnl }, consecutiveWins: won ? { increment: 1 } : 0, consecutiveLosses: won ? 0 : { increment: 1 } } });
+  // A live operator's drawdown/recovery is judged on the on-chain wallet by sampleLiveEquity (live-drawdown.ts),
+  // never on this account's ~$10k paper peak (which made both checks dead for a ~$10 wallet).
+  const liveOperatorBook = c.mode === 'live' && a.isOperator;
   const { equity } = await accountEquity(updated);
   const peak = Math.max(updated.peakEquity, equity);
-  const dd = peak > 0 ? ((peak - equity) / peak) * 100 : 0;
-  const data: Partial<Account> = { peakEquity: peak };
+  const dd = liveOperatorBook ? 0 : peak > 0 ? ((peak - equity) / peak) * 100 : 0;
+  const data: Partial<Account> = liveOperatorBook ? {} : { peakEquity: peak };
   if (c.enableRecoveryMode && !updated.recoveryMode && dd >= c.maxDrawdownPct / 2) { data.recoveryMode = true; await log('warn', `recovery mode ON (drawdown ${dd.toFixed(1)}%) — sizes x${c.recoveryMultiplier}`, a.id); }
   if (updated.recoveryMode && updated.consecutiveWins >= c.recoveryExitWins) { data.recoveryMode = false; await log('info', `recovery mode OFF after ${updated.consecutiveWins} wins`, a.id); }
   // Live closes on the operator count only real trades toward the loss streak (not the paper book's history).
@@ -944,7 +999,8 @@ async function reclaimRent(mint: string, symbol: string, accountId: string) {
     const stillOpen = await prisma.position.count({ where: { status: 'open', mint, simulated: false } });
     if (stillOpen) return;
     const [{ connection }, { loadTradingKeypair }, { closeEmptyTokenAccounts }] = await Promise.all([import('./executor'), import('./wallet'), import('./rent-reclaim')]);
-    const r = await closeEmptyTokenAccounts(connection(getConfig()), loadTradingKeypair(), mint);
+    const { withBotTx } = await import('./live-drawdown');
+    const r = await withBotTx(() => closeEmptyTokenAccounts(connection(getConfig()), loadTradingKeypair(), mint));
     if (r.closed) await log('info', `LIVE ${symbol}: closed ${r.closed} empty token account(s), rent returned to wallet (tx ${r.signature})`, accountId);
     else if (r.skipped === 'balance remains') await log('warn', `LIVE ${symbol}: token account not closed — balance remains`, accountId);
   } catch (e) {
@@ -985,7 +1041,12 @@ export async function startEngine() {
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));
   // Heartbeat: proves both loops are alive (a silent log used to be the only symptom of a hang).
   const hbMin = envNum('HEARTBEAT_MINUTES', 5);
-  if (hbMin > 0) mem.timers.push(setInterval(() => void log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})`).catch(() => undefined), hbMin * 60_000));
+  const liveHb = async () => (c.mode === 'live' ? `; ${(await import('./live-drawdown')).describeLive((await import('./live-drawdown')).loadState())}` : '');
+  if (hbMin > 0) mem.timers.push(setInterval(() => void liveHb().catch(() => '').then((extra) => log('info', `heartbeat: last scan ${ageSec(mem.lastScanDoneAt) ?? 'never'}s ago (${mem.scanning ? `running: ${mem.scanStage}` : 'idle'}), last monitor ${ageSec(mem.lastMonitorDoneAt) ?? 'never'}s ago (${mem.monitoring ? `running: ${mem.monitorStage}` : 'idle'})${extra}`)).catch(() => undefined), hbMin * 60_000));
+  if (c.mode === 'live') {
+    setTimeout(() => void sampleLiveEquity(), 8000); // after the first scan has a SOL price
+    mem.timers.push(setInterval(() => void sampleLiveEquity(), envNum('LIVE_EQUITY_SAMPLE_SECONDS', 60) * 1000));
+  }
   // World events + daily journal
   const newsMin = Math.max(5, Number(process.env.NEWS_REFRESH_MINUTES ?? 30));
   const runNews = () => import('./news').then((n) => n.refreshNewsAndBriefing()).catch((e) => log('warn', `news refresh failed: ${e.message}`));

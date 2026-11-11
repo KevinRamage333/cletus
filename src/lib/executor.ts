@@ -34,6 +34,12 @@ export function connection(cfg: Config) {
  */
 export async function executeSwap(cfg: Config, r: SwapRequest): Promise<SwapResult> {
   if (cfg.mode !== 'live') throw new Error('executeSwap called outside live mode');
+  // Mark the wallet as busy so the live drawdown tracker treats the SOL change as trading, not a deposit.
+  const { withBotTx } = await import('./live-drawdown');
+  return withBotTx(() => executeSwapInner(cfg, r));
+}
+
+async function executeSwapInner(cfg: Config, r: SwapRequest): Promise<SwapResult> {
   const { getOrder, executeOrder, orderTxProblem, describeExecute, RETRYABLE_EXECUTE } = await import('./jupiter');
   const kp = loadTradingKeypair();
   const taker = kp.publicKey.toBase58();

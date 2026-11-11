@@ -342,7 +342,7 @@ export async function serverSweepDeps(): Promise<SweepDeps | null> {
       if (c.mode !== 'live') return row?.signature ?? null;
       try { return await lookupSweepSignature(rungKey, to, op); } catch { return row?.signature ?? null; }
     },
-    sendTransfer: async (to, lamports, memo) => {
+    sendTransfer: async (to, lamports, memo) => (await import('./live-drawdown')).withBotTx(async () => {
       const { connection } = await import('./executor');
       const { loadTradingKeypair } = await import('./wallet');
       const kp = loadTradingKeypair();
@@ -360,7 +360,7 @@ export async function serverSweepDeps(): Promise<SweepDeps | null> {
       const conf = await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
       if (conf.value.err) throw new Error(`transaction failed: ${JSON.stringify(conf.value.err)}`);
       return sig;
-    },
+    }),
     finalizeRung: async (r) => {
       const advance = r.status === 'sent' || r.status === 'simulated';
       await prisma.$transaction([
@@ -396,6 +396,10 @@ export async function maybeRunProfitSweep(): Promise<SweepResult | null> {
     const deps = await serverSweepDeps();
     if (!deps) return null;
     const result = await executeProfitSweep(deps);
+    // A sweep is money paid out to the owner, not a trading loss: move the live drawdown peak with it.
+    if (result?.status === 'sent' && result.amountUsd) {
+      try { (await import('./live-drawdown')).recordFlow(-result.amountUsd, 'sweep'); } catch { /* never block a sweep */ }
+    }
     if (result && (result.status === 'sent' || result.status === 'recovered')) {
       try {
         const { appendLiveTrade } = await import('./live-trade-log');

@@ -379,3 +379,9 @@ export function rungKeyFromMemo(memo: string): string | null {
 export function utcDayKey(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
+
+/** Recovery mode on the owner plan drops the trade back to the smallest (base) tier size. */
+export function ownerRecoverySize(tiers: { sizeUsd: number }[]): number | null {
+  const sizes = tiers.map((t) => t.sizeUsd).filter((x) => Number.isFinite(x) && x > 0);
+  return sizes.length ? Math.min(...sizes) : null;
+}
