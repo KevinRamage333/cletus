@@ -55,3 +55,6 @@ to refresh the table the Brain reads. Reports: `docs/backtest/REPORT-clip25.md` 
 - **Overlapping decision labels** in the IC and calibration tables.
 - **Proxies** are listed above.
 - **Dead or missing pools:** 8 pools failed backfill on a duplicate-bucket bug (fixed since). 25 had fewer than 100 candles.
+
+## Whale flow and X hype
+The harness now loads `market_data.whale_swaps` and the X mention tables. It evaluates the whale veto (mean net return of vetoed vs kept decisions) and the IC of whale net flow and flow ratio using swaps strictly before each decision. It only does this once there is at least 72 h of history on at least 20 backtest tokens. As of this run there are 169 swaps on 4 tokens over 1 h, and no X data (no `X_BEARER_TOKEN`), so it reports **not evaluable yet**. See docs/FLOW_SIGNALS.md.

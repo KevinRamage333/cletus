@@ -1,6 +1,6 @@
 # Cletus backtest report
 
-Generated 2026-11-11T17:31:59.079Z · dataset 02432c3ecf49 · 60 pools · 46,789 five-minute candles · 2026-10-29T13:15:00.000Z → 2026-11-11T17:15:00.000Z (UTC) · clip $500
+Generated 2026-11-11T17:34:34.000Z · dataset f3e59dfa0cc5 · 60 pools · 46,789 five-minute candles · 2026-10-29T13:15:00.000Z → 2026-11-11T17:15:00.000Z (UTC) · clip $500
 
 Pools by discovery source: collector 19, topvol 10, trending24h 31
 

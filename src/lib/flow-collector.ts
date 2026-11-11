@@ -27,7 +27,7 @@ const S: FlowState = (g.__flow ??= {
 const num = (k: string, d: number) => { const v = Number(process.env[k]); return Number.isFinite(v) && v >= 0 ? v : d; };
 export const flowOpts = () => ({
   creditsPerDay: num('HELIUS_FLOW_CREDITS_PER_DAY', 10_000), maxPools: num('WHALE_MAX_POOLS', 6),
-  positionIntervalMs: num('WHALE_POSITION_INTERVAL_SECONDS', 120) * 1000, candidateIntervalMs: num('WHALE_CANDIDATE_INTERVAL_SECONDS', 600) * 1000,
+  positionIntervalMs: num('WHALE_POSITION_INTERVAL_SECONDS', 300) * 1000, candidateIntervalMs: num('WHALE_CANDIDATE_INTERVAL_SECONDS', 600) * 1000,
   fastExit: process.env.WHALE_FAST_EXIT !== 'off', vetoMode: (['off', 'on'].includes(process.env.SIGNAL_VETO_MODE ?? '') ? process.env.SIGNAL_VETO_MODE : 'shadow') as 'off' | 'shadow' | 'on',
 });
 /** Helius calls/day the budget allows at 10 credits per history call (for status / the report). */
@@ -111,6 +111,8 @@ export async function whaleTick(now = Date.now(), override?: FlowTarget[]) {
     for (const t of override ?? await targets()) {
       const interval = t.position ? o.positionIntervalMs : o.candidateIntervalMs;
       if (now - (S.lastPolled.get(t.pool) ?? 0) < interval) continue;
+      // Keep 30% of the daily budget for open positions (fast exits) — candidates stop at 70%.
+      if (!t.position && S.credits.day === today() && S.credits.used > 0.7 * o.creditsPerDay) continue;
       if (!spend(10)) break;
       S.lastPolled.set(t.pool, now);
       const body: Record<string, unknown> = { address: t.pool, limit: 100 };
