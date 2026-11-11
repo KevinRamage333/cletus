@@ -621,7 +621,7 @@ export async function partialClose(positionId: string, price: number, fraction: 
       proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice; fee = (st.priorityFeeLamports / 1e9) * mem.solPrice; tx = r.signature;
       await heal('ok');
     } catch (e) {
-      await heal(classifyError(e), (e as Error).message);
+      await heal(classifyError(e), (e as Error).message, 'swap');
       await log('error', `LIVE partial sell failed ${p.symbol}: ${(e as Error).message}`, p.accountId);
       return;
     }
@@ -800,7 +800,7 @@ export async function startEngine() {
   }
   if (c.liveBlockedReason) await log('warn', `live trading NOT enabled: ${c.liveBlockedReason}. Running in SIMULATION.`);
   const plan = c.ownerPlan;
-  await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s; owner plan ${plan.enabled ? `on (1 pos, SL ${plan.stopLossPct}% / TP ${plan.takeProfitPct}%, sweep ${plan.sweepArmed ? 'armed' : 'paused'})` : 'off'}`);
+  await log('info', `engine start: mode=${c.mode.toUpperCase()} preset=${c.preset} aggression=${c.aggression} scan every ${c.tradeFrequencySeconds}s, monitor every ${c.positionMonitorSeconds}s; owner plan ${plan.enabled ? `on (${plan.maxOpenPositions} pos, SL ${plan.stopLossPct}% / TP ${plan.takeProfitPct}%${plan.tpLadder.length ? `, partials ${plan.tpLadder.map((r) => `${r.sellPct}%@+${r.gainPct}%`).join(' ')}` : ''}${plan.breakEvenTriggerPct !== null ? `, BE after +${plan.breakEvenTriggerPct}%` : ''}${plan.trailingStopPct !== null ? `, trail ${plan.trailingStopPct}% armed +${plan.trailingArmPct ?? 0}%` : ''}, sweep ${plan.sweepArmed ? 'armed' : 'paused'})` : 'off'}`);
   if (process.env.ENGINE_DISABLED === 'true') { mem.lastScanSummary = 'engine disabled (ENGINE_DISABLED=true)'; return; }
   mem.timers.push(setInterval(() => void scanTick(), c.tradeFrequencySeconds * 1000));
   mem.timers.push(setInterval(() => void monitorTick(), c.positionMonitorSeconds * 1000));

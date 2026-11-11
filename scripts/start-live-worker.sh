@@ -19,12 +19,15 @@ export WITHDRAW_LIVE_ENABLED=true
 export OWNER_PLAN_ENABLED=true
 export MCAP_PRESET=BALANCED
 export OWNER_STOP_LOSS_PCT=20
-export OWNER_TAKE_PROFIT_PCT=50
+# Taper: sell 50% at +50%; remainder: stop to break-even once peak hits +50%, trail 8% (armed at +50%), full exit at +150%.
+export OWNER_TAKE_PROFIT_PCT=150
+export OWNER_TP_LADDER=50:50
+export OWNER_BREAK_EVEN_TRIGGER_PCT=50
+export OWNER_TRAILING_ARM_PCT=50
+export OWNER_TRAILING_STOP_PCT=8
 export OWNER_MAX_OPEN_POSITIONS=1
 export WHALE_FAST_EXIT=on
-export ENABLE_TRAILING_STOP=true
-export TRAILING_ARM_PERCENTAGE=25
-export TRAILING_STOP_PERCENTAGE=8
+export ENABLE_TRAILING_STOP=false
 export HOLD_TIME_MINUTES=10080
 # Dead coin can't hold the only slot: exit after 2h if still inside +/-3%.
 export STALE_POSITION_MINUTES=120

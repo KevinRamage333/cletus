@@ -7,6 +7,7 @@
  * Pure helpers live here so they can be unit-tested without the DB or chain.
  */
 import { LAMPORTS_PER_SOL, validateDestination } from './solana-address';
+import { parseTpLadder, type TpRung } from './exits';
 
 /** The server trading wallet. Owner trades from this address are never charged the platform fee. */
 export const OWNER_TRADING_WALLET = 'GdDBJt1nCibTENMKnGRPoNkjaCskTXwrdF1x1UHgY7Hq';
@@ -31,6 +32,7 @@ export const DEFAULT_SIZE_TIERS: EquitySizeTier[] = [
   { minEquityUsd: 20, sizeUsd: DEFAULT_TRADE_SIZES.at20 },
 ];
 
+const optNum = (v: string | undefined): number | null => { if (v === undefined || v.trim() === '') return null; const n = Number(v); return Number.isFinite(n) && n >= 0 ? n : null; };
 const num = (v: string | undefined, d: number) => {
   if (v === undefined || String(v).trim() === '') return d;
   const n = Number(v);
@@ -206,6 +208,15 @@ export interface OwnerPlanConfig {
   maxOpenPositions: number;
   /** Live owner daily loss stop, % of on-chain equity at the start of the day (OWNER_MAX_DAILY_LOSS_PCT). */
   maxDailyLossPct: number;
+  /**
+   * Taper exits for the live owner (all optional; null/[] = inherit the global setting):
+   * OWNER_TP_LADDER "50:50" sells 50% at +50%; OWNER_BREAK_EVEN_TRIGGER_PCT moves the stop on the remainder
+   * to break-even once the peak reaches it; OWNER_TRAILING_ARM_PCT / OWNER_TRAILING_STOP_PCT trail the remainder.
+   */
+  tpLadder: TpRung[];
+  breakEvenTriggerPct: number | null;
+  trailingArmPct: number | null;
+  trailingStopPct: number | null;
   minTradeUsd: number;
   ladder: LadderParams;
   dailyCapUsd: number;
@@ -235,6 +246,10 @@ export function parseOwnerPlanConfig(env: Record<string, string | undefined> = {
     takeProfitPct: num(env.OWNER_TAKE_PROFIT_PCT, DEFAULT_OWNER_TAKE_PROFIT_PCT),
     maxOpenPositions: Math.max(1, Math.round(num(env.OWNER_MAX_OPEN_POSITIONS, DEFAULT_OWNER_MAX_OPEN_POSITIONS))),
     maxDailyLossPct: num(env.OWNER_MAX_DAILY_LOSS_PCT, 15),
+    tpLadder: parseTpLadder(env.OWNER_TP_LADDER ?? ''),
+    breakEvenTriggerPct: optNum(env.OWNER_BREAK_EVEN_TRIGGER_PCT),
+    trailingArmPct: optNum(env.OWNER_TRAILING_ARM_PCT),
+    trailingStopPct: optNum(env.OWNER_TRAILING_STOP_PCT),
     minTradeUsd: num(env.OWNER_MIN_TRADE_USD, DEFAULT_TRADE_SIZES.under10),
     ladder,
     dailyCapUsd: num(env.OWNER_SWEEP_DAILY_CAP_USD, DEFAULT_SWEEP_DAILY_CAP_USD),
