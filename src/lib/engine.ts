@@ -618,6 +618,7 @@ async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra
   });
   if (!planWithinBounds(plan)) throw new Error(`plan outside hard bounds: ${describePlan(plan)}`);
   const lowSeen = mem.lowest.get(p.id);
+  planAnnounced.add(p.id);
   store.savePlanRecord({ positionId: p.id, mint: p.mint, symbol: p.symbol, plan, source, computedAt: new Date().toISOString(), maePct: lowSeen ? Math.max(0, (1 - lowSeen / p.entryPrice) * 100) : 0 });
   await log('info', `LIVE exit plan ${p.symbol} (${source === 'entry' ? 'chosen at entry' : 'recomputed on restart'}): ${describePlan(plan)}`, p.accountId);
   return plan;
@@ -631,12 +632,17 @@ async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra
 async function exitPlanFor(p: Position, price: number) {
   const store = await import('./exit-plan-store');
   const rec = store.getPlanRecord(p.id);
-  if (rec) return rec.plan;
+  if (rec) {
+    if (!planAnnounced.has(p.id)) { planAnnounced.add(p.id); await log('info', `LIVE exit plan ${p.symbol} (kept from ${rec.source === 'entry' ? 'entry' : 'recompute'} at ${rec.computedAt}): ${describePlan(rec.plan)}`, p.accountId); }
+    return rec.plan;
+  }
   if (!mem.regime || !mem.pairChange.has(p.mint)) return null;
   return createExitPlan(p, 'recomputed', { currentPrice: price });
 }
 
 const planWarned = new Set<string>();
+/** Plans already logged by this process (a stored plan is announced once after a restart). */
+const planAnnounced = new Set<string>();
 
 async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
   const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
