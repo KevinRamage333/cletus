@@ -97,6 +97,12 @@ describe('claims output filter', () => {
     'Brokers must report digital asset sales on Form 1099-DA; cost basis reporting for certain covered assets begins with sales in tax year 2026.',
     'Cletus is not a registered broker-dealer or investment adviser.',
     'Cletus uses this knowledge to stay away from wash trading and spoofing; that is an internal risk control, not a claim of regulatory compliance.',
+    'The IRS treats convertible virtual currency as property, so a sale or swap of a Solana meme coin can be a taxable event.',
+    'As of tax year 2026, brokers report digital-asset sales on Form 1099-DA.',
+    'This is general tax education, not tax advice; a CPA or tax attorney should be consulted for your situation.',
+    'Missouri does not require LLCs to file an annual report with the Secretary of State.',
+    'Short-term capital gains are generally taxed at ordinary income rates; long-term rates of 0%, 15% or 20% can apply after a holding period of more than one year.',
+    'IRC section 1091 generally does not apply to typical crypto held as property, though tokenized securities can be inside the wash-sale rule.',
   ])('keeps negations and neutral education: %s', ok);
 
   it('keeps the rest of a mixed answer, removes only the claim sentence, adds each note once', () => {

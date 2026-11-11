@@ -2,6 +2,7 @@ import { filterClaims } from '@/lib/brain/claims-filter';
 import { NextResponse } from 'next/server';
 import { generate, toContents } from '@/lib/brain/gemini';
 import { SYSTEM_PROMPT, secComplianceContext } from '@/lib/brain/persona';
+import { selectCurriculumNotes } from '@/lib/brain/curriculum';
 export const dynamic = 'force-dynamic';
 
 /** Public Brain demo: Gemini with the Cletus persona, NO tools, NO account/DB access. Tight rate limits protect the key's quota. */
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
   try {
     const r = await generate({
       apiKey: key, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-      system: `${SYSTEM_PROMPT}\n\n${secComplianceContext()}\n\n${DEMO_RULES}`,
+      system: `${SYSTEM_PROMPT}\n\n${secComplianceContext()}\n\n${DEMO_RULES}\n\n${selectCurriculumNotes([message, ...history.filter((m) => m.role === 'user').map((m) => m.content)].join('\n'))}`,
       contents: toContents([...history, { role: 'user', content: message }]),
       temperature: 0.6, maxOutputTokens: 2048, timeoutMs: 25_000,
     });

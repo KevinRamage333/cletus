@@ -53,7 +53,10 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
   // Single switch: BRAIN_PROVIDER=gemini (default) | xai | mock. Fallback chain: preferred -> other -> mock.
   const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xaiKey), enableAiBrain: getConfig().enableAiBrain });
   let system: string | null = null;
-  const getSystem = async () => (system ??= buildSystemInstruction({ snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId) }));
+  const getSystem = async () => (system ??= buildSystemInstruction({
+    snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId),
+    query: opts.message, recentQueries: history.filter((m) => m.role === 'user').slice(-3).map((m) => m.content),
+  }));
   const { provider, result, errors } = await withFallback(order, async (p): Promise<Omit<BrainReply, 'conversationId'>> => {
     if (p === 'gemini' && key) {
       const sources: BrainReply['sources'] = [];

@@ -99,12 +99,19 @@ describe('brain: Gemini function calling (mocked fetch)', () => {
 describe('brain: persona & context', () => {
   it('uses the spec SYSTEM_PROMPT persona plus compliance, self-awareness, briefing and journal', () => {
     expect(SYSTEM_PROMPT).toMatch(/You are Cletus, an AI with master's-degree-level expertise/);
-    expect(SYSTEM_PROMPT).not.toMatch(/staking|CLETUS token/i);
+    expect(SYSTEM_PROMPT).not.toMatch(/CLETUS token|profit-share|untaxable bank/i);
+    expect(SYSTEM_PROMPT).toMatch(/CORE FOUNDATIONAL SUBJECTS/);
+    expect(SYSTEM_PROMPT).toMatch(/Tax Law \(educational only\)/);
     const s = buildSystemInstruction({ snapshot: '{"mode":"simulation"}', briefing: 'BRIEFING-X', journal: 'JOURNAL-Y' });
     expect(s).toMatch(/INTERNAL RISK LIMITS/); expect(s).toMatch(/US SECURITIES & MARKET-CONDUCT KNOWLEDGE/); expect(s).toMatch(/Howey test/); expect(s).toMatch(/CLAIMS POLICY/); expect(s).not.toMatch(/REGULATORY COMPLIANCE|operate under a strict regulatory/);
     expect(s).toMatch(/ADVISORY ONLY/);
     expect(s).toContain('BRIEFING-X');
     expect(s).toContain('JOURNAL-Y');
+    expect(s).not.toMatch(/Topic notes for this question/);
+    const dcf = buildSystemInstruction({ snapshot: '{}', briefing: null, journal: null, query: 'Walk me through DCF and WACC' });
+    expect(dcf).toMatch(/Topic notes for this question/);
+    expect(dcf).toMatch(/WACC = /);
+    expect(dcf).toMatch(/NPV = /);
   });
 });
 
