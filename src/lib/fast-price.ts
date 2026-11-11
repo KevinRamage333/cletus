@@ -1,12 +1,13 @@
 /**
  * Fast on-chain price for open positions (flag FAST_PRICE_WS=on, default off).
  *
- * Why: the Helius WebSocket fast path used `accountSubscribe` on the pool account and then re-priced through
- * Jupiter Price v3 (shared, rate-limited bucket). PumpSwap pools keep their reserves in separate vault token
- * accounts, so the pool account itself does not change on a swap and that subscription never fires for them;
- * exits fell back to the ~3 s HTTP poll. With FAST_PRICE_WS=on the WebSocket uses `logsSubscribe` with
- * `mentions: [pool]` (fires on every swap for every DEX type) and prices the token straight from that swap's
- * pre/post token balances (one getTransaction call), with Jupiter Price as the fallback.
+ * Why: the Helius WebSocket fast path (accountSubscribe on the pool) only says "something touched the pool"; it then
+ * re-priced through Jupiter Price v3, which shares the rate-limited Jupiter bucket with /order (0.5-1 RPS) and can
+ * be skipped when that bucket is busy, and its leading-edge debounce dropped the last swap of a burst. With
+ * FAST_PRICE_WS=on the WebSocket uses `logsSubscribe` with `mentions: [pool]`, which carries the swap's signature,
+ * and the token is priced straight from that swap's pre/post token balances (one getTransaction, ~25 ms on Helius),
+ * with a trailing debounce and Jupiter Price as the fallback. Checked against live PumpSwap pools: within ~1-4% of
+ * DexScreener (which lags).
  *
  * Safety: a fast price that jumps more than FAST_PRICE_MAX_JUMP_PCT from the last known price is not trusted on
  * its own (the caller falls back to Jupiter / the poll), so a mis-parsed transaction cannot trigger a stop.

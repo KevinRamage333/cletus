@@ -2,7 +2,7 @@
  * Helius integration (server-side only; URLs/keys never leave the server or the logs).
  *  - On-chain holder concentration from getTokenLargestAccounts + owner lookup (PDAs = pools/lockers excluded)
  *    and DAS getTokenAccounts for the holder count.
- *  - WebSocket accountSubscribe on each open position's pool account: any swap touching the pool
+ *  - WebSocket subscription on each open position's pool (accountSubscribe; logsSubscribe when FAST_PRICE_WS=on): any swap touching the pool
  *    triggers an immediate exit check for that token (polling stays as the backstop).
  */
 import { PublicKey } from '@solana/web3.js';
