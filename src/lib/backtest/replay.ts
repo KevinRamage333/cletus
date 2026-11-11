@@ -91,7 +91,10 @@ const STOPS = new Set(['stop_loss', 'trailing_stop', 'break_even']);
  * Intrabar path: bullish bar O→L→H→C, bearish bar O→H→L→C (stops see the low first on up bars).
  * Level exits fill at the level (or the observed price if it gapped through at the open), then pay impact/slippage.
  */
-export function simulateTrade(bars: Bar[], i: number, meta: PoolMeta, exitP: ExitParams, ladder: TpRung[], cost: CostModel, sizeUsd: number, datasetEndSec: number): TradeResult | null {
+/** Optional per-bar exit checked at each bar close after the level exits (e.g. volume fade). Returns a reason to sell all. */
+export type BarExitHook = (k: number, ctx: { entry: number; close: number; taken: number; openedAtSec: number }) => string | null;
+
+export function simulateTrade(bars: Bar[], i: number, meta: PoolMeta, exitP: ExitParams, ladder: TpRung[], cost: CostModel, sizeUsd: number, datasetEndSec: number, barHook?: BarExitHook): TradeResult | null {
   const b = bars[i]; if (!b) return null;
   const t0 = b.t + BAR_SEC;
   const liq0 = liquidityAt(meta, b.c);
@@ -140,6 +143,12 @@ export function simulateTrade(bars: Bar[], i: number, meta: PoolMeta, exitP: Exi
         sell(lvl, q, false, lvl);
       }
       highest = Math.max(highest, p);
+    }
+    const hookReason = barHook?.(k, { entry, close: x.c, taken, openedAtSec: t0 });
+    if (hookReason) {
+      sell(x.c, tokens, true, x.c); // market sell into a quiet tape: pay the stop-type slippage too
+      const pnl = proceeds - sizeUsd - fees;
+      return { entryIdx: i, exitIdx: k, entryTime: t0, exitTime: x.t + BAR_SEC, reason: hookReason, sizeUsd, pnlUsd: pnl, pnlPct: (pnl / sizeUsd) * 100, feesUsd: fees, censored: false };
     }
   }
   // Ran out of data. If the pool simply stopped trading long before the dataset end, mark to the last close.

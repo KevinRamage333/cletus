@@ -12,6 +12,8 @@ export interface PlanRecord {
   positionId: string; mint: string; symbol: string;
   plan: ExitPlan; source: 'entry' | 'recomputed'; computedAt: string;
   maePct: number;
+  /** Volume-fade baseline: mean 5-min USD volume around entry. */
+  volBaselineM5Usd?: number;
   outcome?: { mfePct: number; maePct: number; pnlPct: number; reason: string; closedAt: string };
 }
 type Store = Record<string, PlanRecord>;

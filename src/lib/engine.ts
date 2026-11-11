@@ -8,6 +8,7 @@
 import { simBuy, simSell, simFeesUsd } from './sim-quote';
 import { shouldChargeOperatorFee } from './jupiter';
 import type { Account, Position } from '@prisma/client';
+import type { FadeState } from './volume-fade';
 import { prisma } from './db';
 import { log } from './logger';
 import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
@@ -56,14 +57,23 @@ interface EngineMemory {
   pairChange: Map<string, PriceChange>;
   regime: RegimeStats | null;
   lowest: Map<string, number>;
+  /** Volume-fade exit: latest DexScreener m5/h1 flow per mint, and each live position's fade clock. */
+  pairFlow: Map<string, PairFlow>;
+  fade: Map<string, FadeState & { lastAt: number }>;
+}
+interface PairFlow { m5Vol: number; h1Vol: number; buys: number; sells: number; at: number }
+function notePairFlow(m: string, p: { volume?: Partial<Record<string, number>>; txns?: Record<string, { buys: number; sells: number }> }) {
+  if (p.volume?.m5 === undefined) return;
+  mem.pairFlow.set(m, { m5Vol: Number(p.volume.m5) || 0, h1Vol: Number(p.volume.h1) || 0, buys: p.txns?.m5?.buys ?? 0, sells: p.txns?.m5?.sells ?? 0, at: Date.now() });
 }
 const g = globalThis as unknown as { __cletusEngine?: EngineMemory };
 export const mem: EngineMemory = (g.__cletusEngine ??= {
   started: false, scanning: false, monitoring: false, timers: [], candidates: [], solPrice: 0, lastScanSummary: 'not started', prices: new Map(), liquidity: new Map(), monitorTicks: 0,
   priceAt: new Map(), sellFailures: new Map(), lastFailureSource: null,
   scanStage: 'idle', monitorStage: 'idle', lastScanDoneAt: null, lastMonitorDoneAt: null, scanFence: { gen: 0 }, monitorFence: { gen: 0 }, selling: new InFlight(),
-  pairChange: new Map(), regime: null, lowest: new Map(),
+  pairChange: new Map(), regime: null, lowest: new Map(), pairFlow: new Map(), fade: new Map(),
 });
+mem.pairFlow ??= new Map(); mem.fade ??= new Map();
 mem.priceAt ??= new Map();
 mem.sellFailures ??= new Map();
 mem.lastFailureSource ??= null;
@@ -377,7 +387,7 @@ async function scanTickInner(gen: number): Promise<string> {
     const weights = await getWeights();
     const ranked = rankCandidates([...pairs.values()], c, weights);
     for (const r of ranked) { setPrice(r.mint, r.priceUsd); if (r.liquidityUsd) mem.liquidity.set(r.mint, r.liquidityUsd); }
-    for (const [m, p] of pairs) if (p.priceChange) mem.pairChange.set(m, p.priceChange);
+    for (const [m, p] of pairs) { if (p.priceChange) mem.pairChange.set(m, p.priceChange); notePairFlow(m, p); }
     const eligible = ranked.filter((r) => !r.rejected);
     mem.regime = regimeStats(eligible.map((r) => r.priceChangeH1));
     mem.candidates = ranked.slice(0, c.scanTopN);
@@ -786,6 +796,7 @@ async function monitorTickInner(gen: number): Promise<void> {
           if (!fast.has(m) && Number(p.priceUsd) > 0) setPrice(m, Number(p.priceUsd));
           if (p.liquidity?.usd) mem.liquidity.set(m, p.liquidity.usd);
           if (p.priceChange) mem.pairChange.set(m, p.priceChange);
+          notePairFlow(m, p);
         }
       } catch (e) {
         await log('warn', `price refresh failed: ${(e as Error).message}`);
@@ -804,13 +815,49 @@ async function monitorTickInner(gen: number): Promise<void> {
         if (!mem.sellFailures.has(p.id)) await log('warn', `LIVE ${p.symbol}: price stale for ${Math.round((now - (mem.priceAt.get(p.mint) ?? now)) / 1000)}s — protective exit`, p.accountId);
         return closePosition(p.id, p.lastPrice, 'stale_price');
       }
-      return evaluatePosition(p, mem.prices.get(p.mint) ?? p.lastPrice, st.killSwitch, c);
+      const px = mem.prices.get(p.mint) ?? p.lastPrice;
+      if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkVolumeFade(p, px)) return;
+      return evaluatePosition(p, px, st.killSwitch, c);
     });
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
   } finally {
     stage('idle');
   }
+}
+
+/**
+ * Volume-fade exit (live owner positions): volume/buyers dried up for FADE_MINUTES while the trade isn't working
+ * -> sell to free the slot. Checked once per fresh DexScreener sample (~30 s). Returns true if it sold.
+ */
+async function checkVolumeFade(p: Position, price: number): Promise<boolean> {
+  const { fadeFromEnv, fadeReason, stepFade } = await import('./volume-fade');
+  const fp = fadeFromEnv(process.env);
+  if (!fp) return false;
+  const flow = mem.pairFlow.get(p.mint);
+  const prev = mem.fade.get(p.id) ?? { since: null, reason: null, lastAt: 0 };
+  if (!flow || flow.at === prev.lastAt || Date.now() - flow.at > 120_000) return false;
+  if (p.partialsTaken > 0) { mem.fade.delete(p.id); return false; } // winner already paid: the trail manages it
+  const store = await import('./exit-plan-store');
+  const rec = store.getPlanRecord(p.id);
+  let baseline = rec?.volBaselineM5Usd;
+  if (!(baseline && baseline > 0)) {
+    baseline = flow.h1Vol / 12; // ~ the hour before entry for a new position (the first sample lands within ~30 s)
+    if (!(baseline > 0)) return false;
+    if (rec) store.savePlanRecord({ ...rec, volBaselineM5Usd: baseline });
+    await log('info', `LIVE volume-fade armed ${p.symbol}: baseline $${Math.round(baseline)}/5m${rec?.source === 'entry' && Date.now() - p.openedAt.getTime() > 5 * 60_000 ? ' (set after a restart from the current hour)' : ''}; exit if 5m volume < ${Math.round(fp.volFrac * 100)}% of it (or buys < ${Math.round(fp.maxBuyShare * 100)}% on < ${Math.round(fp.sellSideVolFrac * 100)}% volume) for ${fp.minutes} min while below +${fp.maxGainPct}%`, p.accountId);
+  }
+  const why = fadeReason({ m5VolUsd: flow.m5Vol, buys: flow.buys, sells: flow.sells }, baseline, fp);
+  const gainPct = (price / p.entryPrice - 1) * 100;
+  const r = stepFade(prev, why, flow.at, { openedAt: p.openedAt.getTime(), gainPct }, fp);
+  if (why && prev.since === null) await log('info', `LIVE ${p.symbol}: volume fading (${why}) — exits in ${fp.minutes} min unless it picks up`, p.accountId);
+  if (!why && prev.since !== null) await log('info', `LIVE ${p.symbol}: volume back (5m $${Math.round(flow.m5Vol)}), fade clock reset`, p.accountId);
+  mem.fade.set(p.id, { ...r.st, lastAt: flow.at });
+  if (!r.fire) return false;
+  await log('warn', `LIVE ${p.symbol}: VOLUME FADE exit after ${r.heldFadedMin.toFixed(0)} min (${why}; P&L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%) — freeing the slot`, p.accountId);
+  mem.fade.delete(p.id);
+  await closePosition(p.id, price, 'volume_fade');
+  return true;
 }
 
 /** Sell `fraction` of the remaining position at a take-profit rung; the rest keeps running. */

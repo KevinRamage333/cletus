@@ -75,3 +75,23 @@ Test-window expectancy per trade (n trades) for four train/test splits:
 - Adaptive plans (median stop ≈ 10%) take about twice as many trades with few stop-outs; adding the learning loop was positive on every split.
 - Worst single trade in some splits was −22% (fixed taper) to −27% (adaptive), because 5-minute bars gap through stops; live checks every 3 s plus the Helius pool WebSocket, so gaps should be smaller live, but a rug can still gap.
 - **Caveat:** 3.6 days, one regime, 14–26 test trades per cell. This is "not worse and probably better", not a proven edge.
+
+## Volume-fade exit replay (2026-11-11)
+
+`npx tsx --env-file=.env.local scripts/backtest/volume-fade.ts --thr 0.6,0.65` — live adaptive+learning exits, $6 clip, 1 slot,
+$70k–$5M, liquidity weight set; fade checked at each 5m bar close vs the mean 5m volume of the 12 bars before entry; only fires
+below +15% and before the first partial. Buy share is a close-location proxy (OHLCV has no buy/sell split), so the sell-side
+rule is weakly tested. 3.6 days, 60 pools, 60/40 time split.
+
+| fade (vol share / minutes / buy share) | train n, exp% | test n, hit, exp%, $ | fades train/test |
+|---|---|---|---|
+| none (score 0.60) | 32, +0.36% | 20, 35%, +1.75%, +$2.10 | 0/0 |
+| 10% / 15 min / 20% | 40, −0.69% | 25, 24%, −0.88%, −$1.32 | 15/6 |
+| **10% / 20 min / 20% (chosen)** | 31, +0.69% | 22, 27%, +1.30%, +$1.71 | 7/3 |
+| 20% / 20 min / 20% | 35, +0.45% | 26, 19%, −0.38%, −$0.59 | 12/6 |
+| 30% / 15 min / 20% | 56, −0.47% | 34, 29%, +0.63%, +$1.28 | 35/20 |
+| 10% / 30 min / 20% | 33, +0.72% | 20, 35%, +1.74%, +$2.09 | 2/0 |
+
+Read: 15-minute windows and looser volume cuts shake trades out of coins that are only pausing (worse in both halves).
+The strictest 15–20 min setting (10% of entry volume for 20 min) is roughly neutral: better in train (+$0.60), worse in test
+(−$0.39). It mainly frees the slot sooner (more trades/day); it is not a proven edge on this sample.
