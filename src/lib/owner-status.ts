@@ -18,6 +18,7 @@ import {
 } from './live-watch';
 import { buildPublicBooks, booksFromMaybeMixed, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from './public-live';
 import { solscanAccountUrl, solscanTxUrl } from './approvals';
+import { type ScanNow, readScanLatest } from './scan-latest';
 import { resolveOwnerWallet } from './owner-auth';
 
 export interface OwnerExtras {
@@ -36,6 +37,7 @@ export interface OwnerExtras {
     withinSchedule: boolean | null;
     brainProvider: string | null;
   };
+  scanning: ScanNow | null;
   onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null;
 }
 
@@ -87,6 +89,10 @@ function withIsolatedBooks(
     publicLiveSimulation: books.simulation,
     owner: { ...payload.owner, plan: planForLiveEquity(payload.owner.plan, liveEquity, solPrice) },
   };
+}
+
+function currentScanning(): ScanNow | null {
+  try { return readScanLatest(); } catch { return null; }
 }
 
 function canUseDb(): boolean {
@@ -258,6 +264,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         ownerWallet: resolveOwnerWallet(),
         plan: db.plan,
         engine: { ...db.engine, killSwitch: halt.halted || db.engine.killSwitch, killReason: halt.reason ?? db.engine.killReason },
+        scanning: currentScanning() ?? ((age !== null && age < 5 * 60_000) ? (stored.snapshot?.payload as OwnerStatusPayload | undefined)?.owner?.scanning ?? null : null),
         onchain,
       },
     }, recorded, onchain?.equityUsd ?? watch.equityUsd ?? null);
@@ -273,6 +280,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
       source: 'snapshot', snapshotAgeMs: age,
       owner: {
         ...(snap.owner ?? emptyOwner(c, onchain)),
+        scanning: snap.owner?.scanning ?? currentScanning(),
         onchain: onchain ?? snap.owner?.onchain ?? null,
       },
     }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null);
@@ -310,6 +318,7 @@ function emptyOwner(c: ReturnType<typeof getConfig>, onchain: Awaited<ReturnType
       lastScanAt: null, scanCount: null, lastScanSummary: null, withinSchedule: null,
       brainProvider: process.env.BRAIN_PROVIDER ?? null,
     },
+    scanning: null,
     onchain,
   };
 }

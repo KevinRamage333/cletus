@@ -415,16 +415,23 @@ async function scanTickInner(gen: number): Promise<string> {
     if (!isWithinSchedule(c)) {
       summary += ' — outside trading schedule, no entries';
       await log('info', summary);
+      try {
+        const { buildScanNow, writeScanLatest } = await import('./scan-latest');
+        writeScanLatest(buildScanNow({ candidates: mem.candidates, minScore, summary }));
+      } catch { /* panel must never break a scan */ }
       return (mem.lastScanSummary = summary);
     }
 
     let opened = 0;
+    const scanPicked = new Set<string>();
+    const scanOutcomes = new Map<string, { decision: string; reason: string }>();
     for (const cand of qualified.slice(0, c.auditTopN)) {
       // On-chain flow + X hype: confirmer/veto only (SIGNAL_VETO_MODE=shadow logs, on blocks, off ignores). Never a buy trigger.
       const verdict = entryVerdict(cand.mint);
       if (verdict.mode !== 'off' && verdict.veto) {
         await log('info', `${verdict.mode === 'on' ? 'flow veto' : 'flow veto (shadow, not enforced)'} ${cand.symbol}: ${verdict.reasons.join(' | ')}`);
-        if (verdict.mode === 'on') continue;
+        if (verdict.mode === 'on') { scanOutcomes.set(cand.mint, { decision: 'vetoed', reason: verdict.reasons.join(' | ') }); continue; }
+        scanOutcomes.set(cand.mint, { decision: 'qualified', reason: `flow veto (shadow): ${verdict.reasons.join(' | ')}` });
       }
       stage(`audit ${cand.symbol}`);
       const audit = await auditToken(cand.mint, {
@@ -435,19 +442,25 @@ async function scanTickInner(gen: number): Promise<string> {
       const mc = mem.candidates.find((x) => x.mint === cand.mint);
       if (mc) mc.audit = audit;
       if (!audit.passed) {
-        await log('info', `audit FAILED ${cand.symbol} (${cand.mint.slice(0, 6)}…): ${audit.checks.filter((x) => !x.passed).map((x) => `${x.name}: ${x.detail}`).join(' | ')}`);
+        const why = audit.checks.filter((x) => !x.passed).map((x) => `${x.name}: ${x.detail}`).join(' | ');
+        await log('info', `audit FAILED ${cand.symbol} (${cand.mint.slice(0, 6)}…): ${why}`);
+        scanOutcomes.set(cand.mint, { decision: 'audit failed', reason: why });
         continue;
       }
       for (const a of accounts) {
         stage(`enter ${cand.symbol}`);
         assertCurrent(mem.scanFence, gen, 'scan');
-        if (await tryEnter(a, cand, audit, c, gen)) opened++;
+        if (await tryEnter(a, cand, audit, c, gen)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
       }
     }
     summary += `, opened ${opened} position(s)`;
     stage('preset lab');
     if (c.enablePresetLab) summary += await presetLabTick([...pairs.values()], weights, c, gen);
     await log('info', summary);
+    try {
+      const { buildScanNow, writeScanLatest } = await import('./scan-latest');
+      writeScanLatest(buildScanNow({ candidates: mem.candidates, minScore, summary, picked: scanPicked, outcomes: scanOutcomes }));
+    } catch { /* panel must never break a scan */ }
     return (mem.lastScanSummary = summary);
   } catch (e) {
     await log('error', `scanTick error: ${(e as Error).message}`);
