@@ -67,6 +67,8 @@ export function pastTrades(limit = 200): PastTrade[] {
 }
 
 /** True when an open/closed position belongs to the KOL add-on mode. */
+/** Every position id the KOL add-on ever opened (open and closed). */
+export function kolPositionIds(): string[] { return Object.values(load()).filter((r) => r.mode === 'kol').map((r) => r.positionId); }
 export function isKolPosition(positionId: string): boolean { return load()[positionId]?.mode === 'kol'; }
 
 /** Test hook. */

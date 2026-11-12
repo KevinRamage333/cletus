@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import LiveWatch from './LiveWatch';
 import OwnerPlanCard from './OwnerPlanCard';
 import OwnerFundsPanel from './OwnerFundsPanel';
+import OwnerKolPanel from './OwnerKolPanel';
 import ScanningNowPanel from './ScanningNowPanel';
 import type { OwnerStatusPayload } from '@/lib/owner-status';
 
@@ -94,6 +95,8 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
       />
 
       {<ScanningNowPanel scan={o.scanning} summary={o.engine.lastScanSummary} lastScanAt={o.engine.lastScanAt} />}
+
+      <OwnerKolPanel kol={o.kol} />
 
       {o.plan && <OwnerPlanCard plan={o.plan} />}
 

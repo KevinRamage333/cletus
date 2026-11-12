@@ -496,30 +496,43 @@ async function scanTickInner(gen: number): Promise<string> {
   }
 }
 
-/** One KOL-mode round: recent KOL callouts -> $5k-$25k band -> audit + KOL gates -> entry from the KOL wallet. */
+const kolCooldown = new Map<string, number>();
+const KOL_AUDITS_PER_ROUND = envNum('KOL_AUDITS_PER_ROUND', 6);
+
+/** One KOL-mode round: free hype sources (KOL_SOURCE=hype, default) and/or X KOL callouts -> $5k-$25k band -> audit + KOL gates -> entry from the KOL wallet. */
 async function kolTick(c: Config, weights: Record<SignalName, number>, accounts: Account[], gen: number, outcomes: Map<string, { decision: string; reason: string }>, picked: Set<string>): Promise<string> {
   const km = await import('./kol-mode');
   const kc = km.kolConfig(process.env);
   if (!kc.enabled) return '';
   const w = await import('./wallet');
   const kolAddr = w.getKolPublicKey();
-  const calls = await km.fetchKolCallouts(kc);
+  const xCalls = await km.fetchKolCallouts(kc);
   const ks = km.kolStatus();
-  let tag = ` [kol: ${calls.length} callout(s)${ks.lastError ? `, X: ${ks.lastError}` : ''}${kolAddr ? '' : ', NO KOL WALLET'}`;
-  if (!calls.length || !kolAddr || c.mode !== 'live') return `${tag}]`;
+  const hy = await import('./kol-hype');
+  const hype = kc.source === 'x' ? [] : await hy.fetchHypeCallouts({ min: kc.minMcap, max: kc.maxMcap });
+  const seen = new Set(xCalls.map((x) => x.mint));
+  const calls = [...xCalls, ...hype.filter((x) => !seen.has(x.mint))];
+  let tag = ` [kol: ${kc.source === 'hype' ? '' : `${xCalls.length} X callout(s)${ks.lastError ? ` (X: ${ks.lastError})` : ''}, `}${kc.source === 'x' ? '' : hy.describeHype()}${kolAddr ? '' : ', NO KOL WALLET'}`;
+  if (!calls.length || !kolAddr || c.mode !== 'live') { hy.setKolRound(tag.replace(/^ \[kol: /, ''), []); return `${tag}]`; }
   const pairs = await fetchPairsForMints(calls.map((x) => x.mint));
   for (const [m, p] of pairs) { if (p.priceChange) mem.pairChange.set(m, p.priceChange); notePairFlow(m, p); }
   const kcfg = { ...c, minMarketCap: kc.minMcap, maxMarketCap: kc.maxMcap, minLiquidityUsd: kc.minLiquidityUsd, minVolume24hUsd: kc.minVolume24hUsd, minVolumeMcapRatio: 0, minTokenAgeHours: 0, requireKnownAge: false };
   const ranked = rankCandidates([...pairs.values()], kcfg, weights);
   const byMint = new Map(calls.map((x) => [x.mint, x]));
-  let inBand = 0, passed = 0, opened = 0;
+  let inBand = 0, passed = 0, opened = 0, audited = 0;
+  for (const k of [...kolCooldown.keys()]) if ((kolCooldown.get(k) ?? 0) < Date.now()) kolCooldown.delete(k);
   for (const cand of ranked) {
     setPrice(cand.mint, cand.priceUsd); if (cand.liquidityUsd) mem.liquidity.set(cand.mint, cand.liquidityUsd);
     const call = byMint.get(cand.mint);
-    const who = call ? `@${call.handle}` : 'KOL';
+    const who = call ? (call.handle.startsWith('hype:') ? call.handle : `@${call.handle}`) : 'KOL';
     mem.candidates.push({ ...cand, symbol: cand.symbol, rejected: cand.rejected });
     if (cand.rejected) { outcomes.set(cand.mint, { decision: 'kol: filtered', reason: `${who}: ${cand.rejected}` }); continue; }
     inBand++;
+    // Hype lists repeat every scan: re-audit a coin that failed at most every 10 min, and cap audits per round.
+    const coolUntil = kolCooldown.get(cand.mint) ?? 0;
+    if (coolUntil > Date.now()) { outcomes.set(cand.mint, { decision: 'kol: cooldown', reason: 'failed recently' }); continue; }
+    if (audited >= KOL_AUDITS_PER_ROUND) continue;
+    audited++;
     const audit = await auditToken(cand.mint, {
       priceUsd: cand.priceUsd, sizeUsd: auditSizeUsd(c),
       params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
@@ -528,6 +541,7 @@ async function kolTick(c: Config, weights: Record<SignalName, number>, accounts:
     if (!audit.passed) {
       const why = audit.checks.filter((x) => !x.passed).map((x) => `${x.name}: ${x.detail}`).join(' | ');
       if (feedbackLogged(`kol:${cand.mint}`)) await log('info', `KOL ${who} ${cand.symbol}: audit failed (${why})`);
+      kolCooldown.set(cand.mint, Date.now() + 10 * 60_000);
       outcomes.set(cand.mint, { decision: 'kol: audit failed', reason: why }); continue;
     }
     const { fetchRugcheck } = await import('./audit');
@@ -539,6 +553,7 @@ async function kolTick(c: Config, weights: Record<SignalName, number>, accounts:
     const g = km.evaluateKolGates({ report, bubblemapsTopClusterPct: bubble, metadata }, kc);
     if (!g.pass) {
       if (feedbackLogged(`kol:${cand.mint}`)) await log('info', `KOL ${who} ${cand.symbol}: skipped (${g.reasons.join('; ')})`);
+      kolCooldown.set(cand.mint, Date.now() + 10 * 60_000);
       outcomes.set(cand.mint, { decision: 'kol: gate', reason: g.reasons.join('; ') }); continue;
     }
     passed++;
@@ -548,7 +563,13 @@ async function kolTick(c: Config, weights: Record<SignalName, number>, accounts:
       if (await w.withKolWallet(() => tryEnter(a, cand, audit, c, gen, outcomes, 'kol'))) { opened++; picked.add(cand.mint); outcomes.set(cand.mint, { decision: 'picked (kol)', reason: `${who} callout` }); }
     }
   }
-  tag += `, ${inBand} in $${kc.minMcap / 1000}k-$${kc.maxMcap / 1000}k, ${passed} passed gates, opened ${opened}]`;
+  tag += `, ${inBand} in $${kc.minMcap / 1000}k-$${kc.maxMcap / 1000}k, ${audited} audited, ${passed} passed gates, opened ${opened}]`;
+  try {
+    hy.setKolRound(tag.replace(/^ \[kol: /, '').replace(/\]$/, ''), ranked.map((cand) => {
+      const o = outcomes.get(cand.mint); const call = byMint.get(cand.mint);
+      return { mint: cand.mint, symbol: cand.symbol, mcapUsd: cand.marketCap ?? null, via: call?.handle ?? 'kol', decision: o?.decision ?? (cand.rejected ? 'kol: filtered' : 'kol: queued'), reason: o?.reason ?? cand.rejected ?? '' };
+    }));
+  } catch { /* desk only */ }
   return tag;
 }
 

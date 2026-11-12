@@ -5,7 +5,7 @@ describe('KOL X API 402 backoff', () => {
   afterEach(() => { vi.unstubAllGlobals(); _resetKolPoll(); });
   it('backs off 10 minutes on 402 and retries after, so topped-up credits are picked up', async () => {
     _resetKolPoll();
-    const cfg = { ...kolConfig({ KOL_MODE: 'on' }), callFile: '/nonexistent/kol.json' };
+    const cfg = { ...kolConfig({ KOL_MODE: 'on', KOL_SOURCE: 'x' }), callFile: '/nonexistent/kol.json' };
     const f = vi.fn(async () => new Response('{"title":"Payment Required"}', { status: 402 }));
     vi.stubGlobal('fetch', f);
     const t0 = Date.parse('2026-11-12T13:00:00Z');

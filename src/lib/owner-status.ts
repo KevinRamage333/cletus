@@ -20,6 +20,8 @@ import { buildPublicBooks, booksFromMaybeMixed, mergeRecorded, recordedFromClose
 import { solscanAccountUrl, solscanTxUrl } from './approvals';
 import { type ScanNow, readScanLatest } from './scan-latest';
 import { resolveOwnerWallet } from './owner-auth';
+import { KOL_TRADING_WALLET } from './owner-withdraw-queue';
+import type { KolDesk } from './owner-kol';
 
 export interface OwnerExtras {
   tradingWallet: string;
@@ -39,6 +41,8 @@ export interface OwnerExtras {
   };
   scanning: ScanNow | null;
   onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null;
+  /** KOL / pump.fun add-on desk (wallet, last scan round, open position, history). */
+  kol?: KolDesk | null;
 }
 
 export interface OwnerStatusPayload {
@@ -244,10 +248,14 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
   const c = getConfig();
   const stored = loadOwnerState();
   const age = snapshotAgeMs(stored);
-  const [db, onchain] = await Promise.all([
+  const [db, onchain, kolChain, kolBox] = await Promise.all([
     fromDatabase(),
     readOnchainWallet(OWNER_TRADING_WALLET).catch(() => null),
+    readOnchainWallet(KOL_TRADING_WALLET, 5).catch(() => null),
+    process.env.VERCEL ? Promise.resolve(null) : import('./owner-kol').then((m) => m.buildKolDesk()).catch(() => null),
   ]);
+  const snapKol = (stored.snapshot?.payload as OwnerStatusPayload | undefined)?.owner?.kol ?? null;
+  const kol = withKolBalance(kolBox ?? snapKol, kolChain);
 
   const halt: HaltState = stored.halt?.rev ? stored.halt : (db?.engine.killSwitch ? { ...EMPTY_HALT, halted: true, reason: db.engine.killReason, source: 'engine', rev: 1 } : { ...EMPTY_HALT });
 
@@ -266,6 +274,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         engine: { ...db.engine, killSwitch: halt.halted || db.engine.killSwitch, killReason: halt.reason ?? db.engine.killReason },
         scanning: currentScanning() ?? ((age !== null && age < 5 * 60_000) ? (stored.snapshot?.payload as OwnerStatusPayload | undefined)?.owner?.scanning ?? null : null),
         onchain,
+        kol,
       },
     }, recorded, onchain?.equityUsd ?? watch.equityUsd ?? null);
   }
@@ -282,6 +291,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         ...(snap.owner ?? emptyOwner(c, onchain)),
         scanning: snap.owner?.scanning ?? currentScanning(),
         onchain: onchain ?? snap.owner?.onchain ?? null,
+        kol,
       },
     }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null);
   }
@@ -293,7 +303,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
     watch, halt,
     source: events.length ? 'mixed' : 'onchain',
     snapshotAgeMs: age,
-    owner: emptyOwner(c, onchain, plan),
+    owner: { ...emptyOwner(c, onchain, plan), kol },
   }, recordedFromLiveEvents(events, true), onchain?.equityUsd ?? watch.equityUsd ?? null);
 }
 
@@ -323,3 +333,9 @@ function emptyOwner(c: ReturnType<typeof getConfig>, onchain: Awaited<ReturnType
   };
 }
 
+
+function withKolBalance(k: KolDesk | null, chain: Awaited<ReturnType<typeof readOnchainWallet>> | null): KolDesk | null {
+  const base: KolDesk = k ?? { enabled: true, source: 'hype', wallet: KOL_TRADING_WALLET, sol: null, usd: null, round: { at: null, summary: '', rows: [] }, open: [], history: [], totals: { trades: 0, wins: 0, pnlUsd: 0 } };
+  if (!chain || chain.sol == null) return k ? base : (chain ? base : null);
+  return { ...base, sol: chain.sol, usd: chain.equityUsd ?? chain.sol * chain.solPriceUsd };
+}

@@ -31,6 +31,8 @@ export interface KolConfig {
   clusterFallback: 'off' | 'rugcheck';
   takeProfitPct: number; stopLossPct: number; staleMinutes: number; staleBandPct: number;
   callFile: string;
+  /** Callout source: 'hype' (free: DexScreener boosts, pump.fun, GeckoTerminal, Phantom; default), 'x' (paid X API) or 'both'. */
+  source: 'hype' | 'x' | 'both';
 }
 
 const num = (env: Record<string, string | undefined>, k: string, d: number) => { const v = env[k]; const x = Number(v); return v !== undefined && v.trim() !== '' && Number.isFinite(x) ? x : d; };
@@ -52,6 +54,7 @@ export function kolConfig(env: Record<string, string | undefined> = process.env)
     maxDevPct: num(env, 'KOL_MAX_DEV_PCT', 10), maxCreatorTokens: num(env, 'KOL_MAX_CREATOR_TOKENS', 3),
     clusterFallback: (env.KOL_CLUSTER_FALLBACK ?? 'off').trim().toLowerCase() === 'rugcheck' ? 'rugcheck' : 'off',
     takeProfitPct: 15, stopLossPct: 7, staleMinutes: num(env, 'KOL_STALE_MINUTES', 60), staleBandPct: 3,
+    source: (['x', 'both'] as const).find((v) => v === (env.KOL_SOURCE ?? '').trim().toLowerCase()) ?? 'hype',
     callFile: env.KOL_CALLOUTS_FILE || path.join(process.cwd(), 'data', 'kol-callouts.json'),
   };
 }
@@ -136,7 +139,7 @@ export async function fetchKolCallouts(cfg: KolConfig, nowMs = Date.now(), env: 
   if (st.day !== day) { st.day = day; st.used = 0; }
   const token = (env.X_BEARER_TOKEN ?? '').trim();
   const queries = kolQueries(cfg.accounts);
-  if (token && nowMs >= st.backoffUntil && nowMs - st.lastAt >= cfg.pollSec * 1000 && st.used + queries.length <= cfg.maxRequestsPerDay) {
+  if (token && cfg.source !== 'hype' && nowMs >= st.backoffUntil && nowMs - st.lastAt >= cfg.pollSec * 1000 && st.used + queries.length <= cfg.maxRequestsPerDay) {
     st.lastAt = nowMs;
     const fresh: Callout[] = [];
     const start = new Date(nowMs - cfg.windowMin * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
