@@ -12,7 +12,7 @@ import type { FadeState } from './volume-fade';
 import { prisma } from './db';
 import { log } from './logger';
 import { getConfig, applyOwnerPlan, isWithinSchedule, SIGNAL_NAMES, MCAP_PRESETS, type Config, type SignalName, type McapPreset } from './config';
-import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, type DexPair } from './dexscreener';
+import { discoverSolanaMints, fetchPairsForMints, fetchSolPriceUsd, lastDiscoveryStats, type DexPair } from './dexscreener';
 import { rankCandidates, updateWeights, normaliseWeights, activeLiquidityWeights, type ScanCandidate, type SignalBreakdown } from './signals';
 import { computePositionSize, computeOwnerTradeSize } from './sizing';
 import { ownerRecoverySize } from './owner-plan';
@@ -411,6 +411,7 @@ async function scanTickInner(gen: number): Promise<string> {
     }
     const topScore = eligible.reduce((m, r) => Math.max(m, r.composite), 0);
     let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore} (top ${topScore.toFixed(3)})`;
+    { const ds = lastDiscoveryStats(); summary += ` [sources: dexscreener ${ds.dexscreener}, phantom trending ${ds.phantom} (+${ds.phantomNew} new), gecko fresh +${ds.gecko}]`; }
 
     if (!isWithinSchedule(c)) {
       summary += ' — outside trading schedule, no entries';
@@ -535,6 +536,20 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       return false;
     }
     pumpHours = ev?.hoursSincePump ?? null;
+  }
+  // Live entry: rolling 5m volume must be at least LOW_VOL_5M_EXIT_USD (owner rule, default $1,500).
+  if (c.mode === 'live' && a.isOperator) {
+    const { lowVolConfig, entryVolumeOk } = await import('./low-volume-exit');
+    const lv = lowVolConfig(process.env);
+    if (lv) {
+      const chk = entryVolumeOk(mem.pairFlow.get(cand.mint)?.m5Vol ?? null, lv);
+      if (!chk.ok) {
+        const why = chk.reason ?? '5m volume low';
+        if (feedbackLogged(`m5vol:${cand.mint}`)) await log('info', `5m volume: skipped ${cand.symbol} (${why})`, a.id);
+        outcomes?.set(cand.mint, { decision: '5m vol low', reason: why });
+        return false;
+      }
+    }
   }
   // Live entry: 10m buy-side volume must clear min($MIN_BUY_VOLUME_10M_USD, MIN_BUY_VOLUME_10M_MCAP_PCT% of mcap).
   if (c.mode === 'live' && a.isOperator) {
@@ -1002,6 +1017,7 @@ async function monitorTickInner(gen: number): Promise<void> {
         return closePosition(p.id, p.lastPrice, 'stale_price');
       }
       const px = mem.prices.get(p.mint) ?? p.lastPrice;
+      if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkLowVolume(p, px)) return;
       if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkVolumeFade(p, px)) return;
       return evaluatePosition(p, px, st.killSwitch, c);
     });
@@ -1010,6 +1026,22 @@ async function monitorTickInner(gen: number): Promise<void> {
   } finally {
     stage('idle');
   }
+}
+
+/** Hard 5m volume floor (owner rule): rolling 5m volume < LOW_VOL_5M_EXIT_USD after the entry grace -> sell all. */
+async function checkLowVolume(p: Position, price: number): Promise<boolean> {
+  const { lowVolConfig, lowVolumeExitReason } = await import('./low-volume-exit');
+  const lv = lowVolConfig(process.env);
+  if (!lv) return false;
+  const flow = mem.pairFlow.get(p.mint);
+  if (!flow) return false;
+  const why = lowVolumeExitReason({ m5VolUsd: flow.m5Vol, openedAtMs: p.openedAt.getTime(), sampleAtMs: flow.at, nowMs: Date.now() }, lv);
+  if (!why) return false;
+  const gainPct = (price / p.entryPrice - 1) * 100;
+  await log('warn', `LIVE ${p.symbol}: LOW 5m VOLUME exit (${why}; P&L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, p.accountId);
+  mem.fade.delete(p.id);
+  await closePosition(p.id, price, 'low_volume_5m');
+  return true;
 }
 
 /**

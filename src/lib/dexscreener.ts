@@ -64,6 +64,11 @@ export function popularMintsFromPairs(pairs: DexPair[], perWindow = 20, windows:
   return out;
 }
 
+/** Per-source counts from the last discovery (new unique mints each source added). */
+export interface DiscoveryStats { dexscreener: number; phantom: number; phantomNew: number; gecko: number; total: number }
+let lastDiscovery: DiscoveryStats = { dexscreener: 0, phantom: 0, phantomNew: 0, gecko: 0, total: 0 };
+export function lastDiscoveryStats(): DiscoveryStats { return { ...lastDiscovery }; }
+
 /** Candidate Solana token addresses from the profile/boost/takeover feeds. */
 export async function discoverSolanaMints(): Promise<string[]> {
   const feeds = ['/token-profiles/latest/v1', '/token-boosts/latest/v1', '/token-boosts/top/v1', '/community-takeovers/latest/v1'];
@@ -97,6 +102,19 @@ export async function discoverSolanaMints(): Promise<string[]> {
   const perWindow = Math.max(1, Math.min(50, Number(process.env.SCAN_POPULAR_PER_WINDOW ?? 20) || 20));
   for (const mint of popularMintsFromPairs(searchPairs, perWindow)) mints.add(mint);
   if (ok === 0) throw new Error('All DexScreener discovery feeds failed');
+  lastDiscovery = { dexscreener: mints.size, phantom: 0, phantomNew: 0, gecko: 0, total: mints.size };
+  // Phantom trending (1h/4h/12h/24h, public Explore list). SCAN_PHANTOM_TRENDING=off disables it.
+  if (!['off', 'false', '0', 'no'].includes((process.env.SCAN_PHANTOM_TRENDING ?? 'on').trim().toLowerCase())) {
+    try {
+      const { fetchPhantomTrendingMints, parsePhantomTimeframes } = await import('./phantom');
+      const min = Number(process.env.MIN_MARKET_CAP) || 0;
+      const max = Number(process.env.MAX_MARKET_CAP) || 5_000_000;
+      const ph = await fetchPhantomTrendingMints({ timeframes: parsePhantomTimeframes(process.env.SCAN_PHANTOM_TIMEFRAMES), band: { min, max } });
+      lastDiscovery.phantom = ph.mints.length;
+      for (const m of ph.mints) if (!mints.has(m)) { mints.add(m); lastDiscovery.phantomNew++; }
+    } catch { /* Phantom is optional */ }
+  }
+  lastDiscovery.total = mints.size;
   // Fresh GeckoTerminal new_pools (listings + pump.fun graduations) when PUMP_AGE_FILTER is on.
   try {
     const { pumpAgeFromEnv, mergeMints } = await import('./pump-age');
@@ -104,7 +122,12 @@ export async function discoverSolanaMints(): Promise<string[]> {
     if (pa?.discoverFreshPools) {
       const { fetchNewSolanaPools } = await import('./gecko');
       const fresh = await fetchNewSolanaPools(2);
-      if (fresh.length) return mergeMints([...mints], fresh.map((x) => x.mint));
+      if (fresh.length) {
+        const merged = mergeMints([...mints], fresh.map((x) => x.mint));
+        lastDiscovery.gecko = merged.length - mints.size;
+        lastDiscovery.total = merged.length;
+        return merged;
+      }
     }
   } catch { /* discovery must still return the DexScreener set */ }
   return [...mints];
