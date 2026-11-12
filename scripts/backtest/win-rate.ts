@@ -194,7 +194,59 @@ async function main() {
     const st = stats(tr); const kk = `${key(c)} lv${lv}`; lvRows.push({ k: kk, s: st, folds });
     console.log(`${kk}: n${st.n} win ${(st.hit * 100).toFixed(1)}% avg ${st.exp.toFixed(2)}% $${st.usd.toFixed(2)} worst ${st.worst.toFixed(1)} folds ${folds.map((f) => f.toFixed(1)).join('/')}`);
   }
-  fs.writeFileSync('docs/backtest/win-rate.json', JSON.stringify({ at: new Date().toISOString(), rows: rows.length, days: span / 86400, pools: series.length, folds: FOLDS, walkForward: { current: A, picked: B, picks: oos.picks }, current: { key: curRow.k, ...curRow.s, folds: curRow.folds }, lowVol1500: lvRows, better: better.slice(0, 30).map((r) => ({ key: r.k, ...r.s, folds: r.folds })) }, null, 2));
+  // ── Momentum scalp (owner request Nov 11, 8:57 PM CT) ─────────────────────────────────────────────────
+  // Entry: last 5m bar buy share (close-location proxy) >= bs, 5m volume rising vs prior bar, 5m volume >= $5k,
+  // existing eligibility (band, scanner filters, pump-age block) and score >= thr. Exit: SL -8%, +15% take (sell
+  // `sell`%; remainder trails 5%), time stop: not >= +3% by the first bar close >= 12 min after entry (15 min on 5m bars),
+  // $1,500 5m-volume exit after the first candle. 1 position at a time, same costs.
+  interface Scalp { thr: number; bs: number; sell: number; minVol: number }
+  const skey = (c: Scalp) => `scalp thr${c.thr} buyShare>=${c.bs} sell${c.sell}% vol>=$${c.minVol / 1000}k`;
+  const scalpPass = (r: Row, c: Scalp) => {
+    const bs = series[r.p]; const b = bs[r.i]; const prev = bs[r.i - 1]; if (!prev) return false;
+    const range = b.h - b.l; const share = range > 0 ? (b.c - b.l) / range : 0.5;
+    return r.s >= c.thr + r.bump && !r.block && share >= c.bs && b.c > b.o && b.v > prev.v && b.v >= c.minVol;
+  };
+  const scalpHook = (bs: Bar[], i: number): BarExitHook => (k, ctx) => {
+    if (k > i + 1 && bs[k].v < 1500) return 'low_volume_5m';
+    if ((k - i) * 5 >= 12 && ctx.taken === 0 && (ctx.close / ctx.entry - 1) * 100 < 3) return 'time_stop';
+    return null;
+  };
+  const runScalp = (c: Scalp, from: number, to: number) => {
+    const cands = rows.filter((r) => r.t >= from && r.t < to && scalpPass(r, c)).sort((a, b) => a.t - b.t || b.s - a.s);
+    let busyUntil = 0; const tr: Tr[] = [];
+    for (const r of cands) {
+      if (r.t < busyUntil) continue;
+      const e = c.sell >= 100
+        ? fixed({ stopLossPct: 8, takeProfitPct: 15 })
+        : fixed({ stopLossPct: 8, takeProfitPct: 60, breakEvenTriggerPct: 15, enableTrailingStop: true, trailingArmPct: 15, trailingStopPct: 5 });
+      const ladder: TpRung[] = c.sell >= 100 ? [] : [{ gainPct: 15, sellPct: c.sell }];
+      const res = simulateTrade(series[r.p], r.i, metas[r.p], e, ladder, cost(r.fee), SIZE, end, scalpHook(series[r.p], r.i));
+      if (!res || res.censored || res.exitTime > to) continue;
+      busyUntil = res.exitTime; tr.push({ ...res, sl: 8 });
+    }
+    return tr;
+  };
+  const sgrid: Scalp[] = [];
+  for (const thr of [0.5, 0.55, 0.6, 0.65]) for (const bsh of [0.55, 0.6]) for (const sell of [75, 100]) sgrid.push({ thr, bs: bsh, sell, minVol: 5000 });
+  const LIVE_NOW: Cfg = { e: { ...CURRENT.e, lv: 1500 }, x: null };
+  const sc = { cur: [] as Tr[], pick: [] as Tr[], picks: [] as string[] };
+  console.log('\nMOMENTUM SCALP walk-forward (pick on train by avg P&L, n>=5):');
+  for (let k = 2; k < FOLDS; k++) {
+    const tf = edge(0), tt = edge(k), te = k === FOLDS - 1 ? Infinity : edge(k + 1);
+    let best: Scalp | null = null; let bs: ReturnType<typeof stats> | null = null;
+    for (const c of sgrid) { const s0 = stats(runScalp(c, tf, tt)); if (s0.n < 5) continue; if (!bs || s0.exp > bs.exp) { bs = s0; best = c; } }
+    const curT = run(LIVE_NOW, tt, te).tr; sc.cur.push(...curT);
+    if (best) { const x = runScalp(best, tt, te); sc.pick.push(...x); sc.picks.push(skey(best)); const a = stats(curT), b = stats(x);
+      console.log(`fold ${k}: pick [${skey(best)}] train n${bs!.n} win ${(bs!.hit * 100).toFixed(0)}% avg ${bs!.exp.toFixed(2)}% | TEST live-now n${a.n} ${(a.hit * 100).toFixed(0)}% ${a.exp.toFixed(2)}% | scalp n${b.n} ${(b.hit * 100).toFixed(0)}% ${b.exp.toFixed(2)}%`); }
+    else console.log(`fold ${k}: no scalp config with n>=5 on train`);
+  }
+  const SC = stats(sc.cur), SP = stats(sc.pick);
+  console.log(`OOS LIVE-NOW (current + $1.5k floor): n${SC.n} win ${(SC.hit * 100).toFixed(1)}% avg ${SC.exp.toFixed(2)}% $${SC.usd.toFixed(2)}`);
+  console.log(`OOS SCALP (walk-forward picks):      n${SP.n} win ${(SP.hit * 100).toFixed(1)}% avg ${SP.exp.toFixed(2)}% $${SP.usd.toFixed(2)} (win avg ${SP.winAvg.toFixed(1)} / loss avg ${SP.lossAvg.toFixed(1)}) worst ${SP.worst.toFixed(1)}`);
+  const sTable = sgrid.map((c) => { const tr: Tr[] = []; for (let k = 2; k < FOLDS; k++) tr.push(...runScalp(c, edge(k), k === FOLDS - 1 ? Infinity : edge(k + 1))); return { k: skey(c), s: stats(tr) }; });
+  for (const r of sTable) console.log(`  ${r.k}: n${r.s.n} win ${(r.s.hit * 100).toFixed(1)}% avg ${r.s.exp.toFixed(2)}% reasons`);
+  const scalpOut = { liveNow: SC, scalp: SP, picks: sc.picks, fixed: sTable.map((r) => ({ key: r.k, ...r.s })) };
+  fs.writeFileSync('docs/backtest/win-rate.json', JSON.stringify({ at: new Date().toISOString(), rows: rows.length, days: span / 86400, pools: series.length, folds: FOLDS, walkForward: { current: A, picked: B, picks: oos.picks }, current: { key: curRow.k, ...curRow.s, folds: curRow.folds }, lowVol1500: lvRows, momentumScalp: scalpOut, better: better.slice(0, 30).map((r) => ({ key: r.k, ...r.s, folds: r.folds })) }, null, 2));
   void HARD_BOUNDS; void ({} as TpRung);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

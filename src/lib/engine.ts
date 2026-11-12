@@ -551,6 +551,19 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       }
     }
   }
+  // Momentum scalp (MOMENTUM_SCALP=dryrun): log what the scalp entry would do. Replay was negative OOS, so this never
+  // changes live entries (see src/lib/momentum-scalp.ts).
+  if (c.mode === 'live' && a.isOperator) {
+    const { scalpConfig, scalpEntryCheck, describeScalpPlan } = await import('./momentum-scalp');
+    const sc = scalpConfig(process.env);
+    if (sc.mode !== 'off' && feedbackLogged(`scalp:${cand.mint}`)) {
+      const flow = mem.pairFlow.get(cand.mint);
+      let candles: Array<{ volume: number; open?: number; close?: number; high?: number; low?: number }> | null = null;
+      if (cand.pairAddress) { try { candles = await (await import('./gecko')).fiveMinuteCandles(cand.pairAddress, 8); } catch { candles = null; } }
+      const chk = scalpEntryCheck({ buys5m: flow?.buys, sells5m: flow?.sells, m5VolUsd: flow?.m5Vol, candles5m: candles }, sc);
+      await log('info', `momentum scalp dryrun: ${cand.symbol} ${chk.pass ? `would enter (${describeScalpPlan(sc)})` : `no entry (${chk.reasons.join('; ')})`}`, a.id);
+    }
+  }
   // Live entry: 10m buy-side volume must clear min($MIN_BUY_VOLUME_10M_USD, MIN_BUY_VOLUME_10M_MCAP_PCT% of mcap).
   if (c.mode === 'live' && a.isOperator) {
     const { buyVolumeGateConfig, estimateBuyVolume10m } = await import('./buy-volume-gate');

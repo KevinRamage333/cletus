@@ -55,6 +55,7 @@ export MIN_BUY_VOLUME_10M_MCAP_PCT=5   # 10m buy vol must clear min($10k, 5% of 
 export FADE_MINUTES=15            # volume-fade: move out if 5m volume stays off for more than 15 min
 export LOW_VOL_5M_EXIT_USD=1500     # owner rule: no entry under $1.5k 5m volume; sell if 5m volume < $1.5k (after the first 5m candle)
 export SCAN_PHANTOM_TRENDING=on   # Phantom Explore trending (1h/4h/12h/24h) as an extra scan source
+export MOMENTUM_SCALP=dryrun       # log-only: replay negative OOS (Nov 11), never trades
 export HOLDER_SELL_EXIT=on       # 3-4 RPC calls per open position every HOLDER_WATCH_SEC (120 s); baseline in logs/holder-baselines.json
 
 export PUMP_AGE_FILTER=on         # impulse 0-6h favored; block late+below-anchor; fresh new_pools; waived min token age
