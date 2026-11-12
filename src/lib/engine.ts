@@ -450,7 +450,7 @@ async function scanTickInner(gen: number): Promise<string> {
       for (const a of accounts) {
         stage(`enter ${cand.symbol}`);
         assertCurrent(mem.scanFence, gen, 'scan');
-        if (await tryEnter(a, cand, audit, c, gen)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
+        if (await tryEnter(a, cand, audit, c, gen, scanOutcomes)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
       }
     }
     summary += `, opened ${opened} position(s)`;
@@ -488,7 +488,7 @@ function feedbackLogged(mint: string, now = Date.now()): boolean {
   return true;
 }
 
-async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number): Promise<boolean> {
+async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number, outcomes?: Map<string, { decision: string; reason: string }>): Promise<boolean> {
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
   const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
   const c = applyOwnerPlan(us ? effectiveConfig(serverCfg, us) : serverCfg, a.isOperator);
@@ -510,7 +510,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     if (hours > 0) {
       const last = await prisma.position.findFirst({ where: { accountId: a.id, mint: cand.mint, simulated: false, status: 'closed' }, orderBy: { closedAt: 'desc' }, select: { closedAt: true, pnlUsd: true, exitReason: true } });
       const ban = reentryBan(last, Date.now(), hours);
-      if (ban) { if (feedbackLogged(`reentry:${cand.mint}`)) await log('info', `re-entry cooldown: skipped ${cand.symbol} (last live close ${ban.why}; ${Math.floor(ban.minutesLeft / 60)}h${ban.minutesLeft % 60}m left)`, a.id); return false; }
+      if (ban) { const why = `re-entry cooldown: last live close ${ban.why}; ${Math.floor(ban.minutesLeft / 60)}h${ban.minutesLeft % 60}m left`; if (feedbackLogged(`reentry:${cand.mint}`)) await log('info', `re-entry cooldown: skipped ${cand.symbol} (last live close ${ban.why}; ${Math.floor(ban.minutesLeft / 60)}h${ban.minutesLeft % 60}m left)`, a.id); outcomes?.set(cand.mint, { decision: 'cooldown', reason: why }); return false; }
     }
   }
   const { pumpAgeFromEnv, resolvePumpAge } = await import('./pump-age');
@@ -525,13 +525,38 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     });
     if (ev?.block) {
       if (feedbackLogged(`pumpage:${cand.mint}`)) await log('info', `pump-age: skipped ${cand.symbol} (${ev.reason})`, a.id);
+      outcomes?.set(cand.mint, { decision: 'too old', reason: ev.reason ?? 'late after pump' });
       return false;
     }
     if (ev?.downWeight && cand.composite < c.minCompositeScore + ev.scoreBump) {
-      if (feedbackLogged(`pumpage:${cand.mint}`)) await log('info', `pump-age: down-weighted ${cand.symbol} score ${cand.composite.toFixed(3)} < ${(c.minCompositeScore + ev.scoreBump).toFixed(3)} (${ev.reason})`, a.id);
+      const why = ev.reason ?? 'late after pump';
+      if (feedbackLogged(`pumpage:${cand.mint}`)) await log('info', `pump-age: down-weighted ${cand.symbol} score ${cand.composite.toFixed(3)} < ${(c.minCompositeScore + ev.scoreBump).toFixed(3)} (${why})`, a.id);
+      outcomes?.set(cand.mint, { decision: 'down-weighted', reason: why });
       return false;
     }
     pumpHours = ev?.hoursSincePump ?? null;
+  }
+  // Live entry: 10m buy-side volume must clear min($MIN_BUY_VOLUME_10M_USD, MIN_BUY_VOLUME_10M_MCAP_PCT% of mcap).
+  if (c.mode === 'live' && a.isOperator) {
+    const { buyVolumeGateConfig, estimateBuyVolume10m } = await import('./buy-volume-gate');
+    const bvCfg = buyVolumeGateConfig(process.env);
+    if (bvCfg) {
+      const flow = mem.pairFlow.get(cand.mint);
+      let candles: Array<{ volume: number }> | null = null;
+      if (cand.pairAddress) {
+        try { candles = await (await import('./gecko')).fiveMinuteCandles(cand.pairAddress, 8); } catch { candles = null; }
+      }
+      const ev = estimateBuyVolume10m({
+        m5VolUsd: flow?.m5Vol, m5Buys: flow?.buys, m5Sells: flow?.sells,
+        candles5m: candles, marketCapUsd: cand.marketCap,
+      }, bvCfg);
+      if (!ev.pass) {
+        const why = ev.reason ?? 'buy vol 10m below threshold';
+        if (feedbackLogged(`buyvol:${cand.mint}`)) await log('info', `buy-volume: skipped ${cand.symbol} (${why}; ${ev.source})`, a.id);
+        outcomes?.set(cand.mint, { decision: 'buy vol low', reason: why });
+        return false;
+      }
+    }
   }
   const { equity, exposure, open } = await accountEquity(a);
   const narrative = narrativeOf(cand.symbol, cand.name);
