@@ -13,6 +13,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import WithdrawPanel from '@/components/WithdrawPanel';
 import ConnectWallet from '@/components/ConnectWallet';
+import SimWithdrawPanel from '@/components/SimWithdrawPanel';
 
 type WalletState = {
   address: string | null;
@@ -241,6 +242,7 @@ export default function CletusWalletPage() {
           </div>
 
           {/* Owner-only withdraw (operator wallet; box worker only) */}
+          <SimWithdrawPanel />
           <WithdrawPanel />
 
           <ConnectWallet

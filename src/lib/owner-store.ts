@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import type { HaltAuditEvent, HaltState } from './owner-halt';
 import { EMPTY_HALT } from './owner-halt';
+import { mergeRequests, type OwnerWithdrawRequest } from './owner-withdraw-queue';
 
 export interface OwnerSnapshot {
   asOf: string;
@@ -25,6 +26,8 @@ export interface OwnerSharedState {
   snapshot: OwnerSnapshot | null;
   halt: HaltState;
   audit: HaltAuditEvent[];
+  /** Owner real-withdrawal requests (site creates, box worker executes). */
+  withdrawals?: OwnerWithdrawRequest[];
 }
 
 const g = globalThis as unknown as { __cletusOwnerState?: OwnerSharedState };
@@ -47,6 +50,7 @@ function readFileState(): OwnerSharedState | null {
       snapshot: j.snapshot ?? null,
       halt: { ...EMPTY_HALT, ...(j.halt ?? {}) },
       audit: Array.isArray(j.audit) ? j.audit.slice(-200) : [],
+      withdrawals: Array.isArray(j.withdrawals) ? j.withdrawals : [],
     };
   } catch {
     return null;
@@ -73,13 +77,14 @@ export function loadOwnerState(): OwnerSharedState {
   const halt = (f.halt?.rev ?? 0) >= (m.halt?.rev ?? 0) ? f.halt : m.halt;
   const snapshot = fileSnap >= memSnap ? f.snapshot : m.snapshot;
   const audit = (f.audit?.length ?? 0) >= (m.audit?.length ?? 0) ? f.audit : m.audit;
-  const merged = { snapshot, halt, audit };
+  const withdrawals = mergeRequests(m.withdrawals, f.withdrawals);
+  const merged = { snapshot, halt, audit, withdrawals };
   g.__cletusOwnerState = merged;
   return merged;
 }
 
 export function saveOwnerState(s: OwnerSharedState): OwnerSharedState {
-  const next = { snapshot: s.snapshot, halt: s.halt, audit: (s.audit ?? []).slice(-200) };
+  const next = { snapshot: s.snapshot, halt: s.halt, audit: (s.audit ?? []).slice(-200), withdrawals: mergeRequests(s.withdrawals ?? []) };
   g.__cletusOwnerState = next;
   writeFileState(next);
   return next;
@@ -159,7 +164,7 @@ export async function pullOwnerState(env: Record<string, string | undefined> = p
     if (!r.ok) return null;
     const j = await r.json() as OwnerSharedState;
     if (!j || typeof j !== 'object') return null;
-    return { snapshot: j.snapshot ?? null, halt: { ...EMPTY_HALT, ...(j.halt ?? {}) }, audit: Array.isArray(j.audit) ? j.audit : [] };
+    return { snapshot: j.snapshot ?? null, halt: { ...EMPTY_HALT, ...(j.halt ?? {}) }, audit: Array.isArray(j.audit) ? j.audit : [], withdrawals: Array.isArray(j.withdrawals) ? j.withdrawals : [] };
   } catch {
     return null;
   }

@@ -7,6 +7,7 @@
  */
 import { applyHaltCommand, isOwnerHaltReason, markHaltApplied, mergeHalt, type HaltState } from './owner-halt';
 import { loadOwnerState, pullOwnerState, pushOwnerState, saveOwnerState } from './owner-store';
+import { mergeRequests } from './owner-withdraw-queue';
 
 let running = false;
 let lastPush = 0;
@@ -47,8 +48,18 @@ export async function syncHaltAndPublishSnapshot(opts?: { forcePush?: boolean })
       /* keep previous snapshot */
     }
 
-    const next = saveOwnerState({ snapshot, halt, audit: local.audit });
-    const due = opts?.forcePush || Date.now() - lastPush > 3000;
+    let withdrawals = mergeRequests(local.withdrawals, remote?.withdrawals);
+    let forceWd = false;
+    if (!process.env.VERCEL && process.env.CLETUS_DEMO !== '1' && withdrawals.some((r) => r.status === 'confirmed')) {
+      try {
+        const { processOwnerWithdrawals } = await import('./owner-withdraw-exec');
+        const updated = await processOwnerWithdrawals(withdrawals);
+        if (updated.length) { withdrawals = mergeRequests(withdrawals, updated); forceWd = true; }
+      } catch { /* worker keeps request; retried next tick */ }
+    }
+
+    const next = saveOwnerState({ snapshot, halt, audit: local.audit, withdrawals });
+    const due = opts?.forcePush || forceWd || Date.now() - lastPush > 3000;
     if (due) {
       const r = await pushOwnerState(next);
       if (r.ok) lastPush = Date.now();

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import LiveWatch from './LiveWatch';
 import OwnerPlanCard from './OwnerPlanCard';
+import OwnerFundsPanel from './OwnerFundsPanel';
 import ScanningNowPanel from './ScanningNowPanel';
 import type { OwnerStatusPayload } from '@/lib/owner-status';
 
@@ -95,6 +96,8 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
       {<ScanningNowPanel scan={o.scanning} summary={o.engine.lastScanSummary} lastScanAt={o.engine.lastScanAt} />}
 
       {o.plan && <OwnerPlanCard plan={o.plan} />}
+
+      <OwnerFundsPanel />
 
       <p className="text-[11px] text-white/40">Not financial advice. Past results, including simulated or paper results, do not predict future results. Losses, including total loss of principal, can occur.</p>
     </div>
