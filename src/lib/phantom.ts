@@ -50,6 +50,27 @@ export function phantomMintsFromItems(items: PhantomTrendingItem[], band?: { min
 
 export interface PhantomTrendingResult { mints: string[]; raw: number; okFrames: number }
 
+/**
+ * GET via node:https. Phantom's edge answers 403 to undici (global fetch) requests but 200 to a plain
+ * HTTPS GET with a user agent, so this uses node:https (8 s timeout, 2 MB cap).
+ */
+async function getJson(url: string, timeoutMs = 8000): Promise<unknown> {
+  const https = await import('node:https');
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (cletus scanner)' }, timeout: timeoutMs }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (c: string) => { body += c; if (body.length > 2_000_000) req.destroy(new Error('Phantom trending: response too large')); });
+      res.on('end', () => {
+        if ((res.statusCode ?? 0) !== 200) return reject(new Error(`Phantom trending HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('Phantom trending: timeout')));
+    req.on('error', reject);
+  });
+}
+
 let cache: { at: number; key: string; v: PhantomTrendingResult } | null = null;
 
 /** Fetch Phantom trending across timeframes (cached 60s). Never throws; returns [] on failure. */
@@ -58,9 +79,7 @@ export async function fetchPhantomTrendingMints(opts: { timeframes?: readonly Ph
   const key = `${tfs.join(',')}|${opts.band?.min ?? ''}-${opts.band?.max ?? ''}|${opts.limit ?? 50}`;
   if (cache && cache.key === key && Date.now() - cache.at < 60_000) return cache.v;
   const results = await Promise.allSettled(tfs.map(async (tf) => {
-    const res = await fetch(phantomTrendingUrl(tf, opts.limit ?? 50), { headers: { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (cletus scanner)' }, signal: AbortSignal.timeout(8000), cache: 'no-store' });
-    if (!res.ok) throw new Error(`Phantom trending HTTP ${res.status}`);
-    const j = (await res.json()) as { items?: PhantomTrendingItem[] };
+    const j = (await getJson(phantomTrendingUrl(tf, opts.limit ?? 50))) as { items?: PhantomTrendingItem[] };
     return Array.isArray(j?.items) ? j.items : [];
   }));
   const items: PhantomTrendingItem[] = [];
