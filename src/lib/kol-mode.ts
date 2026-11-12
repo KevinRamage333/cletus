@@ -129,8 +129,7 @@ function readInbox(file: string, nowMs: number, windowMin: number): Callout[] {
 }
 
 /**
- * Recent KOL callouts (X API, rate-limited to one round per KOL_POLL_SEC and KOL_MAX_REQUESTS_PER_DAY; 402/429 back
- * off for an hour) merged with the inbox file. Never throws.
+ * Recent KOL callouts (X API, rate-limited to one round per KOL_POLL_SEC and KOL_MAX_REQUESTS_PER_DAY; 402 backs off 10 min (so topped-up credits are picked up fast), 429 15 min) merged with the inbox file. Never throws.
  */
 export async function fetchKolCallouts(cfg: KolConfig, nowMs = Date.now(), env: Record<string, string | undefined> = process.env): Promise<Callout[]> {
   const day = new Date(nowMs).toISOString().slice(0, 10);
@@ -146,7 +145,7 @@ export async function fetchKolCallouts(cfg: KolConfig, nowMs = Date.now(), env: 
       try {
         const url = `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(q)}&max_results=100&start_time=${start}&tweet.fields=created_at,author_id,entities&expansions=author_id&user.fields=username`;
         const res = await fetch(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000), cache: 'no-store' });
-        if (res.status === 402 || res.status === 429) { st.backoffUntil = nowMs + 3_600_000; st.lastError = `X API HTTP ${res.status}${res.status === 402 ? ' (credits depleted)' : ''}`; break; }
+        if (res.status === 402 || res.status === 429) { st.backoffUntil = nowMs + (res.status === 402 ? 600_000 : 900_000); st.lastError = `X API HTTP ${res.status}${res.status === 402 ? ' (credits depleted)' : ''}`; break; }
         if (!res.ok) { st.lastError = `X API HTTP ${res.status}`; continue; }
         fresh.push(...calloutsFromSearch(await res.json(), nowMs, cfg.windowMin));
         st.lastError = null;

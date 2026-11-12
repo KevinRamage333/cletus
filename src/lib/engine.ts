@@ -224,6 +224,27 @@ async function operatorLamports(c: Config): Promise<number | null> {
 }
 
 /**
+ * Lamports of the whole house book for the live drawdown guard: operator wallet + the owner's KOL wallet
+ * (KOL_WALLET_ADDRESS / KOL keypair). Owner transfers between the two are internal and never look like a
+ * withdrawal or a loss; KOL positions (same operator account) are already in the position value.
+ * Null if either wallet can't be read, so a half-read never registers as a flow.
+ */
+export async function houseLamports(c: Config, env: Record<string, string | undefined> = process.env): Promise<number | null> {
+  const { connection } = await import('./executor');
+  const w = await import('./wallet');
+  const { PublicKey } = await import('@solana/web3.js');
+  const op = w.getOperatorPublicKey();
+  if (!op) return null;
+  const kol = env.KOL_WALLET_ADDRESS?.trim() || w.getKolPublicKey();
+  const conn = connection(c);
+  const [a, b] = await Promise.all([
+    conn.getBalance(new PublicKey(op)),
+    kol && kol !== op ? conn.getBalance(new PublicKey(kol)) : Promise.resolve(0),
+  ]);
+  return a + b;
+}
+
+/**
  * Equity written to logs/live-trades.jsonl for a live trade: the on-chain wallet (SOL x price) plus open LIVE
  * positions, never the operator's Postgres book (which still carries ~$9.7k of paper history and made the
  * owner equity curve jump). Null when the wallet can't be read; the curve then rebuilds from trade P&L.
@@ -239,7 +260,7 @@ export async function liveEquityForLog(c: Config, accountId: string, getLamports
 }
 
 /**
- * Live drawdown guard for the operator wallet: samples on-chain equity (SOL x price + open live positions),
+ * Live drawdown guard for the house wallets (operator + owner's KOL wallet): samples on-chain equity (SOL x price + open live positions),
  * tracks a deposit-adjusted live peak (live-drawdown.ts) and, only on settled samples (no bot tx in flight):
  * recovery mode ON at half of MAX_DRAWDOWN_PERCENTAGE, pause at the full value. When the owner resumes an
  * account paused for live drawdown, the live peak is rebased to the current equity so it doesn't re-pause.
@@ -255,7 +276,7 @@ export async function sampleLiveEquity(deps: { getLamports?: () => Promise<numbe
     if (!a) return;
     const solPrice = mem.solPrice;
     if (!(solPrice > 0)) return;
-    const lamRaw = await (deps.getLamports ?? (() => operatorLamports(c)))();
+    const lamRaw = await (deps.getLamports ?? (() => houseLamports(c)))();
     if (lamRaw === null || lamRaw === undefined) return;
     const lamports = Number(lamRaw);
     if (!Number.isFinite(lamports) || lamports < 0) return;
