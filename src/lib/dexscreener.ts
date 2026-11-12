@@ -26,6 +26,44 @@ async function getJson<T>(url: string, timeoutMs = 10000): Promise<T> {
   return (await res.json()) as T;
 }
 
+
+export const POPULAR_WINDOWS = ['m5', 'h1', 'h6', 'h24'] as const;
+export type PopularWindow = (typeof POPULAR_WINDOWS)[number];
+
+/** Score for "most popular" in one window: USD volume, with txn count as a tie-breaker. */
+export function popularWindowScore(p: DexPair, w: PopularWindow): number {
+  const vol = p.volume?.[w] ?? 0;
+  const t = p.txns?.[w];
+  const tx = t ? (t.buys ?? 0) + (t.sells ?? 0) : 0;
+  return vol + tx * 10;
+}
+
+/**
+ * Top mints in each of the 5m / 1h / 6h / 24h windows. DexScreener has no official per-window
+ * trending list (`/latest/dex/pairs/solana` is 404); this approximates the site's "most popular"
+ * sections by ranking already-fetched Solana pairs on volume and txns for that window.
+ */
+export function popularMintsFromPairs(pairs: DexPair[], perWindow = 20, windows: readonly PopularWindow[] = POPULAR_WINDOWS): string[] {
+  const n = Math.max(1, Math.min(50, perWindow));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const w of windows) {
+    const ranked = pairs
+      .filter((p) => p.chainId === 'solana' && p.baseToken?.address && popularWindowScore(p, w) > 0)
+      .sort((a, b) => popularWindowScore(b, w) - popularWindowScore(a, w) || (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    let added = 0;
+    for (const p of ranked) {
+      const mint = p.baseToken.address;
+      if (seen.has(mint)) { added++; if (added >= n) break; continue; }
+      seen.add(mint);
+      out.push(mint);
+      added++;
+      if (added >= n) break;
+    }
+  }
+  return out;
+}
+
 /** Candidate Solana token addresses from the profile/boost/takeover feeds. */
 export async function discoverSolanaMints(): Promise<string[]> {
   const feeds = ['/token-profiles/latest/v1', '/token-boosts/latest/v1', '/token-boosts/top/v1', '/community-takeovers/latest/v1'];
@@ -41,12 +79,23 @@ export async function discoverSolanaMints(): Promise<string[]> {
   const queries = (process.env.SCAN_SEARCH_QUERIES ?? 'pump,pumpswap,raydium,meteora,solana').split(',').map((q) => q.trim()).filter(Boolean);
   // When the pump-age filter is on, also search pump.fun so graduations show up even if they missed the profile feeds.
   if (['on', 'true', '1', 'yes'].includes((process.env.PUMP_AGE_FILTER ?? '').trim().toLowerCase()) && !queries.includes('pump.fun')) queries.push('pump.fun');
+  // Extra searches to surface "most popular" pairs vs the main quotes (still one request each; 30 pairs).
+  for (const q of ['SOL', 'USDC']) if (!queries.includes(q)) queries.push(q);
   const searches = await Promise.allSettled(queries.map((q) => getJson<{ pairs?: DexPair[] }>(`${BASE}/latest/dex/search?q=${encodeURIComponent(q)}`)));
+  const searchPairs: DexPair[] = [];
   for (const r of searches) {
     if (r.status !== 'fulfilled') continue;
     ok++;
-    for (const p of r.value.pairs ?? []) if (p.chainId === 'solana' && p.baseToken?.address) mints.add(p.baseToken.address);
+    for (const p of r.value.pairs ?? []) {
+      if (p.chainId === 'solana' && p.baseToken?.address) {
+        mints.add(p.baseToken.address);
+        searchPairs.push(p);
+      }
+    }
   }
+  // Most popular in the 5m / 1h / 6h / 24h windows (approx; no official DexScreener trending-by-window API).
+  const perWindow = Math.max(1, Math.min(50, Number(process.env.SCAN_POPULAR_PER_WINDOW ?? 20) || 20));
+  for (const mint of popularMintsFromPairs(searchPairs, perWindow)) mints.add(mint);
   if (ok === 0) throw new Error('All DexScreener discovery feeds failed');
   // Fresh GeckoTerminal new_pools (listings + pump.fun graduations) when PUMP_AGE_FILTER is on.
   try {

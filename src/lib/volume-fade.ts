@@ -18,8 +18,8 @@ export interface FadeParams {
 }
 export const FADE_BOUNDS = { volFrac: [0.05, 0.5], minutes: [15, 30], maxBuyShare: [0.2, 0.45], sellSideVolFrac: [0.2, 1], minTxns: [4, 100], maxGainPct: [0, 100] } as const;
 // Chosen by replay (scripts/backtest/volume-fade.ts, docs/BACKTEST.md): 15-min windows and looser volume cuts shook
-// trades out of coins that were only pausing; 10% of entry volume for 20 min is the strictest 15-20 min setting.
-export const DEFAULT_FADE: FadeParams = { volFrac: 0.1, minutes: 20, maxBuyShare: 0.2, sellSideVolFrac: 0.5, minTxns: 6, maxGainPct: 15 };
+// trades out of coins that were only pausing; 10% of entry volume for 15 min (owner: move out if volume stays off for more than 15 min).
+export const DEFAULT_FADE: FadeParams = { volFrac: 0.1, minutes: 15, maxBuyShare: 0.2, sellSideVolFrac: 0.5, minTxns: 6, maxGainPct: 15 };
 
 const clamp = (x: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, x));
 export function boundedFade(p: Partial<FadeParams>): FadeParams {
