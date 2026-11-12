@@ -6,7 +6,7 @@ import { appContext } from './app-api';
 import { getConfig } from './config';
 import { log } from './logger';
 import { isDemo } from './demo';
-import { getOperatorPublicKey } from './wallet';
+import { getOperatorWalletAddress as getOperatorPublicKey } from './wallet';
 import { closePosition, ensureOperatorAccount, mem } from './engine';
 import { LAMPORTS_PER_SOL, reserveLamports, type WithdrawDeps } from './withdraw';
 
@@ -52,8 +52,8 @@ export function deps(uid: string, operator: string): WithdrawDeps {
     },
     sendTransfer: async (to, lamports) => {
       const { connection } = await import('./executor');
-      const { loadTradingKeypair } = await import('./wallet');
-      const kp = loadTradingKeypair();
+      const { loadOperatorKeypair } = await import('./wallet');
+      const kp = loadOperatorKeypair();
       const conn = connection(getConfig());
       const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
       const tx = new Transaction({ feePayer: kp.publicKey, blockhash, lastValidBlockHeight })

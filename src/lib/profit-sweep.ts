@@ -11,7 +11,7 @@ import { prisma } from './db';
 import { log } from './logger';
 import { getConfig } from './config';
 import { isDemo } from './demo';
-import { getOperatorPublicKey } from './wallet';
+import { getOperatorWalletAddress as getOperatorPublicKey } from './wallet';
 import {
   LAMPORTS_PER_SOL,
   computeSend,
@@ -357,8 +357,8 @@ export async function serverSweepDeps(): Promise<SweepDeps | null> {
     },
     sendTransfer: async (to, lamports, memo) => (await import('./live-drawdown')).withBotTx(async () => {
       const { connection } = await import('./executor');
-      const { loadTradingKeypair } = await import('./wallet');
-      const kp = loadTradingKeypair();
+      const { loadOperatorKeypair } = await import('./wallet');
+      const kp = loadOperatorKeypair();
       const conn = connection(c);
       const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
       const dest = validateDestination(to, op);

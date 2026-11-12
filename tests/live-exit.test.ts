@@ -26,7 +26,7 @@ vi.mock('@/lib/logger', () => ({ log: vi.fn(async (level: string, msg: string) =
 vi.mock('@/lib/journal', () => ({ writeTradeReflection: vi.fn(), writeDailyJournals: vi.fn() }));
 vi.mock('@/lib/profit-sweep', () => ({ maybeRunProfitSweep: vi.fn(async () => undefined) }));
 vi.mock('@/lib/live-trade-log', () => ({ appendLiveTrade: vi.fn() }));
-vi.mock('@/lib/wallet', () => ({ getOperatorPublicKey: () => '11111111111111111111111111111111' }));
+vi.mock('@/lib/wallet', () => ({ getOperatorPublicKey: () => '11111111111111111111111111111111', withKolWallet: <T>(fn: () => T) => fn(), activeWalletName: () => 'operator' }));
 vi.mock('@/lib/executor', () => ({
   SOL_MINT: 'So11111111111111111111111111111111111111112',
   tokenBalanceRaw: h.tokenBalanceRaw, executeSwap: h.executeSwap, mintDecimals: h.mintDecimals,

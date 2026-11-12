@@ -229,6 +229,8 @@ async function operatorLamports(c: Config): Promise<number | null> {
  * owner equity curve jump). Null when the wallet can't be read; the curve then rebuilds from trade P&L.
  */
 export async function liveEquityForLog(c: Config, accountId: string, getLamports: () => Promise<number | bigint | null> = () => operatorLamports(c)): Promise<number | null> {
+  // KOL add-on trades use their own wallet: don't mix its balance into the operator equity curve.
+  { const w = await import('./wallet'); if (typeof w.activeWalletName === 'function' && w.activeWalletName() === 'kol') return null; }
   try {
     const open = await prisma.position.findMany({ where: { accountId, status: 'open', simulated: false } });
     const bal = await resolveSizingBalances({ live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice, liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0), getLamports });
@@ -454,6 +456,8 @@ async function scanTickInner(gen: number): Promise<string> {
         if (await tryEnter(a, cand, audit, c, gen, scanOutcomes)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
       }
     }
+    // KOL / pump.fun add-on (KOL_MODE=on): its own source, band, gates, wallet and exits, alongside the main strategy.
+    try { summary += await kolTick(c, weights, accounts, gen, scanOutcomes, scanPicked); } catch (e) { summary += ` [kol: error ${(e as Error).message}]`; }
     summary += `, opened ${opened} position(s)`;
     stage('preset lab');
     if (c.enablePresetLab) summary += await presetLabTick([...pairs.values()], weights, c, gen);
@@ -469,6 +473,62 @@ async function scanTickInner(gen: number): Promise<string> {
   } finally {
     stage('idle');
   }
+}
+
+/** One KOL-mode round: recent KOL callouts -> $5k-$25k band -> audit + KOL gates -> entry from the KOL wallet. */
+async function kolTick(c: Config, weights: Record<SignalName, number>, accounts: Account[], gen: number, outcomes: Map<string, { decision: string; reason: string }>, picked: Set<string>): Promise<string> {
+  const km = await import('./kol-mode');
+  const kc = km.kolConfig(process.env);
+  if (!kc.enabled) return '';
+  const w = await import('./wallet');
+  const kolAddr = w.getKolPublicKey();
+  const calls = await km.fetchKolCallouts(kc);
+  const ks = km.kolStatus();
+  let tag = ` [kol: ${calls.length} callout(s)${ks.lastError ? `, X: ${ks.lastError}` : ''}${kolAddr ? '' : ', NO KOL WALLET'}`;
+  if (!calls.length || !kolAddr || c.mode !== 'live') return `${tag}]`;
+  const pairs = await fetchPairsForMints(calls.map((x) => x.mint));
+  for (const [m, p] of pairs) { if (p.priceChange) mem.pairChange.set(m, p.priceChange); notePairFlow(m, p); }
+  const kcfg = { ...c, minMarketCap: kc.minMcap, maxMarketCap: kc.maxMcap, minLiquidityUsd: kc.minLiquidityUsd, minVolume24hUsd: kc.minVolume24hUsd, minVolumeMcapRatio: 0, minTokenAgeHours: 0, requireKnownAge: false };
+  const ranked = rankCandidates([...pairs.values()], kcfg, weights);
+  const byMint = new Map(calls.map((x) => [x.mint, x]));
+  let inBand = 0, passed = 0, opened = 0;
+  for (const cand of ranked) {
+    setPrice(cand.mint, cand.priceUsd); if (cand.liquidityUsd) mem.liquidity.set(cand.mint, cand.liquidityUsd);
+    const call = byMint.get(cand.mint);
+    const who = call ? `@${call.handle}` : 'KOL';
+    mem.candidates.push({ ...cand, symbol: cand.symbol, rejected: cand.rejected });
+    if (cand.rejected) { outcomes.set(cand.mint, { decision: 'kol: filtered', reason: `${who}: ${cand.rejected}` }); continue; }
+    inBand++;
+    const audit = await auditToken(cand.mint, {
+      priceUsd: cand.priceUsd, sizeUsd: auditSizeUsd(c),
+      params: { maxHolderConcentration: c.maxHolderConcentration, requireLiquidityLock: c.requireLiquidityLock, minLpLockedPct: c.minLpLockedPct, maxAuditRiskScore: c.maxAuditRiskScore, maxSellPriceImpactPct: c.maxSellPriceImpactPct, maxTop10HolderPct: c.maxTop10HolderPct, devSellCheck: c.devSellCheck, blockIfDevExited: c.blockIfDevExited, devExitLookbackHours: c.devExitLookbackHours },
+      rugcheckApiKey: c.rugcheckApiKey, jupiterBase: c.jupiterBaseUrl, jupiterApiKey: c.jupiterApiKey,
+    });
+    if (!audit.passed) {
+      const why = audit.checks.filter((x) => !x.passed).map((x) => `${x.name}: ${x.detail}`).join(' | ');
+      if (feedbackLogged(`kol:${cand.mint}`)) await log('info', `KOL ${who} ${cand.symbol}: audit failed (${why})`);
+      outcomes.set(cand.mint, { decision: 'kol: audit failed', reason: why }); continue;
+    }
+    const { fetchRugcheck } = await import('./audit');
+    const report = (await fetchRugcheck(cand.mint)) as (Parameters<typeof km.evaluateKolGates>[0]['report'] & { tokenMeta?: { uri?: string } }) | null;
+    const [bubble, metadata] = await Promise.all([
+      (await import('./bubblemaps')).bubblemapsTopClusterPct(cand.mint),
+      km.fetchTokenMetadata(report?.tokenMeta?.uri),
+    ]);
+    const g = km.evaluateKolGates({ report, bubblemapsTopClusterPct: bubble, metadata }, kc);
+    if (!g.pass) {
+      if (feedbackLogged(`kol:${cand.mint}`)) await log('info', `KOL ${who} ${cand.symbol}: skipped (${g.reasons.join('; ')})`);
+      outcomes.set(cand.mint, { decision: 'kol: gate', reason: g.reasons.join('; ') }); continue;
+    }
+    passed++;
+    await log('info', `KOL ${who} ${cand.symbol}: gates passed (${g.notes.join(', ')}); mcap $${Math.round(cand.marketCap).toLocaleString()}`);
+    for (const a of accounts.filter((x) => x.isOperator)) {
+      assertCurrent(mem.scanFence, gen, 'scan');
+      if (await w.withKolWallet(() => tryEnter(a, cand, audit, c, gen, outcomes, 'kol'))) { opened++; picked.add(cand.mint); outcomes.set(cand.mint, { decision: 'picked (kol)', reason: `${who} callout` }); }
+    }
+  }
+  tag += `, ${inBand} in $${kc.minMcap / 1000}k-$${kc.maxMcap / 1000}k, ${passed} passed gates, opened ${opened}]`;
+  return tag;
 }
 
 /**
@@ -489,13 +549,15 @@ function feedbackLogged(mint: string, now = Date.now()): boolean {
   return true;
 }
 
-async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number, outcomes?: Map<string, { decision: string; reason: string }>): Promise<boolean> {
+async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, serverCfg: Config, scanGen?: number, outcomes?: Map<string, { decision: string; reason: string }>, mode?: 'kol'): Promise<boolean> {
+  const kol = mode === 'kol';
+  const kolCfg = kol ? (await import('./kol-mode')).kolConfig(process.env) : null;
   const a = await prisma.account.findUniqueOrThrow({ where: { id: acct.id } });
   const us = a.labPreset ? null : await accountSettings(a.id, serverCfg, a.settings);
   const c = applyOwnerPlan(us ? effectiveConfig(serverCfg, us) : serverCfg, a.isOperator);
-  if (cand.composite < c.minCompositeScore) return false;
+  if (!kol && cand.composite < c.minCompositeScore) return false;
   // Optional bounded feedback from the daily review (JOURNAL_FEEDBACK=on, default off): +0.025 per flagged setup, max +0.05.
-  if (process.env.JOURNAL_FEEDBACK) {
+  if (!kol && process.env.JOURNAL_FEEDBACK) {
     const fb = (await import('./review-runtime')).entryFeedback({ signals: cand.signals, terms: cand.terms ?? null, mcapUsd: cand.marketCap });
     if (fb.bump > 0 && cand.composite < c.minCompositeScore + fb.bump) {
       if (!a.labPreset && feedbackLogged(cand.mint)) await log('info', `review feedback: skipped ${cand.symbol} score ${cand.composite.toFixed(3)} < ${(c.minCompositeScore + fb.bump).toFixed(3)} (flagged setup: ${fb.why})`, a.id);
@@ -517,7 +579,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   const { pumpAgeFromEnv, resolvePumpAge } = await import('./pump-age');
   const paCfg = pumpAgeFromEnv(process.env);
   let pumpHours: number | null = null;
-  if (paCfg) {
+  if (paCfg && !kol) {
     const ev = await resolvePumpAge({
       mint: cand.mint,
       pairAddress: cand.pairAddress,
@@ -542,7 +604,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     const { lowVolConfig, entryVolumeOk } = await import('./low-volume-exit');
     const lv = lowVolConfig(process.env);
     if (lv) {
-      const chk = entryVolumeOk(mem.pairFlow.get(cand.mint)?.m5Vol ?? null, lv);
+      const chk = entryVolumeOk(mem.pairFlow.get(cand.mint)?.m5Vol ?? null, kolCfg ? { ...lv, minUsd: kolCfg.minVol5mUsd } : lv);
       if (!chk.ok) {
         const why = chk.reason ?? '5m volume low';
         if (feedbackLogged(`m5vol:${cand.mint}`)) await log('info', `5m volume: skipped ${cand.symbol} (${why})`, a.id);
@@ -556,7 +618,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   if (c.mode === 'live' && a.isOperator) {
     const { scalpConfig, scalpEntryCheck, describeScalpPlan } = await import('./momentum-scalp');
     const sc = scalpConfig(process.env);
-    if (sc.mode !== 'off' && feedbackLogged(`scalp:${cand.mint}`)) {
+    if (!kol && sc.mode !== 'off' && feedbackLogged(`scalp:${cand.mint}`)) {
       const flow = mem.pairFlow.get(cand.mint);
       let candles: Array<{ volume: number; open?: number; close?: number; high?: number; low?: number }> | null = null;
       if (cand.pairAddress) { try { candles = await (await import('./gecko')).fiveMinuteCandles(cand.pairAddress, 8); } catch { candles = null; } }
@@ -567,7 +629,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   // Live entry: 10m buy-side volume must clear min($MIN_BUY_VOLUME_10M_USD, MIN_BUY_VOLUME_10M_MCAP_PCT% of mcap).
   if (c.mode === 'live' && a.isOperator) {
     const { buyVolumeGateConfig, estimateBuyVolume10m } = await import('./buy-volume-gate');
-    const bvCfg = buyVolumeGateConfig(process.env);
+    const bvCfg = kolCfg ? { minUsd: kolCfg.buyVolMinUsd, mcapPct: kolCfg.buyVolMcapPct } : buyVolumeGateConfig(process.env);
     if (bvCfg) {
       const flow = mem.pairFlow.get(cand.mint);
       let candles: Array<{ volume: number }> | null = null;
@@ -586,10 +648,14 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       }
     }
   }
-  const { equity, exposure, open } = await accountEquity(a);
+  const { equity, exposure, open: allOpen } = await accountEquity(a);
+  // KOL add-on has its own slot(s): each mode only counts its own open positions against its own limit.
+  const { isKolPosition } = await import('./exit-plan-store');
+  const open = allOpen.filter((p) => (isKolPosition(p.id) ? kol : !kol));
+  const maxOpen = kolCfg ? kolCfg.maxOpen : c.maxOpenPositions;
   const narrative = narrativeOf(cand.symbol, cand.name);
   const creator = audit.creator ?? null;
-  let pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
+  let pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, equity, { maxOpenPositions: maxOpen, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
   if (!pre.allowed) { if (!pre.reasons.some((r) => r.startsWith('max open') || r.startsWith('duplicate'))) await log('info', `portfolio cap blocked ${cand.symbol}: ${pre.reasons.join('; ')}`, a.id); return false; }
 
   // A live operator entry spends real SOL, so it sizes strictly from the on-chain trading wallet.
@@ -599,7 +665,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     live: liveEntry,
     bookEquityUsd: equity,
     bookCashUsd: a.cashUsd,
-    liveOpenValueUsd: open.filter((p) => !p.simulated).reduce((s, p) => s + positionValue(p), 0),
+    liveOpenValueUsd: allOpen.filter((p) => !p.simulated).reduce((s, p) => s + positionValue(p), 0),
     solPriceUsd: mem.solPrice,
     getLamports: () => operatorLamports(c),
   });
@@ -610,7 +676,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   const sizingEquity = bal.equityUsd;
   const sizingCash = bal.cashUsd;
   if (liveEntry) {
-    pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, sizingEquity, { maxOpenPositions: c.maxOpenPositions, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
+    pre = portfolioCheck(open, { mint: cand.mint, sizeUsd: Number.MAX_SAFE_INTEGER, narrative, creator }, sizingEquity, { maxOpenPositions: maxOpen, maxTotalExposurePct: c.maxTotalExposurePct, maxPositionsPerCluster: c.maxPositionsPerCluster });
     if (!pre.allowed) return false;
   }
 
@@ -662,6 +728,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
   let fillPrice: number, tokenAmount: number, fees: number, entryTx: string | null = null;
   // A scan the watchdog abandoned must never spend: re-check the fence right before the swap.
   if (scanGen !== undefined) assertCurrent(mem.scanFence, scanGen, 'scan');
+  if (live && kol) kolPendingMints.add(cand.mint);
   if (live) {
     let r: { signature: string; outAmount: string };
     try {
@@ -671,6 +738,7 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
       await heal('ok', undefined, 'swap');
     } catch (e) {
       await heal(classifyError(e), (e as Error).message, 'swap');
+      kolPendingMints.delete(cand.mint);
       await log('error', `LIVE buy failed ${cand.symbol}: ${(e as Error).message}`, a.id);
       return false;
     }
@@ -705,8 +773,8 @@ async function tryEnter(acct: Account, cand: ScanCandidate, audit: AuditResult, 
     prisma.account.update({ where: { id: a.id }, data: { cashUsd: { decrement: sizeUsd + fees } } }),
   ]);
   await log('trade', `${live ? 'LIVE' : 'PAPER'} BUY ${cand.symbol} $${sizeUsd.toFixed(2)} @ ${fillPrice.toPrecision(6)} (score ${cand.composite.toFixed(3)}, mcap $${Math.round(cand.marketCap).toLocaleString()}, tier ${size.tier} ${size.multiplier}x; ${size.notes.join(', ')})`, a.id);
-  if (live && adaptiveExitsOn(c, a.isOperator)) {
-    try { await createExitPlan(created, 'entry', { composite: cand.composite, liquidityUsd: liquidity ?? null }); } catch (e) { await log('warn', `LIVE ${cand.symbol}: exit plan failed (${(e as Error).message}); fixed owner exits apply`, a.id); }
+  if (live && (kol || adaptiveExitsOn(c, a.isOperator))) {
+    try { await createExitPlan(created, 'entry', { composite: cand.composite, liquidityUsd: liquidity ?? null, kol }); if (kol) kolPendingMints.delete(cand.mint); } catch (e) { await log('warn', `LIVE ${cand.symbol}: exit plan failed (${(e as Error).message}); fixed owner exits apply`, a.id); }
   }
   if (journalOn()) await journalEntryHook(a, c, cand, created, live, liquidity ?? null);
   if (live) {
@@ -832,8 +900,16 @@ async function journalExitHook(p: Position, observed: number, reason: string, ex
 }
 
 /** Compute, persist and log a position's exit plan. */
-async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra: { composite?: number; liquidityUsd?: number | null; currentPrice?: number } = {}) {
+async function createExitPlan(p: Position, source: 'entry' | 'recomputed', extra: { composite?: number; liquidityUsd?: number | null; currentPrice?: number; kol?: boolean } = {}) {
   const store = await import('./exit-plan-store');
+  if (extra.kol || store.isKolPosition(p.id)) {
+    const km = await import('./kol-mode');
+    const kplan = km.kolExitPlan(km.kolConfig(process.env), extra.composite ?? p.compositeScore, extra.liquidityUsd ?? mem.liquidity.get(p.mint) ?? null);
+    planAnnounced.add(p.id);
+    store.savePlanRecord({ positionId: p.id, mint: p.mint, symbol: p.symbol, plan: kplan, source, computedAt: new Date().toISOString(), maePct: 0, mode: 'kol' });
+    await log('info', `LIVE exit plan ${p.symbol} (KOL mode): take profit +${kplan.takeProfitPct}% (sell 100%) | stop -${kplan.stopLossPct}% | stale ${kplan.stalePositionMinutes}m ±${kplan.staleBandPct}% | $${km.kolConfig(process.env).minVol5mUsd} 5m-volume exit`, p.accountId);
+    return kplan;
+  }
   const currentPnlPct = source === 'recomputed' && extra.currentPrice ? (extra.currentPrice / p.entryPrice - 1) * 100 : undefined;
   let plan = computeExitPlan({
     priceChange: mem.pairChange.get(p.mint) ?? null,
@@ -877,12 +953,18 @@ const planWarned = new Set<string>();
 const planAnnounced = new Set<string>();
 
 async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
+  return inPositionWallet(p.id, p.mint, () => evaluatePositionInner(p, price, killSwitch, serverCfg));
+}
+async function evaluatePositionInner(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
   const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
   let c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
   if (!p.simulated && adaptiveExitsOn(c, !!acct?.isOperator)) {
     try {
       const plan = await exitPlanFor(p, price);
-      if (plan) c = { ...c, ...planOverrides(plan) };
+      if (plan) {
+        const km = await import('./kol-mode');
+        c = km.isKolPlan(plan) ? (km.kolPlanValid(plan) ? { ...c, ...km.kolOverrides(plan) } : c) : { ...c, ...planOverrides(plan) };
+      }
     } catch (e) {
       if (!planWarned.has(p.id)) { planWarned.add(p.id); await log('warn', `LIVE ${p.symbol}: exit plan unavailable (${(e as Error).message}); fixed owner exits apply`, p.accountId); }
     }
@@ -1048,7 +1130,9 @@ async function checkLowVolume(p: Position, price: number): Promise<boolean> {
   if (!lv) return false;
   const flow = mem.pairFlow.get(p.mint);
   if (!flow) return false;
-  const why = lowVolumeExitReason({ m5VolUsd: flow.m5Vol, openedAtMs: p.openedAt.getTime(), sampleAtMs: flow.at, nowMs: Date.now() }, lv);
+  const { isKolPosition } = await import('./exit-plan-store');
+  const lvFor = isKolPosition(p.id) ? { ...lv, minUsd: (await import('./kol-mode')).kolConfig(process.env).minVol5mUsd } : lv;
+  const why = lowVolumeExitReason({ m5VolUsd: flow.m5Vol, openedAtMs: p.openedAt.getTime(), sampleAtMs: flow.at, nowMs: Date.now() }, lvFor);
   if (!why) return false;
   const gainPct = (price / p.entryPrice - 1) * 100;
   await log('warn', `LIVE ${p.symbol}: LOW 5m VOLUME exit (${why}; P&L ${gainPct >= 0 ? '+' : ''}${gainPct.toFixed(1)}%)`, p.accountId);
@@ -1093,6 +1177,9 @@ async function checkVolumeFade(p: Position, price: number): Promise<boolean> {
 
 /** Sell `fraction` of the remaining position at a take-profit rung; the rest keeps running. */
 export async function partialClose(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
+  return inPositionWallet(positionId, null, () => partialCloseLocked(positionId, price, fraction, rung, gainPct));
+}
+async function partialCloseLocked(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
   if (!mem.selling.tryAcquire(positionId)) return; // another path is already selling this position
   try { await partialCloseInner(positionId, price, fraction, rung, gainPct); } finally { mem.selling.release(positionId); }
 }
@@ -1145,7 +1232,22 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
   }
 }
 
+/** Mints whose KOL buy is in flight (before the plan record marks the position as KOL). */
+const kolPendingMints = new Set<string>();
+/** Run `fn` with the wallet that holds this position (KOL add-on wallet or the operator wallet). */
+async function inPositionWallet<T>(positionId: string, mint: string | null, fn: () => Promise<T>): Promise<T> {
+  const [{ isKolPosition }, w] = await Promise.all([import('./exit-plan-store'), import('./wallet')]);
+  if (typeof w.withKolWallet !== 'function' || typeof w.activeWalletName !== 'function' || w.activeWalletName() === 'kol') return fn();
+  if (isKolPosition(positionId) || (mint !== null && kolPendingMints.has(mint))) return w.withKolWallet(fn);
+  return fn();
+}
+
 export async function closePosition(positionId: string, price: number, reason: string) {
+  // Only look the mint up while a KOL buy is in flight (its plan record not written yet).
+  const mint = kolPendingMints.size ? (await prisma.position.findUnique({ where: { id: positionId }, select: { mint: true } }))?.mint ?? null : null;
+  return inPositionWallet(positionId, mint, () => closePositionLocked(positionId, price, reason));
+}
+async function closePositionLocked(positionId: string, price: number, reason: string) {
   if (!mem.selling.tryAcquire(positionId)) return; // another path is already selling this position
   try { await closePositionInner(positionId, price, reason); } finally { mem.selling.release(positionId); }
 }

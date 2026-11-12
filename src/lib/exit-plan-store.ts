@@ -11,6 +11,8 @@ import type { ExitPlan, PastTrade } from './adaptive-exits';
 export interface PlanRecord {
   positionId: string; mint: string; symbol: string;
   plan: ExitPlan; source: 'entry' | 'recomputed'; computedAt: string;
+  /** Strategy mode: 'kol' = KOL/pump.fun add-on (own exits; excluded from the adaptive learning loop). */
+  mode?: 'kol';
   maePct: number;
   /** Volume-fade baseline: mean 5-min USD volume around entry. */
   volBaselineM5Usd?: number;
@@ -58,11 +60,14 @@ export function recordOutcome(positionId: string, o: { mfePct: number; pnlPct: n
 /** Closed live trades with a known plan, newest last: the learning loop's input. Book write-offs are excluded. */
 export function pastTrades(limit = 200): PastTrade[] {
   return Object.values(load())
-    .filter((r) => r.outcome && r.outcome.reason !== 'stuck_written_off' && r.outcome.reason !== 'external_zero')
+    .filter((r) => r.outcome && r.mode !== 'kol' && r.outcome.reason !== 'stuck_written_off' && r.outcome.reason !== 'external_zero')
     .sort((a, b) => (a.outcome!.closedAt < b.outcome!.closedAt ? -1 : 1))
     .slice(-limit)
     .map((r) => ({ mfePct: r.outcome!.mfePct, maePct: r.outcome!.maePct, pnlPct: r.outcome!.pnlPct, stopLossPct: r.plan.stopLossPct, won: r.outcome!.pnlPct > 0 }));
 }
+
+/** True when an open/closed position belongs to the KOL add-on mode. */
+export function isKolPosition(positionId: string): boolean { return load()[positionId]?.mode === 'kol'; }
 
 /** Test hook. */
 export function _resetPlanStoreCache(): void { cache = null; }

@@ -56,6 +56,7 @@ export FADE_MINUTES=15            # volume-fade: move out if 5m volume stays off
 export LOW_VOL_5M_EXIT_USD=1500     # owner rule: no entry under $1.5k 5m volume; sell if 5m volume < $1.5k (after the first 5m candle)
 export SCAN_PHANTOM_TRENDING=on   # Phantom Explore trending (1h/4h/12h/24h) as an extra scan source
 export MOMENTUM_SCALP=dryrun       # log-only: replay negative OOS (Nov 11), never trades
+export KOL_MODE=on                # KOL/pump.fun add-on: X KOL callouts, $5k-$25k, own wallet (KOL_WALLET_KEYPAIR_PATH), +15% TP / -7% SL
 export HOLDER_SELL_EXIT=on       # 3-4 RPC calls per open position every HOLDER_WATCH_SEC (120 s); baseline in logs/holder-baselines.json
 
 export PUMP_AGE_FILTER=on         # impulse 0-6h favored; block late+below-anchor; fresh new_pools; waived min token age
