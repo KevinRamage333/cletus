@@ -98,6 +98,20 @@ export function wsIsStale(connected: boolean, lastMsgAt: number | undefined, now
   return connected && !!lastMsgAt && now - lastMsgAt > staleMs;
 }
 
+export const wsHandshakeTimeoutMs = (env: Record<string, string | undefined> = process.env) => {
+  const v = Number(env.HELIUS_WS_CONNECT_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : 8_000;
+};
+export const wsCloseGraceMs = (env: Record<string, string | undefined> = process.env) => {
+  const v = Number(env.HELIUS_WS_CLOSE_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : 2_000;
+};
+
+/** True when a handshake or close has waited too long and should be abandoned (pure; unit-tested). */
+export function wsAttemptTimedOut(startedAt: number, now: number, timeoutMs: number): boolean {
+  return timeoutMs > 0 && now - startedAt >= timeoutMs;
+}
+
 function send(obj: unknown) { if (st.ws && st.ws.readyState === 1) st.ws.send(JSON.stringify(obj)); }
 
 function subscribe(pool: string) {
@@ -115,18 +129,56 @@ function connect() {
   const WS = (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket;
   if (!WS) return;
   st.connecting = true;
-  const ws = new WS(url);
+  let settled = false;
+  let handshake: NodeJS.Timeout | undefined;
+  let closeWait: NodeJS.Timeout | undefined;
+  let ws: WebSocket;
+  try {
+    ws = new WS(url);
+  } catch {
+    st.connecting = false;
+    const delay = Math.min(60_000, 1000 * 2 ** st.retry++);
+    if (st.subs.size) setTimeout(connect, delay);
+    return;
+  }
   st.ws = ws;
+
+  const down = () => {
+    if (settled) return;
+    settled = true;
+    if (handshake) clearTimeout(handshake);
+    if (closeWait) clearTimeout(closeWait);
+    st.connecting = false; st.connected = false; clearInterval(st.ping);
+    if (st.ws === ws) st.ws = null;
+    const delay = Math.min(60_000, 1000 * 2 ** st.retry++);
+    if (st.subs.size) setTimeout(connect, delay);
+  };
+
+  // If the TCP/TLS handshake never finishes, `connecting` would stay true and block every later connect().
+  handshake = setTimeout(() => {
+    if (settled || st.connected) return;
+    try { ws.close(); } catch { /* ignore */ }
+    closeWait = setTimeout(down, wsCloseGraceMs());
+    closeWait.unref?.();
+  }, wsHandshakeTimeoutMs());
+  handshake.unref?.();
+
   ws.onopen = () => {
+    if (settled) { try { ws.close(); } catch { /* ignore */ } return; }
+    if (handshake) clearTimeout(handshake);
     st.connecting = false; st.connected = true; st.retry = 0; st.bySub.clear(); st.byReq.clear(); st.lastMsgAt = Date.now();
     for (const pool of st.subs.keys()) subscribe(pool);
     clearInterval(st.ping);
     st.ping = setInterval(() => {
       // Logs mode watchdog: a socket that stopped answering (even pings) is closed so `down()` reconnects; polling covers the gap.
+      // close() is not awaited — if it hangs, the close-grace timer drops the socket so scans/polling stay unblocked.
       if (wsMode() === 'logs' && wsIsStale(st.connected, st.lastMsgAt, Date.now(), fastPriceParams().wsStaleMs)) {
         st.staleReconnects = (st.staleReconnects ?? 0) + 1;
         console.log(`[cletus] Helius WebSocket silent >${Math.round(fastPriceParams().wsStaleMs / 1000)}s; reconnecting (polling continues)`);
         try { ws.close(); } catch { /* ignore */ }
+        if (closeWait) clearTimeout(closeWait);
+        closeWait = setTimeout(down, wsCloseGraceMs());
+        closeWait.unref?.();
         return;
       }
       send({ jsonrpc: '2.0', id: 0, method: 'getHealth' });
@@ -149,14 +201,8 @@ function connect() {
       if (s) { st.events++; st.onChange?.(s.mint, n.signature); }
     }
   };
-  const down = () => {
-    st.connecting = false; st.connected = false; clearInterval(st.ping);
-    if (st.ws === ws) st.ws = null;
-    const delay = Math.min(60_000, 1000 * 2 ** st.retry++);
-    if (st.subs.size) setTimeout(connect, delay);
-  };
   ws.onclose = down;
-  ws.onerror = () => { try { ws.close(); } catch { /* ignore */ } };
+  ws.onerror = () => { try { ws.close(); } catch { down(); } };
 }
 
 /** Keep subscriptions in sync with the set of open positions ({pool -> mint}). */

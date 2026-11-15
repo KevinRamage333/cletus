@@ -33,7 +33,10 @@ function makePrisma(): PrismaClient {
     pool.on?.('connect', (client: { query: (sql: string) => unknown }) => {
       void client.query('SET search_path TO app, public');
     });
-    const adapter = new PrismaNeon(pool);
+    // Driver adapters default schemaName to `public` unless set here, which made
+    // Prisma qualify app tables as public."EngineState" / public."LogEntry"
+    // (42501 permission denied for schema public). @@schema("app") is not enough.
+    const adapter = new PrismaNeon(pool, { schema: 'app' });
     return new PrismaClient({ adapter, log: ['error'] });
   }
   return new PrismaClient({ log: ['error'] });

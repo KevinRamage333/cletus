@@ -4,9 +4,34 @@ export interface ExitParams {
   stalePositionMinutes?: number; staleBandPct?: number;
   /** Peak gain (%) that arms the trailing stop. Unset/0 = breakEvenTriggerPct (old behaviour). */
   trailingArmPct?: number;
+  /** Hard ceiling on a dynamic/plan stop (looser stops are capped; tighter stops stay tighter). */
+  hardStopCeilingPct?: number;
 }
 export interface PositionLike { entryPrice: number; highestPrice: number; openedAt: Date }
 export type ExitReason = 'stop_loss' | 'take_profit' | 'break_even' | 'trailing_stop' | 'stale_exit' | 'time_exit';
+
+/** House hard stop: a dynamic or plan stop may be tighter, never looser than this (percent). */
+export const HARD_STOP_CEILING_PCT = 20;
+
+/** Effective stop = min(plan/dynamic stop, hard ceiling). Invalid values fall back to the ceiling. */
+export function effectiveStopLossPct(stopLossPct: number, hardCeilingPct = HARD_STOP_CEILING_PCT): number {
+  const stop = Number(stopLossPct);
+  const cap = Number(hardCeilingPct);
+  if (stop > 0 && cap > 0) return Math.min(stop, cap);
+  if (stop > 0) return stop;
+  return cap > 0 ? cap : HARD_STOP_CEILING_PCT;
+}
+
+/**
+ * Stop/TP (and other exitDecision reasons) always beat volume/fade. Used so a breached stop
+ * cannot be skipped by a later low-volume sell.
+ */
+export function preferStopOverSecondary<S extends string>(
+  primary: ExitReason | null,
+  secondary: S | null,
+): ExitReason | S | null {
+  return primary ?? secondary;
+}
 
 /** Decide whether an open position should be FULLY closed at `price` (pure; unit-tested). */
 export function exitDecision(pos: PositionLike, price: number, p: ExitParams, now = new Date()): ExitReason | null {
@@ -14,7 +39,8 @@ export function exitDecision(pos: PositionLike, price: number, p: ExitParams, no
   const pnlPct = (price / pos.entryPrice - 1) * 100;
   const peakPct = (peak / pos.entryPrice - 1) * 100;
   const ageMin = (now.getTime() - pos.openedAt.getTime()) / 60_000;
-  if (pnlPct <= -p.stopLossPct) return 'stop_loss';
+  const stopPct = effectiveStopLossPct(p.stopLossPct, p.hardStopCeilingPct ?? HARD_STOP_CEILING_PCT);
+  if (pnlPct <= -stopPct) return 'stop_loss';
   if (pnlPct >= p.takeProfitPct) return 'take_profit';
   if (p.enableTrailingStop && peakPct >= (p.trailingArmPct && p.trailingArmPct > 0 ? p.trailingArmPct : p.breakEvenTriggerPct) && price <= peak * (1 - p.trailingStopPct / 100) && price > pos.entryPrice) return 'trailing_stop';
   if (peakPct >= p.breakEvenTriggerPct && price <= pos.entryPrice) return 'break_even';

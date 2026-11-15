@@ -18,7 +18,7 @@ import { computePositionSize, computeOwnerTradeSize } from './sizing';
 import { ownerRecoverySize } from './owner-plan';
 import { resolveSizingBalances } from './live-sizing';
 import { complianceGate, concentrationCap } from './compliance';
-import { exitDecision, partialTakeProfit } from './exits';
+import { exitDecision, partialTakeProfit, effectiveStopLossPct, HARD_STOP_CEILING_PCT } from './exits';
 import { flowExitFor, entryVerdict } from './flow-collector';
 import { simFillPrice } from './fills';
 import { narrativeOf, portfolioCheck, mapLimit } from './portfolio';
@@ -94,13 +94,55 @@ const healParams = (c: Config): HealParams => ({
   maxConsecutiveFailures: c.maxConsecutiveFailures, pauseMinutes: c.failurePauseMinutes,
 });
 
+export const engineStateDeadlineMs = () => envNum('ENGINE_STATE_DEADLINE_MS', 3_000);
+
+type EngineStateRow = Awaited<ReturnType<typeof prisma.engineState.upsert>>;
+let cachedEngineState: EngineStateRow | null = null;
+let cachedOpenPositions: Position[] = [];
+
+function fallbackEngineState(c: Config, err?: string): EngineStateRow {
+  return {
+    id: 'global',
+    killSwitch: cachedEngineState?.killSwitch ?? false,
+    killReason: cachedEngineState?.killReason ?? null,
+    killedAt: cachedEngineState?.killedAt ?? null,
+    priorityFeeLamports: cachedEngineState?.priorityFeeLamports ?? c.priorityFeeLamports,
+    slippageBps: cachedEngineState?.slippageBps ?? Math.round(c.slippageTolerance * 10000),
+    consecutiveFailures: cachedEngineState?.consecutiveFailures ?? 0,
+    pausedUntil: cachedEngineState?.pausedUntil ?? null,
+    lastScanAt: cachedEngineState?.lastScanAt ?? null,
+    lastError: err ?? cachedEngineState?.lastError ?? null,
+    scanCount: cachedEngineState?.scanCount ?? 0,
+    updatedAt: cachedEngineState?.updatedAt ?? new Date(),
+  };
+}
+
+/** Load EngineState, but never stall the monitor/scan: time-box Prisma and fall back to the last good row. */
 export async function getEngineState() {
   const c = getConfig();
-  return prisma.engineState.upsert({
-    where: { id: 'global' },
-    create: { id: 'global', priorityFeeLamports: c.priorityFeeLamports, slippageBps: Math.round(c.slippageTolerance * 10000) },
-    update: {},
-  });
+  try {
+    const st = await withDeadline(prisma.engineState.upsert({
+      where: { id: 'global' },
+      create: { id: 'global', priorityFeeLamports: c.priorityFeeLamports, slippageBps: Math.round(c.slippageTolerance * 10000) },
+      update: {},
+    }), engineStateDeadlineMs(), 'engine state');
+    cachedEngineState = st;
+    return st;
+  } catch (e) {
+    const reason = (e as Error)?.message ?? 'engine state unavailable';
+    if (cachedEngineState) return cachedEngineState;
+    return fallbackEngineState(c, reason);
+  }
+}
+
+async function loadOpenPositions(): Promise<Position[]> {
+  try {
+    const open = await withDeadline(prisma.position.findMany({ where: { status: 'open' } }), engineStateDeadlineMs(), 'open positions');
+    cachedOpenPositions = open;
+    return open;
+  } catch {
+    return cachedOpenPositions;
+  }
 }
 
 async function heal(kind: 'ok' | FailureKind, err?: string, source: 'scan' | 'swap' = 'scan') {
@@ -249,11 +291,11 @@ export async function houseLamports(c: Config, env: Record<string, string | unde
  * positions, never the operator's Postgres book (which still carries ~$9.7k of paper history and made the
  * owner equity curve jump). Null when the wallet can't be read; the curve then rebuilds from trade P&L.
  */
-export async function liveEquityForLog(c: Config, accountId: string, getLamports: () => Promise<number | bigint | null> = () => operatorLamports(c)): Promise<number | null> {
-  // KOL add-on trades use their own wallet: don't mix its balance into the operator equity curve.
-  { const w = await import('./wallet'); if (typeof w.activeWalletName === 'function' && w.activeWalletName() === 'kol') return null; }
+export async function liveEquityForLog(c: Config, _accountId: string, getLamports: () => Promise<number | bigint | null> = () => operatorLamports(c)): Promise<number | null> {
+  // Same house number as the heartbeat: operator + KOL SOL plus all open LIVE positions.
+  // (Do not return null for KOL trades — that made event equity look like the $10 size.)
   try {
-    const open = await prisma.position.findMany({ where: { accountId, status: 'open', simulated: false } });
+    const open = await prisma.position.findMany({ where: { status: 'open', simulated: false } });
     const bal = await resolveSizingBalances({ live: true, bookEquityUsd: 0, bookCashUsd: 0, solPriceUsd: mem.solPrice, liveOpenValueUsd: open.reduce((s, x) => s + positionValue(x), 0), getLamports });
     return bal.ok ? Math.round(bal.equityUsd * 100) / 100 : null;
   } catch { return null; }
@@ -994,10 +1036,10 @@ const planWarned = new Set<string>();
 /** Plans already logged by this process (a stored plan is announced once after a restart). */
 const planAnnounced = new Set<string>();
 
-async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
+async function evaluatePosition(p: Position, price: number, killSwitch: boolean, serverCfg: Config): Promise<boolean> {
   return inPositionWallet(p.id, p.mint, () => evaluatePositionInner(p, price, killSwitch, serverCfg));
 }
-async function evaluatePositionInner(p: Position, price: number, killSwitch: boolean, serverCfg: Config) {
+async function evaluatePositionInner(p: Position, price: number, killSwitch: boolean, serverCfg: Config): Promise<boolean> {
   const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
   let c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
   if (!p.simulated && adaptiveExitsOn(c, !!acct?.isOperator)) {
@@ -1013,6 +1055,13 @@ async function evaluatePositionInner(p: Position, price: number, killSwitch: boo
     const low = Math.min(mem.lowest.get(p.id) ?? price, price);
     mem.lowest.set(p.id, low);
     void import('./exit-plan-store').then((s) => s.noteDrawdown(p.id, Math.max(0, (1 - low / p.entryPrice) * 100))).catch(() => undefined);
+  }
+  // Hard ceiling on any dynamic/plan stop; tighter stops (e.g. KOL 7%) stay tighter. Sell immediately on breach
+  // before volume rules, holder-watch, or a Prisma lastPrice write can delay the exit.
+  c = { ...c, stopLossPct: effectiveStopLossPct(c.stopLossPct, HARD_STOP_CEILING_PCT) };
+  if (!killSwitch && p.entryPrice > 0 && price > 0 && (price / p.entryPrice - 1) * 100 <= -c.stopLossPct) {
+    await closePosition(p.id, price, 'stop_loss');
+    return true;
   }
   if (journalOn()) void import('./trade-journal').then((j) => j.noteLow(p.id, price)).catch(() => undefined);
   const highest = Math.max(p.highestPrice, price);
@@ -1038,9 +1087,10 @@ async function evaluatePositionInner(p: Position, price: number, killSwitch: boo
     } catch { /* holder watch must never block the monitor */ }
   }
   const reason = killSwitch ? 'kill_switch' : flow ?? holderReason ?? exitDecision({ entryPrice: p.entryPrice, highestPrice: highest, openedAt: p.openedAt }, price, { ...c });
-  if (reason) { await closePosition(p.id, price, reason); return; }
+  if (reason) { await closePosition(p.id, price, reason); return true; }
   const partial = partialTakeProfit(p, price, c.tpLadder, p.partialsTaken, c.takeProfitPct);
   if (partial) await partialClose(p.id, price, partial.fraction, partial.rung, partial.gainPct);
+  return false;
 }
 
 const fastChecks = new Map<string, number>();
@@ -1083,7 +1133,7 @@ async function fastRecheck(mint: string, signature?: string) {
     setPrice(mint, px);
     const st = await getEngineState();
     const open = await prisma.position.findMany({ where: { status: 'open', mint } });
-    await mapLimit(open, 4, (p) => evaluatePosition(p, px!, st.killSwitch, c));
+    await mapLimit(open, 4, async (p) => { await evaluatePosition(p, px!, st.killSwitch, c); });
   } catch { /* polling is the backstop */ }
 }
 
@@ -1112,7 +1162,7 @@ async function monitorTickInner(gen: number): Promise<void> {
     stage('engine state');
     const st = await getEngineState();
     stage('open positions');
-    const open = await prisma.position.findMany({ where: { status: 'open' } });
+    const open = await loadOpenPositions();
     // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
     const { syncPoolSubscriptions } = await import('./helius');
     syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m, sig) => onPoolChange(m, sig));
@@ -1126,10 +1176,14 @@ async function monitorTickInner(gen: number): Promise<void> {
     for (const [m, v] of fast) setPrice(m, v);
     const missing = mints.filter((m) => !fast.has(m));
     const needLiq = mints.filter((m) => !mem.liquidity.has(m));
-    if (missing.length || needLiq.length || mem.monitorTicks % 10 === 0) {
+    // When the Helius WebSocket is down, refresh DexScreener every tick (not every 10th) so stops stay tight.
+    let wsDown = true;
+    try { wsDown = !(await import('./helius')).wsStatus().connected; } catch { wsDown = true; }
+    const refreshAll = mem.monitorTicks % 10 === 0 || wsDown;
+    if (missing.length || needLiq.length || refreshAll) {
       try {
         stage('dexscreener prices');
-        const pairs = await fetchPairsForMints([...new Set([...missing, ...needLiq, ...(mem.monitorTicks % 10 === 0 ? mints : [])])]);
+        const pairs = await fetchPairsForMints([...new Set([...missing, ...needLiq, ...(refreshAll ? mints : [])])]);
         for (const [m, p] of pairs) {
           if (!fast.has(m) && Number(p.priceUsd) > 0) setPrice(m, Number(p.priceUsd));
           if (p.liquidity?.usd) mem.liquidity.set(m, p.liquidity.usd);
@@ -1154,9 +1208,10 @@ async function monitorTickInner(gen: number): Promise<void> {
         return closePosition(p.id, p.lastPrice, 'stale_price');
       }
       const px = mem.prices.get(p.mint) ?? p.lastPrice;
+      // Stop/TP first: a breached stop must sell immediately and never be skipped by low-volume / fade.
+      if (await evaluatePosition(p, px, st.killSwitch, c)) return;
       if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkLowVolume(p, px)) return;
       if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkVolumeFade(p, px)) return;
-      return evaluatePosition(p, px, st.killSwitch, c);
     });
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
@@ -1482,7 +1537,16 @@ export async function startEngine() {
       const now = { wall: Date.now(), mono: performance.now() };
       const gap = suspendGapMs(last, now);
       last = now;
-      if (gap > 0) void log('warn', `box was suspended ~${Math.round(gap / 1000)}s (wall clock jumped, process clock did not): scans and stop checks were paused meanwhile${c.mode === 'live' ? '; open positions are re-checked now' : ''}`).catch(() => undefined);
+      if (gap > 0) {
+        void log('warn', `box was suspended ~${Math.round(gap / 1000)}s (wall clock jumped, process clock did not): scans and stop checks were paused meanwhile${c.mode === 'live' ? '; open positions are re-checked now' : ''}`).catch(() => undefined);
+        if (c.mode === 'live') {
+          // A tick that started before the suspend may still hold the running flag until its frozen
+          // deadline fires; release it so stops are re-checked immediately on wake.
+          if (mem.monitoring) { nextGen(mem.monitorFence); mem.monitoring = false; }
+          if (mem.scanning) { nextGen(mem.scanFence); mem.scanning = false; }
+          void monitorTick();
+        }
+      }
     }, 10_000));
   }
   if (c.mode === 'live') {

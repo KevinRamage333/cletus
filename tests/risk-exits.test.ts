@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hardRiskBlock, capByEquityPct, lossStreakPause } from '@/lib/risk';
-import { exitDecision, parseTpLadder, partialTakeProfit } from '@/lib/exits';
+import { exitDecision, parseTpLadder, partialTakeProfit, effectiveStopLossPct, HARD_STOP_CEILING_PCT, preferStopOverSecondary } from '@/lib/exits';
 import { computeScorecard } from '@/lib/scorecard';
 import { submissionPlan, parseSubmissionMode } from '@/lib/submission';
 import { simFillPrice } from '@/lib/fills';
@@ -103,5 +103,38 @@ describe('extra pre-trade checks', () => {
     const young = evaluateAudit({ ...base, creator: 'Dev1', creatorBalance: 0, detectedAt: new Date(Date.now() - 3600_000).toISOString() }, sell, P);
     expect(young.checks.find((c) => c.name === 'dev_selling')?.passed).toBe(false);
     expect(young.creator).toBe('Dev1');
+  });
+});
+
+describe('hard stop ceiling and stop priority', () => {
+  const now = new Date();
+  const base = { takeProfitPct: 50, breakEvenTriggerPct: 5, enableTrailingStop: false, trailingStopPct: 5, holdTimeMinutes: 120 };
+  const pos = { entryPrice: 1, highestPrice: 1, openedAt: now };
+
+  it('effective stop is the tighter of the plan stop and the 20% hard ceiling', () => {
+    expect(effectiveStopLossPct(7, HARD_STOP_CEILING_PCT)).toBe(7);
+    expect(effectiveStopLossPct(25, HARD_STOP_CEILING_PCT)).toBe(20);
+    expect(effectiveStopLossPct(20, 20)).toBe(20);
+    expect(effectiveStopLossPct(0, 20)).toBe(20);
+  });
+
+  it('a 25% dynamic stop still sells at -20% because of the hard ceiling', () => {
+    const p = { ...base, stopLossPct: 25 };
+    expect(exitDecision(pos, 0.79, p, now)).toBe('stop_loss'); // -21%
+    expect(exitDecision(pos, 0.79, { ...p, hardStopCeilingPct: 20 }, now)).toBe('stop_loss');
+    expect(exitDecision(pos, 0.82, p, now)).toBeNull(); // -18% — under a 20% ceiling
+  });
+
+  it('a KOL 7% stop still fires at -7%, not only at the 20% ceiling', () => {
+    const p = { ...base, stopLossPct: 7, hardStopCeilingPct: 20 };
+    expect(exitDecision(pos, 0.92, p, now)).toBe('stop_loss'); // -8%
+    expect(exitDecision(pos, 0.94, p, now)).toBeNull(); // -6%
+  });
+
+  it('a breached stop is chosen over a low-volume / fade exit', () => {
+    expect(preferStopOverSecondary('stop_loss', 'low_volume_5m')).toBe('stop_loss');
+    expect(preferStopOverSecondary(null, 'low_volume_5m')).toBe('low_volume_5m');
+    expect(preferStopOverSecondary('take_profit', 'volume_fade')).toBe('take_profit');
+    expect(preferStopOverSecondary(null, null)).toBeNull();
   });
 });

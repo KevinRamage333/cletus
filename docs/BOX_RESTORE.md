@@ -35,7 +35,7 @@ Current box crontab (America/Chicago). Install by merging these lines into `cron
 15 2 * * * cd /workspace/cletus && /workspace/cletus/scripts/db-backup.sh >> /workspace/cletus/logs/db-backup.log 2>&1
 ```
 
-- `@reboot` and every 2 minutes: `ensure-live-worker.sh` starts `supervise-live-worker.sh` if it is not running. The supervisor restarts the worker if that process dies; it does not change trading config or place extra trades.
+- `@reboot` and every 2 minutes: `ensure-live-worker.sh` starts `supervise-live-worker.sh` if it is not running. The supervisor restarts the worker if that process dies, or if `logs/scan-latest.json` is older than `WORKER_STALE_SCAN_MINUTES` (default 8) after a short start grace — so a hung reconnect or Prisma wait cannot leave a living process that never scans. It does not change trading config or place extra trades.
 - `15 2 * * *` (2:15 AM CT): encrypted Neon backup via `scripts/db-backup.sh` (SQL dump over WebSockets, `age`-encrypted to `.secrets/backup-age.pub`, kept under `$HOME/cletus-backups`). See `docs/DATABASE_PLAN.md` for retention and restore-drill notes.
 
 ## Scripts in this setup
