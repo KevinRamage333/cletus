@@ -44,7 +44,14 @@ export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatch
         </span>
         {watch.halted && <span className="text-[10px] px-2 py-0.5 rounded-full border border-red-500/60 text-red-300">HALTED</span>}
         {watch.paused && !watch.halted && <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-200">PAUSED</span>}
-        {watch.sol != null && <span className="text-xs text-white/45 font-mono ml-auto">{watch.sol.toFixed(4)} SOL{watch.solPriceUsd ? ` · ${usd(watch.solPriceUsd, 2)}` : ''}</span>}
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          {watch.walletAddress && (
+            <a className="text-[11px] font-mono underline text-white/50" href={`https://solscan.io/account/${watch.walletAddress}`} target="_blank" rel="noreferrer">
+              {watch.walletAddress.length > 10 ? `${watch.walletAddress.slice(0, 4)}…${watch.walletAddress.slice(-4)}` : watch.walletAddress}
+            </a>
+          )}
+          {watch.sol != null && <span className="text-xs text-white/45 font-mono">{watch.sol.toFixed(4)} SOL{watch.solPriceUsd ? ` · ${usd(watch.solPriceUsd, 2)}` : ''}</span>}
+        </span>
       </div>
 
       <section className="rounded-2xl border border-amber-500/30 bg-[#0b0a07] p-4 sm:p-5" data-testid="live-watch-hero">

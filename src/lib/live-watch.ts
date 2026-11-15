@@ -82,6 +82,8 @@ export interface LiveWatchModel {
   simulatedBadge: boolean;
   book?: 'live' | 'simulation';
   emptyMessage?: string | null;
+  /** Optional on-chain address shown on the owner desk (not used on public/user views). */
+  walletAddress?: string | null;
 }
 
 export function stopTakeLevels(entryPrice: number, stopLossPct = DEFAULT_OWNER_STOP_LOSS_PCT, takeProfitPct = DEFAULT_OWNER_TAKE_PROFIT_PCT): { stopLoss: number; takeProfit: number } {

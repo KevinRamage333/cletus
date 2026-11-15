@@ -1,6 +1,7 @@
 /** Owner desk: KOL add-on view (wallet balance, last scan round, open KOL positions, KOL trade history with P&L). */
 import { KOL_TRADING_WALLET } from './owner-withdraw-queue';
-import { solscanTxUrl } from './approvals';
+import { solscanAccountUrl, solscanTxUrl } from './approvals';
+import { curveFromClosed, enrichPosition, sumTodayPnl, winLoss, type LiveWatchModel } from './live-watch';
 
 export interface KolDeskPosition { id: string; symbol: string; mint: string; entryPrice: number; lastPrice: number; sizeUsd: number; valueUsd: number; pnlUsd: number; pnlPct: number; openedAt: string }
 export interface KolDeskTrade { id: string; symbol: string; mint: string; openedAt: string; closedAt: string | null; sizeUsd: number; pnlUsd: number; pnlPct: number; exitReason: string | null; exitTxUrl: string | null }
@@ -16,6 +17,96 @@ export interface KolDesk {
 export function kolTotals(h: KolDeskTrade[]) {
   return { trades: h.length, wins: h.filter((t) => t.pnlUsd > 0).length, pnlUsd: Math.round(h.reduce((s, t) => s + t.pnlUsd, 0) * 100) / 100 };
 }
+
+export function emptyKolDesk(): KolDesk {
+  return {
+    enabled: true, source: 'hype', wallet: KOL_TRADING_WALLET, sol: null, usd: null,
+    round: { at: null, summary: '', rows: [] }, open: [], history: [], totals: { trades: 0, wins: 0, pnlUsd: 0 },
+  };
+}
+
+export interface CombinedWallets {
+  sol: number | null;
+  usd: number | null;
+  realizedPnl: number;
+  totalPnl: number;
+  openPositions: number;
+  mainSol: number | null;
+  kolSol: number | null;
+  mainUsd: number | null;
+  kolUsd: number | null;
+}
+
+export function combinedWallets(
+  main: { sol?: number | null; equityUsd?: number | null; realizedPnl?: number; totalPnl?: number; openAll?: unknown[]; open?: unknown },
+  kol: KolDesk | null | undefined,
+): CombinedWallets {
+  const mainSol = main.sol ?? null;
+  const kolSol = kol?.sol ?? null;
+  const mainUsd = main.equityUsd ?? null;
+  const kolUsd = kol?.usd ?? null;
+  const add = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+  const realized = (main.realizedPnl ?? 0) + (kol?.totals.pnlUsd ?? 0);
+  const unrealized = (kol?.open ?? []).reduce((s, p) => s + p.pnlUsd, 0);
+  const mainTotal = main.totalPnl ?? main.realizedPnl ?? 0;
+  const openPositions = (main.openAll?.length ?? (main.open ? 1 : 0)) + (kol?.open.length ?? 0);
+  return {
+    sol: add(mainSol, kolSol),
+    usd: add(mainUsd, kolUsd) == null ? null : Math.round(((mainUsd ?? 0) + (kolUsd ?? 0)) * 100) / 100,
+    realizedPnl: Math.round(realized * 100) / 100,
+    totalPnl: Math.round((mainTotal + (kol?.totals.pnlUsd ?? 0) + unrealized) * 100) / 100,
+    openPositions,
+    mainSol, kolSol, mainUsd, kolUsd,
+  };
+}
+
+/** Map the KOL desk into the same LiveWatch model the main wallet section uses. Does not invent trades. */
+export function kolWatchFromDesk(kol: KolDesk, opts?: { halted?: boolean; solPriceUsd?: number | null; asOf?: string }): LiveWatchModel {
+  const openAll = kol.open.map((p) => enrichPosition({
+    id: p.id, symbol: p.symbol, mint: p.mint, sizeUsd: p.sizeUsd,
+    entryPrice: p.entryPrice, lastPrice: p.lastPrice, pnlUsd: p.pnlUsd, pnlPct: p.pnlPct,
+    openedAt: p.openedAt, solscanMint: solscanAccountUrl(p.mint), simulated: false,
+  }, 7, 15));
+  const feed = kol.history.map((h) => ({
+    id: h.id, kind: 'sell' as const, at: h.closedAt ?? h.openedAt, symbol: h.symbol, mint: h.mint,
+    sizeUsd: h.sizeUsd, pnlUsd: h.pnlUsd, pnlPct: h.pnlPct, reason: h.exitReason,
+    win: h.pnlUsd > 0, solscan: h.exitTxUrl, solscanMint: solscanAccountUrl(h.mint), simulated: false,
+  })).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const wl = winLoss(feed);
+  const realized = kol.totals.pnlUsd;
+  const unrealized = openAll.reduce((s, p) => s + p.pnlUsd, 0);
+  const equity = kol.usd;
+  const start = equity == null ? 0 : Math.round((equity - realized - unrealized) * 100) / 100;
+  const hasBook = feed.length > 0 || openAll.length > 0;
+  return {
+    asOf: opts?.asOf ?? new Date().toISOString(),
+    mode: 'live',
+    scope: 'owner',
+    label: 'KOL / pump.fun wallet',
+    equityUsd: equity,
+    sol: kol.sol,
+    solPriceUsd: opts?.solPriceUsd ?? null,
+    realizedPnl: realized,
+    unrealizedPnl: Math.round(unrealized * 100) / 100,
+    totalPnl: Math.round((realized + unrealized) * 100) / 100,
+    todayPnl: sumTodayPnl(feed.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
+    winRate: wl.winRate,
+    wins: wl.wins,
+    losses: wl.losses,
+    closedTrades: feed.length,
+    open: openAll[0] ?? null,
+    openAll,
+    feed,
+    equityCurve: hasBook || equity != null ? curveFromClosed(start, feed.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd })), equity) : [],
+    halted: opts?.halted ?? false,
+    chartApiBase: '/api/owner/chart',
+    simulatedBadge: false,
+    book: 'live',
+    emptyMessage: hasBook ? null : 'No KOL trades yet.',
+    walletAddress: kol.wallet,
+  };
+}
+
 
 /** Box-only (needs Postgres, the plan store and engine memory). */
 export async function buildKolDesk(): Promise<KolDesk> {

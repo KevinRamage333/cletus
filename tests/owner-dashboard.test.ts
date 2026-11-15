@@ -255,3 +255,86 @@ describe('owner plan card uses live equity, not the paper book', () => {
     expect(live?.nextSweepTargetUsd).toBe(50);
   });
 });
+
+import { combinedWallets, emptyKolDesk, kolWatchFromDesk, kolTotals, type KolDesk } from '@/lib/owner-kol';
+import { KOL_TRADING_WALLET } from '@/lib/owner-withdraw-queue';
+import { OWNER_TRADING_WALLET } from '@/lib/owner-plan';
+
+function sampleKol(): KolDesk {
+  const history = [
+    { id: 'k1', symbol: 'POPVAX', mint: 'Mint1111111111111111111111111111111111111', openedAt: '2026-11-12T13:00:00.000Z', closedAt: '2026-11-12T13:20:00.000Z', sizeUsd: 10, pnlUsd: 1.5, pnlPct: 15, exitReason: 'take-profit', exitTxUrl: 'https://solscan.io/tx/sigA' },
+    { id: 'k2', symbol: 'FLOP', mint: 'Mint2222222222222222222222222222222222222', openedAt: '2026-11-12T14:00:00.000Z', closedAt: '2026-11-12T14:10:00.000Z', sizeUsd: 10, pnlUsd: -0.7, pnlPct: -7, exitReason: 'stop-loss', exitTxUrl: null },
+  ];
+  return {
+    enabled: true,
+    source: 'hype',
+    wallet: KOL_TRADING_WALLET,
+    sol: 0.30,
+    usd: 21.22,
+    round: { at: '2026-11-14T23:00:00.000Z', summary: '2 scanned', rows: [] },
+    open: [{
+      id: 'k3', symbol: 'NEWTKN', mint: 'Mint3333333333333333333333333333333333333',
+      entryPrice: 1, lastPrice: 1.05, sizeUsd: 8, valueUsd: 8.4, pnlUsd: 0.4, pnlPct: 5,
+      openedAt: '2026-11-14T22:00:00.000Z',
+    }],
+    history,
+    totals: kolTotals(history),
+  };
+}
+
+describe('KOL wallet watch and combined totals', () => {
+  it('maps the KOL desk into a LiveWatch model without inventing trades', () => {
+    const w = kolWatchFromDesk(sampleKol(), { solPriceUsd: 70.73, asOf: '2026-11-14T23:30:00.000Z' });
+    expect(w.label).toBe('KOL / pump.fun wallet');
+    expect(w.walletAddress).toBe(KOL_TRADING_WALLET);
+    expect(w.sol).toBeCloseTo(0.30);
+    expect(w.equityUsd).toBeCloseTo(21.22);
+    expect(w.mode).toBe('live');
+    expect(w.simulatedBadge).toBe(false);
+    expect(w.closedTrades).toBe(2);
+    expect(w.wins).toBe(1);
+    expect(w.losses).toBe(1);
+    expect(w.realizedPnl).toBeCloseTo(0.8);
+    expect(w.unrealizedPnl).toBeCloseTo(0.4);
+    expect(w.totalPnl).toBeCloseTo(1.2);
+    expect(w.open?.symbol).toBe('NEWTKN');
+    expect(w.open?.stopLoss).toBeCloseTo(0.93);
+    expect(w.open?.takeProfit).toBeCloseTo(1.15);
+    expect(w.feed.map((f) => f.symbol)).toEqual(['FLOP', 'POPVAX']);
+    expect(w.feed[1].solscan).toContain('solscan.io/tx/sigA');
+    expect(w.emptyMessage).toBeNull();
+  });
+
+  it('still renders an empty KOL book when there are no trades', () => {
+    const w = kolWatchFromDesk({ ...emptyKolDesk(), sol: 0.15, usd: 10.5 });
+    expect(w.closedTrades).toBe(0);
+    expect(w.open).toBeNull();
+    expect(w.feed).toEqual([]);
+    expect(w.equityUsd).toBeCloseTo(10.5);
+    expect(w.emptyMessage).toBe('No KOL trades yet.');
+  });
+
+  it('adds main and KOL balances into a combined total', () => {
+    const c = combinedWallets(
+      { sol: 0.71, equityUsd: 50.22, realizedPnl: 0.35, totalPnl: 0.35, openAll: [], open: null },
+      sampleKol(),
+    );
+    expect(c.sol).toBeCloseTo(1.01);
+    expect(c.usd).toBeCloseTo(71.44);
+    expect(c.mainSol).toBeCloseTo(0.71);
+    expect(c.kolSol).toBeCloseTo(0.30);
+    expect(c.mainUsd).toBeCloseTo(50.22);
+    expect(c.kolUsd).toBeCloseTo(21.22);
+    expect(c.realizedPnl).toBeCloseTo(1.15);
+    expect(c.totalPnl).toBeCloseTo(1.55);
+    expect(c.openPositions).toBe(1);
+  });
+
+  it('keeps combined totals null when both wallets are unknown, and does not invent a KOL wallet address', () => {
+    const empty = combinedWallets({ sol: null, equityUsd: null, realizedPnl: 0, totalPnl: 0, openAll: [] }, emptyKolDesk());
+    expect(empty.sol).toBeNull();
+    expect(empty.usd).toBeNull();
+    expect(emptyKolDesk().wallet).toBe(KOL_TRADING_WALLET);
+    expect(OWNER_TRADING_WALLET).not.toBe(KOL_TRADING_WALLET);
+  });
+});

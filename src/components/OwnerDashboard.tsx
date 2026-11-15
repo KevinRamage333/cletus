@@ -6,6 +6,10 @@ import OwnerFundsPanel from './OwnerFundsPanel';
 import OwnerKolPanel from './OwnerKolPanel';
 import ScanningNowPanel from './ScanningNowPanel';
 import type { OwnerStatusPayload } from '@/lib/owner-status';
+import { KOL_TRADING_WALLET } from '@/lib/owner-withdraw-queue';
+
+const usd = (n: number | null | undefined, d = 2) => (n == null ? '—' : `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`);
+const tone = (n: number | null | undefined) => (n == null ? 'text-white/70' : n > 0 ? 'text-emerald-400' : n < 0 ? 'text-red-400' : 'text-white/70');
 
 export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [data, setData] = useState<OwnerStatusPayload | null>(null);
@@ -47,6 +51,12 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
   const short = (a: string) => a.length > 10 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a;
   const hasSim = Boolean(data.simulationWatch && (data.simulationWatch.closedTrades > 0 || data.simulationWatch.feed.length > 0 || data.simulationWatch.open));
   const watch = showSim && data.simulationWatch ? data.simulationWatch : data.watch;
+  const kolWatch = data.kolWatch;
+  const combined = data.combined;
+  const kolWallet = o.kol?.wallet ?? KOL_TRADING_WALLET;
+  const mainWatch = showSim
+    ? watch
+    : { ...watch, label: 'Main wallet · $25k–$5M', walletAddress: watch.walletAddress ?? o.tradingWallet };
 
   return (
     <div className="space-y-6">
@@ -54,7 +64,7 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
         <img src="/cletus-logo.png" alt="" className="w-8 h-8 rounded-full" />
         <div>
           <div className="gold-text font-bold text-xl leading-none">Owner desk</div>
-          <div className="text-[11px] text-white/45 font-mono">{short(o.tradingWallet)} · source {data.source}{data.snapshotAgeMs != null ? ` · snapshot ${Math.round(data.snapshotAgeMs / 1000)}s` : ''}</div>
+          <div className="text-[11px] text-white/45 font-mono">Main {short(o.tradingWallet)} · KOL {short(kolWallet)} · source {data.source}{data.snapshotAgeMs != null ? ` · snapshot ${Math.round(data.snapshotAgeMs / 1000)}s` : ''}</div>
         </div>
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-300">OWNER</span>
         <button type="button" className="btn small ml-auto" onClick={async () => { await fetch('/api/owner/logout', { method: 'POST', credentials: 'include' }); onSignOut(); }}>Sign out</button>
@@ -74,8 +84,26 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
         </div>
       )}
 
+      {combined && (
+        <section className="rounded-2xl border border-amber-500/30 bg-[#0b0a07] p-4 sm:p-5" data-testid="combined-wallets">
+          <div className="text-[11px] uppercase tracking-wider text-amber-300/80">Combined wallets</div>
+          <div className="flex flex-wrap items-end justify-between gap-3 mt-1">
+            <div>
+              <div className="text-4xl sm:text-5xl font-extrabold font-mono leading-tight">{usd(combined.usd)}</div>
+              <div className="text-sm text-white/50 font-mono mt-1">{combined.sol != null ? `${combined.sol.toFixed(4)} SOL` : '—'}</div>
+            </div>
+            <div className="text-xs text-white/55 space-y-0.5 font-mono text-right">
+              <div>Main {usd(combined.mainUsd)}{combined.mainSol != null ? ` · ${combined.mainSol.toFixed(4)} SOL` : ''}</div>
+              <div>KOL {usd(combined.kolUsd)}{combined.kolSol != null ? ` · ${combined.kolSol.toFixed(4)} SOL` : ''}</div>
+              <div>Realized P&amp;L <span className={tone(combined.realizedPnl)}>{usd(combined.realizedPnl)}</span></div>
+              <div>{combined.openPositions} open</div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <LiveWatch
-        watch={watch}
+        watch={mainWatch}
         actions={{
           sellAllLabel: 'Sell all / halt',
           resumeLabel: 'Resume trading',
@@ -96,7 +124,12 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
 
       {<ScanningNowPanel scan={o.scanning} summary={o.engine.lastScanSummary} lastScanAt={o.engine.lastScanAt} />}
 
-      <OwnerKolPanel kol={o.kol} />
+      {kolWatch && (
+        <LiveWatch
+          watch={kolWatch}
+          footer={<OwnerKolPanel kol={o.kol} scanOnly />}
+        />
+      )}
 
       {o.plan && <OwnerPlanCard plan={o.plan} />}
 

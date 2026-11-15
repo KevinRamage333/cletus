@@ -21,7 +21,7 @@ import { solscanAccountUrl, solscanTxUrl } from './approvals';
 import { type ScanNow, readScanLatest } from './scan-latest';
 import { resolveOwnerWallet } from './owner-auth';
 import { KOL_TRADING_WALLET } from './owner-withdraw-queue';
-import type { KolDesk } from './owner-kol';
+import { combinedWallets, emptyKolDesk, kolWatchFromDesk, type CombinedWallets, type KolDesk } from './owner-kol';
 
 export interface OwnerExtras {
   tradingWallet: string;
@@ -45,6 +45,8 @@ export interface OwnerExtras {
   kol?: KolDesk | null;
 }
 
+export type { CombinedWallets };
+
 export interface OwnerStatusPayload {
   watch: LiveWatchModel;
   simulationWatch: LiveWatchModel;
@@ -54,6 +56,10 @@ export interface OwnerStatusPayload {
   publicLiveSimulation: PublicLiveStats;
   source: 'live' | 'snapshot' | 'onchain' | 'mixed';
   snapshotAgeMs: number | null;
+  /** LiveWatch-shaped view of the KOL / pump.fun wallet (owner desk only). */
+  kolWatch: LiveWatchModel;
+  /** Main + KOL on-chain totals for the owner desk combined bar. */
+  combined: CombinedWallets;
 }
 
 function mergeWatches(a: LiveWatchModel, b?: LiveWatchModel | null): LiveWatchModel {
@@ -68,8 +74,10 @@ function mergeWatches(a: LiveWatchModel, b?: LiveWatchModel | null): LiveWatchMo
   };
 }
 
+type OwnerStatusBooks = Omit<OwnerStatusPayload, 'kolWatch' | 'combined'>;
+
 function withIsolatedBooks(
-  payload: Omit<OwnerStatusPayload, 'watch' | 'simulationWatch' | 'publicLive' | 'publicLiveSimulation'> & {
+  payload: Omit<OwnerStatusBooks, 'watch' | 'simulationWatch' | 'publicLive' | 'publicLiveSimulation'> & {
     watch: LiveWatchModel;
     simulationWatch?: LiveWatchModel | null;
     publicLive?: PublicLiveStats | null;
@@ -77,7 +85,7 @@ function withIsolatedBooks(
   },
   recorded: import('./public-live').RecordedPublicTrade[],
   liveEquity: number | null,
-): OwnerStatusPayload {
+): OwnerStatusBooks {
   const books = recorded.length
     ? buildPublicBooks(recorded)
     : payload.publicLive && payload.publicLive.book === 'live' && payload.publicLiveSimulation
@@ -92,6 +100,19 @@ function withIsolatedBooks(
     publicLive: books.live,
     publicLiveSimulation: books.simulation,
     owner: { ...payload.owner, plan: planForLiveEquity(payload.owner.plan, liveEquity, solPrice) },
+  };
+}
+
+
+function withKolViews(payload: OwnerStatusBooks, kol: KolDesk, halt: HaltState): OwnerStatusPayload {
+  const solPrice = payload.owner?.onchain?.solPriceUsd ?? payload.watch.solPriceUsd ?? null;
+  const kolWatch = kolWatchFromDesk(kol, { halted: halt.halted, solPriceUsd: solPrice, asOf: payload.watch.asOf });
+  return {
+    ...payload,
+    watch: { ...payload.watch, walletAddress: payload.watch.walletAddress ?? payload.owner.tradingWallet },
+    owner: { ...payload.owner, kol },
+    kolWatch,
+    combined: combinedWallets(payload.watch, kol),
   };
 }
 
@@ -263,7 +284,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
     const watch = applyLogAndChain({ ...db.watch, halted: halt.halted, haltReason: halt.reason }, db.plan, onchain);
     const events = readLiveTrades();
     const recorded = mergeRecorded(recordedFromClosedPositions(db.recordedPlanClosed), recordedFromLiveEvents(events, true));
-    return withIsolatedBooks({
+    return withKolViews(withIsolatedBooks({
       watch, halt, snapshotAgeMs: age,
       source: onchain ? 'mixed' : 'live',
       owner: {
@@ -276,14 +297,14 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         onchain,
         kol,
       },
-    }, recorded, onchain?.equityUsd ?? watch.equityUsd ?? null);
+    }, recorded, onchain?.equityUsd ?? watch.equityUsd ?? null), kol, halt);
   }
 
   if (stored.snapshot?.payload && (age === null || age < 5 * 60_000)) {
     const snap = stored.snapshot.payload as OwnerStatusPayload;
     // Refresh on-chain balance on top of a recent snapshot so the hero stays live on Vercel.
     const watch = snap.watch ? { ...snap.watch, equityUsd: onchain?.equityUsd ?? snap.watch.equityUsd, sol: onchain?.sol ?? snap.watch.sol, solPriceUsd: onchain?.solPriceUsd ?? snap.watch.solPriceUsd, halted: halt.halted } : applyLogAndChain(emptyWatch(c.mode, onchain), snap.owner?.plan ?? null, onchain);
-    return withIsolatedBooks({
+    return withKolViews(withIsolatedBooks({
       watch, simulationWatch: snap.simulationWatch, halt,
       publicLive: snap.publicLive, publicLiveSimulation: snap.publicLiveSimulation,
       source: 'snapshot', snapshotAgeMs: age,
@@ -293,18 +314,18 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
         onchain: onchain ?? snap.owner?.onchain ?? null,
         kol,
       },
-    }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null);
+    }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null), kol, halt);
   }
 
   const plan = fallbackPlan(onchain?.equityUsd ?? 0, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd);
   const events = readLiveTrades();
   const watch = applyLogAndChain(emptyWatch(c.mode, onchain), plan, onchain);
-  return withIsolatedBooks({
+  return withKolViews(withIsolatedBooks({
     watch, halt,
     source: events.length ? 'mixed' : 'onchain',
     snapshotAgeMs: age,
     owner: { ...emptyOwner(c, onchain, plan), kol },
-  }, recordedFromLiveEvents(events, true), onchain?.equityUsd ?? watch.equityUsd ?? null);
+  }, recordedFromLiveEvents(events, true), onchain?.equityUsd ?? watch.equityUsd ?? null), kol, halt);
 }
 
 function emptyWatch(mode: 'simulation' | 'live', onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {
@@ -334,8 +355,8 @@ function emptyOwner(c: ReturnType<typeof getConfig>, onchain: Awaited<ReturnType
 }
 
 
-function withKolBalance(k: KolDesk | null, chain: Awaited<ReturnType<typeof readOnchainWallet>> | null): KolDesk | null {
-  const base: KolDesk = k ?? { enabled: true, source: 'hype', wallet: KOL_TRADING_WALLET, sol: null, usd: null, round: { at: null, summary: '', rows: [] }, open: [], history: [], totals: { trades: 0, wins: 0, pnlUsd: 0 } };
-  if (!chain || chain.sol == null) return k ? base : (chain ? base : null);
-  return { ...base, sol: chain.sol, usd: chain.equityUsd ?? chain.sol * chain.solPriceUsd };
+function withKolBalance(k: KolDesk | null, chain: Awaited<ReturnType<typeof readOnchainWallet>> | null): KolDesk {
+  const base = k ?? emptyKolDesk();
+  if (!chain || chain.sol == null) return base;
+  return { ...base, sol: chain.sol, usd: chain.equityUsd ?? Math.round(chain.sol * chain.solPriceUsd * 100) / 100 };
 }
