@@ -4,6 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# Production start never honors test overrides (a tainted env must not redirect the entry).
+unset LIVE_WORKER_TEST_MODE LIVE_WORKER_ENTRY LIVE_WORKER_ROOT || true
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
 # Local Postgres is optional now (Neon is primary). Only start it if DATABASE_URL is localhost.
@@ -13,10 +15,13 @@ if grep -E '^DATABASE_URL=' .env.local | grep -qE '127\.0\.0\.1|localhost'; then
     exit 1
   fi
 fi
-PIDFILE="$LOG_DIR/live-worker.pid"
-
-if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "live worker already running pid $(cat "$PIDFILE")"
+# Exclusive start: refuse if any scripts/live-worker.ts process is already alive
+# (not just the pidfile, which used to hold the npm wrapper and could miss orphans).
+# Launch is in its own session/process group (setsid); see live-worker-ctl.sh.
+# shellcheck source=scripts/live-worker-ctl.sh
+source "$ROOT/scripts/live-worker-ctl.sh"
+cletus_ctl_init
+if refuse_if_worker_running; then
   exit 0
 fi
 
@@ -79,6 +84,6 @@ export CLETUS_DEMO=0
 export NEXT_RUNTIME=nodejs
 
 # Node --env-file does not overwrite these exports.
-nohup npx tsx --env-file=.env.local scripts/live-worker.ts >> "$LOG_DIR/live-worker.log" 2>&1 &
-echo $! > "$PIDFILE"
-echo "started live worker pid $! log $LOG_DIR/live-worker.log"
+# setsid + recorded pgid/node pid so a hung restart can kill the whole tree
+# (npm/tsx wrappers and the real node process) and wait until none remain.
+start_live_worker_process
