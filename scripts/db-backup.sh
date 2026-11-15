@@ -6,7 +6,7 @@
 # Retention: 7 daily, 4 weekly (Sunday runs), 6 monthly (1st-of-month runs).
 # Optional off-box copy: BACKUP_OFFSITE_CMD='oci os object put -bn cletus-backups --file' (file path appended).
 # Connects as the read-only cletus_backup role over SSL. Never prints credentials.
-# Cron example (02:15 America/Chicago):  15 2 * * *  /opt/cletus/scripts/db-backup.sh >> /var/log/cletus-backup.log 2>&1
+# Cron (02:15 America/Chicago): see docs/BOX_RESTORE.md
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ENV_FILE=${ENV_FILE:-.env.local}
@@ -31,7 +31,14 @@ OUT="$BACKUP_DIR/daily/cletus-$STAMP.dump.age"
 TMP="$OUT.partial"
 trap 'rm -f "$TMP"' EXIT
 
-pg_dump --format=custom --compress=6 --no-password | age --encrypt -R "$RECIPIENTS" -o "$TMP"
+if [[ "${PGHOST:-}" == *neon.tech* ]] || [[ "${BACKUP_DATABASE_URL:-}" == *neon.tech* ]]; then
+  export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:8791}"
+  export NEON_HTTPS_PROXY="${NEON_HTTPS_PROXY:-$HTTPS_PROXY}"
+  # Neon from this box cannot use libpq :5432; dump over WebSocket as SQL, then encrypt.
+  node scripts/neon-backup-dump.mjs | gzip -c | age --encrypt -R "$RECIPIENTS" -o "$TMP"
+else
+  pg_dump --format=custom --compress=6 --no-password | age --encrypt -R "$RECIPIENTS" -o "$TMP"
+fi
 [ "$(stat -c %s "$TMP")" -gt 512 ] || { echo "backup suspiciously small" >&2; exit 1; }
 mv "$TMP" "$OUT"
 ( cd "$(dirname "$OUT")" && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256" )

@@ -6,12 +6,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR"
+# Local Postgres is optional now (Neon is primary). Only start it if DATABASE_URL is localhost.
+if grep -E '^DATABASE_URL=' .env.local | grep -qE '127\.0\.0\.1|localhost'; then
+  if ! "$ROOT/scripts/ensure-postgres.sh"; then
+    echo "postgres is not running on 127.0.0.1:5432; install/start it first" >&2
+    exit 1
+  fi
+fi
 PIDFILE="$LOG_DIR/live-worker.pid"
 
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   echo "live worker already running pid $(cat "$PIDFILE")"
   exit 0
 fi
+
+# Neon is reached over WSS/443 through the box egress proxy (outbound :5432 is blocked).
+export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:8791}"
+export HTTP_PROXY="${HTTP_PROXY:-$HTTPS_PROXY}"
+export NEON_HTTPS_PROXY="${NEON_HTTPS_PROXY:-$HTTPS_PROXY}"
 
 export TRADING_MODE=live
 export ALLOW_LIVE_IN_BETA=true
