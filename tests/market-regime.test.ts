@@ -22,6 +22,6 @@ describe('market regime intelligence', () => {
   });
   it('uses the median so one extreme token cannot create a false risk-on regime', () => {
     const r = assessMarketRegime([{ h1: 1000 }, ...Array.from({ length: 19 }, () => ({ h1: -1 }))]);
-    expect(r.regime).toBe('neutral');
+    expect(r.regime).toBe('risk_off'); // one extreme green token cannot overturn broad negative breadth
   });
 });
