@@ -28,6 +28,7 @@ import { auditToken, type AuditResult } from './audit';
 import { onFailure, onSuccess, isPaused, classifyError, type HealParams, type HealState, type FailureKind } from './healer';
 import { withDeadline, DeadlineError, nextGen, assertCurrent, InFlight, ageSec, memoizeFor, type TickFence } from './watchdog';
 import { computeExitPlan, planOverrides, planWithinBounds, describePlan, regimeStats, regimeOf, volatilityPctPerHour, HARD_BOUNDS, type PriceChange, type RegimeStats } from './adaptive-exits';
+import { assessMarketRegime, marketRegimeBlocksEntries } from './market-regime';
 import { fastPriceOn, fastPriceParams, fastPriceFromSignature, acceptFastPrice, TrailingDebounce } from './fast-price';
 import { exitSlippageBps, parseLadder, recordSellFailure, shouldWriteOff, liveFillTokenAmount, safeExitPrice, isPriceStale, type SellFailureState } from './live-exit';
 
@@ -458,6 +459,8 @@ async function scanTickInner(gen: number): Promise<string> {
     for (const [m, p] of pairs) { if (p.priceChange) mem.pairChange.set(m, p.priceChange); notePairFlow(m, p); }
     const eligible = ranked.filter((r) => !r.rejected);
     mem.regime = regimeStats(eligible.map((r) => r.priceChangeH1));
+    const marketRegime = assessMarketRegime(eligible.map((r) => ({ h1: r.priceChangeH1, h24: r.priceChangeH24 })));
+    const marketRegimeMode = ['off', 'shadow', 'on'].includes(process.env.MARKET_REGIME_GATE ?? '') ? process.env.MARKET_REGIME_GATE! : 'shadow';
     mem.candidates = ranked.slice(0, c.scanTopN);
     await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
 
@@ -475,7 +478,8 @@ async function scanTickInner(gen: number): Promise<string> {
       });
     }
     const topScore = eligible.reduce((m, r) => Math.max(m, r.composite), 0);
-    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in $${c.minMarketCap / 1000}k-$${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore} (top ${topScore.toFixed(3)})`;
+    let summary = `scanned ${pairs.size} Solana pairs, ${eligible.length} in ${c.minMarketCap / 1000}k-${c.maxMarketCap / 1000}k band, ${qualified.length} >= score ${minScore} (top ${topScore.toFixed(3)})`;
+    summary += ` [market ${marketRegime.regime}, n=${marketRegime.sampleSize}, breadth=${marketRegime.breadthUp === null ? 'n/a' : `${Math.round(marketRegime.breadthUp * 100)}%`}, gate=${marketRegimeMode}]`;
     { const ds = lastDiscoveryStats(); summary += ` [sources: dexscreener ${ds.dexscreener}, phantom trending ${ds.phantom} (+${ds.phantomNew} new), gecko fresh +${ds.gecko}]`; }
 
     if (!isWithinSchedule(c)) {
@@ -492,6 +496,15 @@ async function scanTickInner(gen: number): Promise<string> {
     const scanPicked = new Set<string>();
     const scanOutcomes = new Map<string, { decision: string; reason: string }>();
     for (const cand of qualified.slice(0, c.auditTopN)) {
+      if (marketRegimeMode !== 'off' && marketRegimeBlocksEntries(marketRegime.regime)) {
+        const reason = `broad market ${marketRegime.regime}: ${marketRegime.reasons.join('; ')}`;
+        if (marketRegimeMode === 'on') {
+          await log('info', `market-regime gate blocked ${cand.symbol}: ${reason}`);
+          scanOutcomes.set(cand.mint, { decision: 'market blocked', reason });
+          continue;
+        }
+        await log('info', `market-regime shadow would block ${cand.symbol}: ${reason}`);
+      }
       // On-chain flow + X hype: confirmer/veto only (SIGNAL_VETO_MODE=shadow logs, on blocks, off ignores). Never a buy trigger.
       const verdict = entryVerdict(cand.mint);
       if (verdict.mode !== 'off' && verdict.veto) {
