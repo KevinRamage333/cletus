@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse, HttpError } from '@/lib/auth';
+import { isWorldConversationTitle } from '@/lib/brain/conversation-scope';
 
 export const dynamic = 'force-dynamic';
 
 async function owned(userId: string, id: string) {
   const c = await prisma.conversation.findFirst({ where: { id, userId } });
-  if (!c) throw new HttpError(404, 'conversation not found');
+  if (!c || isWorldConversationTitle(c.title)) throw new HttpError(404, 'conversation not found');
   return c;
 }
 
