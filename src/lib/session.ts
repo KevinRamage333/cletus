@@ -9,6 +9,7 @@ export interface SessionClaims {
   uid: string;
   email: string;
   adm: boolean;
+  av: string | null; // age attestation version
   tv: string | null; // accepted terms version
   rv: string | null; // acknowledged risk version
   fc: string | null; // completed five-stage financial consent version
@@ -62,8 +63,8 @@ export async function verifySession(token: string | undefined | null, secret = g
   try {
     const raw = JSON.parse(new TextDecoder().decode(fromB64url(body))) as Partial<SessionClaims>;
     if (!raw.uid || !raw.email || typeof raw.exp !== 'number' || raw.exp < Math.floor(Date.now() / 1000)) return null;
-    // Older valid cookies have no fc claim and must re-enter the new consent gate.
-    return { ...raw, fc: typeof raw.fc === 'string' ? raw.fc : null } as SessionClaims;
+    // Older sessions must re-enter any newly introduced eligibility/consent gates.
+    return { ...raw, av: typeof raw.av === 'string' ? raw.av : null, fc: typeof raw.fc === 'string' ? raw.fc : null } as SessionClaims;
   } catch {
     return null;
   }
