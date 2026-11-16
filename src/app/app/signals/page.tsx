@@ -77,6 +77,7 @@ export default function SignalsPage() {
       {/* Logo on every page */}
       <header className="border-b border-white/10 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+          <Link href="/app/intelligence" className="text-xs border border-amber-400/30 text-amber-300 rounded-lg px-3 py-2 hover:bg-amber-400/10">Token Intelligence</Link>
           <Link href="/app" className="flex items-center gap-3">
             <Image
               src="/cletus-logo.png"
