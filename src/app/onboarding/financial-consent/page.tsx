@@ -58,7 +58,7 @@ export default function FinancialConsentPage() {
   return (
     <div className="center-page">
       <div className="card narrow" style={{ maxWidth: 760 }}>
-        <Steps at={3} />
+        <Steps at={4} />
         <h1>Financial understanding</h1>
         <p className="muted">Five short stages before any wallet connection. This is designed to check understanding, not rush you through a disclaimer.</p>
         {!progress && !error && <p className="muted">Loading your progress…</p>}
