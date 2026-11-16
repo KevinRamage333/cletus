@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, setSessionCookie } from "@/lib/auth";
 import { TERMS_VERSION, RISK_VERSION } from "@/lib/legal";
+import { AGE_ATTESTATION_VERSION } from "@/lib/age";
 import { FINANCIAL_CONSENT_STAGES, FINANCIAL_CONSENT_VERSION, validateFinancialConsentStage } from "@/lib/financial-consent";
 
 export const dynamic = "force-dynamic";
