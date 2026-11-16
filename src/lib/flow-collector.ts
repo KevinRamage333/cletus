@@ -223,7 +223,21 @@ export function entryVerdict(mint: string) {
 }
 
 export function flowStatus() {
-  return { enabled: enabled(), xEnabled: xConfig().enabled, xNeedsToken: !xConfig().token, heliusCreditsToday: S.credits.used, xRequestsToday: S.xReq.used, budget: estimatedHeliusUsage(), xBudgetPerDay: xConfig().maxRequestsPerDay, ...S.status, tracked: S.features.size, watchedWallets: S.watched.length };
+  return {
+    enabled: enabled(),
+    xEnabled: xConfig().enabled,
+    xNeedsToken: !xConfig().token,
+    heliusCreditsToday: S.credits.used,
+    xRequestsToday: S.xReq.used,
+    budget: estimatedHeliusUsage(),
+    xBudgetPerDay: xConfig().maxRequestsPerDay,
+    ...S.status,
+    // Do not return raw database/provider errors to the browser; they can contain infrastructure details.
+    lastError: S.status.lastError ? 'Collector encountered an error; inspect server logs.' : null,
+    active: enabled() && S.status.whaleTicks > 0,
+    tracked: S.features.size,
+    watchedWallets: S.watched.length,
+  };
 }
 
 export async function whaleActivity(query: { mint?: string; symbol?: string }) {

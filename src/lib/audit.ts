@@ -51,9 +51,9 @@ export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | n
     return { passed: false, checks, liquidityUsd: null, riskScore: null, topHolderPct: null, auditedAt: new Date().toISOString() };
   }
 
-  add('mint_authority', !report.mintAuthority, report.mintAuthority ? 'mint authority is still enabled (supply can be inflated)' : 'renounced');
-  add('freeze_authority', !report.freezeAuthority, report.freezeAuthority ? 'freeze authority enabled (wallets can be frozen)' : 'renounced');
-  add('not_rugged', !report.rugged, report.rugged ? 'RugCheck flags token as rugged' : 'ok');
+  add('mint_authority', report.mintAuthority === null, report.mintAuthority ? 'mint authority is still enabled (supply can be inflated)' : report.mintAuthority === null ? 'renounced' : 'mint authority status unavailable — failing closed');
+  add('freeze_authority', report.freezeAuthority === null, report.freezeAuthority ? 'freeze authority enabled (wallets can be frozen)' : report.freezeAuthority === null ? 'renounced' : 'freeze authority status unavailable — failing closed');
+  add('not_rugged', report.rugged === false, report.rugged === true ? 'RugCheck flags token as rugged' : report.rugged === false ? 'RugCheck does not flag token as rugged' : 'rug status unavailable — failing closed');
 
   // LP lock: best market's locked %. Pump.fun bonding curves report 100% (no withdrawable LP).
   const lockPcts = (report.markets ?? []).map((m) => m.lp?.lpLockedPct ?? 0);
@@ -66,13 +66,14 @@ export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | n
   const isProgramAccount = (h: { address?: string; owner?: string }) =>
     Boolean((h.owner && known[h.owner]) || (h.address && known[h.address]) || (report.markets ?? []).some((m) => m.pubkey && (m.pubkey === h.owner || m.pubkey === h.address)));
   const holders = (report.topHolders ?? []).filter((h) => !isProgramAccount(h));
-  const topPct = onchain ? onchain.top1Pct : holders.length ? Math.max(...holders.map((h) => h.pct ?? 0)) : 0;
+  const holderDataAvailable = Boolean(onchain) || holders.some((h) => typeof h.pct === 'number' && Number.isFinite(h.pct));
+  const topPct = onchain ? onchain.top1Pct : holderDataAvailable ? Math.max(...holders.map((h) => h.pct ?? 0)) : null;
   const srcLabel = onchain ? `on-chain via Helius${onchain.holders ? `, ${onchain.holders >= 1000 ? '1000+' : onchain.holders} holders` : ''}` : 'RugCheck';
-  add('holder_concentration', topPct / 100 <= p.maxHolderConcentration, `top non-pool holder ${topPct.toFixed(2)}% (max ${(p.maxHolderConcentration * 100).toFixed(0)}%, ${srcLabel})`);
+  add('holder_concentration', topPct !== null && topPct / 100 <= p.maxHolderConcentration, topPct === null ? 'holder concentration unavailable — failing closed' : `top non-pool holder ${topPct.toFixed(2)}% (max ${(p.maxHolderConcentration * 100).toFixed(0)}%, ${srcLabel})`);
 
   if (p.maxTop10HolderPct !== undefined && p.maxTop10HolderPct > 0) {
-    const top10 = onchain ? onchain.top10Pct : holders.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)).slice(0, 10).reduce((s, h) => s + (h.pct ?? 0), 0);
-    add('top10_concentration', top10 <= p.maxTop10HolderPct, `top 10 non-pool holders ${top10.toFixed(1)}% (max ${p.maxTop10HolderPct}%, ${srcLabel})`);
+    const top10 = onchain ? onchain.top10Pct : holderDataAvailable ? holders.slice().sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0)).slice(0, 10).reduce((s, h) => s + (h.pct ?? 0), 0) : null;
+    add('top10_concentration', top10 !== null && top10 <= p.maxTop10HolderPct, top10 === null ? 'top-10 holder concentration unavailable — failing closed' : `top 10 non-pool holders ${top10.toFixed(1)}% (max ${p.maxTop10HolderPct}%, ${srcLabel})`);
   }
 
   // Dev wallet selling: RugCheck risk flags about the creator selling/dumping, plus an optional
@@ -87,18 +88,19 @@ export function evaluateAudit(report: RugcheckReport | null, sell: SellQuote | n
   }
 
   const risk = report.score_normalised ?? null;
-  add('risk_score', risk === null ? true : risk <= p.maxAuditRiskScore, risk === null ? 'no score' : `RugCheck score ${risk} (max ${p.maxAuditRiskScore})`);
+  add('risk_score', risk !== null && Number.isFinite(risk) && risk <= p.maxAuditRiskScore, risk === null ? 'RugCheck risk score unavailable — failing closed' : `RugCheck score ${risk} (max ${p.maxAuditRiskScore})`);
 
   const danger = (report.risks ?? []).filter((r) => (r.level ?? '').toLowerCase() === 'danger');
   add('no_danger_risks', danger.length === 0, danger.length ? danger.map((r) => r.name).join('; ') : 'none');
 
-  const fee = report.transferFee?.pct ?? 0;
-  add('transfer_fee', fee <= 5, `transfer fee ${fee}%`);
+  const fee = report.transferFee?.pct;
+  add('transfer_fee', typeof fee === 'number' && Number.isFinite(fee) && fee <= 5, fee === undefined ? 'transfer-fee status unavailable — failing closed' : `transfer fee ${fee}%`);
 
   // Honeypot: Jupiter must find a sell route at an acceptable price impact.
   if (!sell) add('honeypot', false, 'sell route not checked — failing closed');
   else if (!sell.routeFound) add('honeypot', false, `no sell route${sell.error ? `: ${sell.error}` : ''} (possible honeypot)`);
-  else add('honeypot', (sell.priceImpactPct ?? 0) <= p.maxSellPriceImpactPct, `sell route ok, impact ${(sell.priceImpactPct ?? 0).toFixed(2)}%`);
+  else if (sell.priceImpactPct === null || !Number.isFinite(sell.priceImpactPct)) add('honeypot', false, 'sell route returned no valid price-impact estimate — failing closed');
+  else add('honeypot', sell.priceImpactPct <= p.maxSellPriceImpactPct, `sell route ok, impact ${sell.priceImpactPct.toFixed(2)}%`);
 
   return {
     passed: checks.every((c) => c.passed),
