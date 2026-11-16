@@ -24,7 +24,7 @@ export default function SignupPage() {
         <h1 style={{ marginTop: 14 }}>Cletus,<br />the golden goose.</h1>
         <p className="tag">An autonomous, self-learning, self-healing trading system for Solana tokens. He scans the market, audits every token, sizes every trade, and learns from each result. You can talk to his Brain, and he keeps up with world events.</p>
         <div className="stack"><span>Solana</span><span>Helius</span><span>Jupiter</span><span>DexScreener</span><span>RugCheck</span><span>Gemini by Google</span><span>Grok by xAI</span><span>Next.js</span></div>
-        <p className="muted" style={{ fontSize: 12, maxWidth: 520 }}>Not financial advice. No guaranteed gains. Losses, including total loss, will happen. The beta runs in simulation mode: real market data, paper trades, no real funds.</p>
+        <p className="muted" style={{ fontSize: 12, maxWidth: 520 }}>18+ only. Crypto trading is risky. The only guarantee is that you can lose money, including all funds you choose to put at risk. No profit, income, or return is guaranteed. The beta runs in simulation mode: real market data, paper trades, no real funds.</p>
       </div>
       <form className="card" onSubmit={submit}>
         <h2 style={{ color: 'var(--gold)' }}>Join the beta</h2>
@@ -34,7 +34,7 @@ export default function SignupPage() {
         <input id="invite" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="optional" />
         {err && <div className="err">{err}</div>}
         <div style={{ marginTop: 16 }}><button className="btn primary" disabled={busy}>Continue</button></div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>Next you will read the full Terms and Conditions, acknowledge the Risk Disclaimer, then optionally connect your own wallet (or continue in paper mode). Cletus never holds your keys.</p>
+        <p className="muted" style={{ fontSize: 12, marginTop: 14 }}>You must be at least 18 and legally permitted to use Cletus where you live. After sign-up, you must confirm age eligibility, read the Terms, acknowledge the loss-risk disclosure, and complete five understanding stages before the app or wallet step. Wallet connection is optional; Cletus never holds your keys.</p>
       </form>
     </div>
   );
