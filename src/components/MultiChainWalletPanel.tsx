@@ -24,12 +24,18 @@ declare global {
   }
 }
 
+// Chain IDs are the canonical EVM network IDs. This panel only requests wallet
+// network switching; it does not sign transactions or read balances.
 const NETWORKS = [
   { id: '0x1', name: 'Ethereum', symbol: 'ETH' },
   { id: '0x2105', name: 'Base', symbol: 'ETH' },
-  { id: '0x38', name: 'BNB Chain', symbol: 'BNB' },
-  { id: '0x89', name: 'Polygon', symbol: 'POL' },
-  { id: '0x19', name: 'Cronos', symbol: 'CRO' },
+  { id: '0xa4b1', name: 'Arbitrum One', symbol: 'ETH' },
+  { id: '0x89', name: 'Polygon PoS', symbol: 'POL' },
+  { id: '0xa', name: 'Optimism', symbol: 'ETH' },
+  { id: '0x1237', name: 'Robinhood Chain', symbol: 'ETH' },
+  { id: '0xa86a', name: 'Avalanche C-Chain', symbol: 'AVAX' },
+  { id: '0x38', name: 'BNB Smart Chain', symbol: 'BNB' },
+  { id: '0x8f', name: 'Monad', symbol: 'MON' },
 ] as const;
 
 function providerLabel(detail: ProviderDetail): string {
@@ -100,7 +106,10 @@ export default function MultiChainWalletPanel() {
       const chain = await active.provider.request({ method: 'eth_chainId' }) as string;
       setChainId(chain);
     } catch (e) {
-      setError((e as Error).message || 'Network switch was not completed.');
+      const message = (e as Error).message || 'Network switch was not completed.';
+      setError(message.includes('4902') || message.toLowerCase().includes('unrecognized chain')
+        ? 'This network is not configured in your wallet yet. Add it in your wallet, then try again.'
+        : message);
     } finally {
       setBusy(false);
     }
@@ -117,7 +126,7 @@ export default function MultiChainWalletPanel() {
     <section className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4" aria-label="Multi-chain EVM wallet connections">
       <div>
         <h2 className="text-lg font-semibold">Multi-chain wallets</h2>
-        <p className="text-sm text-white/55 mt-1">Connect an EVM wallet once, then switch between supported networks. This is a read-only connection; it does not authorize swaps or transfers.</p>
+        <p className="text-sm text-white/55 mt-1">Connect an EVM wallet once, then switch between the nine supported EVM networks. This is a read-only connection; it does not authorize swaps or transfers.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -157,7 +166,7 @@ export default function MultiChainWalletPanel() {
         </div>
       </div>
       {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
-      <p className="text-[11px] text-white/35">Wallet detection uses the browser's standard provider announcements where available. Network switching is always initiated by you. Wallet linking to your Cletus account and Solana/EVM identity verification are separate steps still being built.</p>
+      <p className="text-[11px] text-white/35">Wallet detection uses the browser's standard provider announcements where available. Network switching is always initiated by you. Some wallets require you to add a network before switching. Wallet linking to your Cletus account and Solana/EVM identity verification are separate steps still being built.</p>
     </section>
   );
 }
