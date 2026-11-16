@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestBasePairPerToken, parseBasePairs, parseBaseTokenIdentities } from '@/lib/base-market-data';
+import { bestBasePairPerToken, filterBasePairsForTokens, parseBasePairs, parseBaseTokenIdentities } from '@/lib/base-market-data';
 
 describe('Base read-only market data', () => {
   it('keeps only Base token identities and de-duplicates case-insensitively', () => {
@@ -19,6 +19,22 @@ describe('Base read-only market data', () => {
     ]);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]).toMatchObject({ chainId: 'base', priceUsd: 0.25, volume24hUsd: 100, liquidityUsd: 500, priceChange24hPct: 4 });
+  });
+
+  it('keeps null prices null instead of converting them to zero', () => {
+    const pairs = parseBasePairs([
+      { chainId: 'base', pairAddress: 'p1', baseToken: { address: '0xToken' }, quoteToken: { address: '0xQ' }, priceUsd: null },
+    ]);
+    expect(pairs[0].priceUsd).toBeNull();
+  });
+
+  it('filters out quote-side matches until their USD price can be normalized safely', () => {
+    const pairs = parseBasePairs([
+      { chainId: 'base', pairAddress: 'p1', baseToken: { address: '0xBase' }, quoteToken: { address: '0xRequested' }, priceUsd: '2' },
+      { chainId: 'base', pairAddress: 'p2', baseToken: { address: '0xRequested' }, quoteToken: { address: '0xUsd' }, priceUsd: '0.5' },
+      { chainId: 'base', pairAddress: 'p3', baseToken: { address: '0xOther' }, quoteToken: { address: '0xUsd' }, priceUsd: '8' },
+    ]);
+    expect(filterBasePairsForTokens(pairs, ['0xrequested']).map((p) => p.pairAddress)).toEqual(['p2']);
   });
 
   it('chooses the deepest/most active pair for each token', () => {
