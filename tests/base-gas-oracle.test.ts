@@ -14,7 +14,9 @@ describe('Base GasPriceOracle ABI encoding', () => {
   it('supports multiple RLP bytes and pads only to a 32-byte boundary', () => {
     const data = encodeGetL1FeeCall('0x' + 'ab'.repeat(33));
     expect(data.slice(74, 138)).toBe('0'.repeat(62) + '21');
-    expect(data.slice(138)).toBe('ab'.repeat(33) + '0'.repeat(30));
+    // 33 bytes occupy two ABI data words (64 bytes), so 31 bytes of zero padding are required.
+    expect(data.slice(138)).toBe('ab'.repeat(33) + '0'.repeat(62));
+    expect(data).toHaveLength(2 + 8 + 64 + 64 + 128);
   });
 
   it('rejects malformed or empty input rather than estimating from calldata', () => {
