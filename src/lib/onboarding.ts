@@ -24,8 +24,15 @@ export type WalletSource = (typeof WALLET_SOURCES)[number];
 const SECRET_FIELDS = ['secretKey', 'mnemonic', 'privateKey', 'seed', 'recoveryPhrase', 'secret'];
 
 /** Non-custodial wallet step: connect an existing wallet (SIWS) or continue in paper mode. Secrets are always rejected. */
-export function validateWalletSetup(body: unknown, termsOk: boolean, riskOk: boolean): Validation & { publicKey?: string; source?: WalletSource } {
-  if (!termsOk || !riskOk) return { ok: false, error: 'complete the Terms and Risk Disclaimer steps first' };
+export function validateWalletSetup(
+  body: unknown,
+  termsOk: boolean,
+  riskOk: boolean,
+  financialConsentOk: boolean,
+): Validation & { publicKey?: string; source?: WalletSource } {
+  if (!termsOk || !riskOk || !financialConsentOk) {
+    return { ok: false, error: 'complete Terms, Risk, and all five Financial Understanding stages first' };
+  }
   const b = (body ?? {}) as Record<string, unknown>;
   if (SECRET_FIELDS.some((k) => k in b)) return { ok: false, error: 'only the public key may be sent to the server' };
   if (b.source === 'created' || b.source === 'imported') {
