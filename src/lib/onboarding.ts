@@ -2,6 +2,13 @@ import { PublicKey } from '@solana/web3.js';
 
 export type Validation = { ok: true } | { ok: false; error: string };
 
+export function validateAgeAttestation(body: unknown, currentVersion: string): Validation {
+  const value = (body ?? {}) as Record<string, unknown>;
+  if (value.version !== currentVersion) return { ok: false, error: 'age attestation version changed; reload and review the requirement' };
+  if (value.confirmed18Plus !== true || value.legallyPermitted !== true) return { ok: false, error: 'you must confirm that you are at least 18 and legally permitted to use Cletus where you live' };
+  return { ok: true };
+}
+
 export function validateTermsAcceptance(body: unknown, currentVersion: string): Validation {
   const b = (body ?? {}) as Record<string, unknown>;
   if (b.version !== currentVersion) return { ok: false, error: `terms version mismatch (current is ${currentVersion}); reload and read the current terms` };
