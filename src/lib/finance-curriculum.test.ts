@@ -39,8 +39,8 @@ describe("Cletus financial intelligence curriculum", () => {
     expect(progress.masteredSubjects).toBe(0);
     expect(progress.completionPct).toBe(0);
     expect(progress.byLevel.foundation.total).toBe(3);
-    expect(progress.byLevel.professional.total).toBe(5);
-    expect(progress.byLevel.advanced.total).toBe(4);
+    expect(progress.byLevel.professional.total).toBe(4);
+    expect(progress.byLevel.advanced.total).toBe(5);
   });
 
   it("returns a subject by stable id", () => {
