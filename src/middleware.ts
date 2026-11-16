@@ -10,7 +10,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isDemo()) {
     const publicBeforeAge = ['/onboarding/age', '/api/onboarding/age', '/whitepaper', '/cletus-whitepaper.pdf', '/legal', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt', '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
-    const exempt = publicBeforeAge.some((p) => pathname === p.replace(/\\/$/, '') || pathname.startsWith(p));
+    const exempt = publicBeforeAge.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p));
     if (!exempt) {
       const demoClaims = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
       if (demoClaims?.av !== AGE_ATTESTATION_VERSION) {
