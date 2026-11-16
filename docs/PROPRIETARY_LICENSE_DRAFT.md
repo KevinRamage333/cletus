@@ -1,8 +1,8 @@
 # Cletus Proprietary Software License — Draft
 
-> **DRAFT FOR LEGAL REVIEW — NOT YET EFFECTIVE.** This document is a working template, not legal advice and not a substitute for a signed intellectual-property assignment or attorney review. Do not treat it as the final license until the legal owner is confirmed, contributor rights are documented, and counsel approves it.
+> **DRAFT FOR LEGAL REVIEW — NOT YET EFFECTIVE.** This document is a working template, not legal advice and not a substitute for a signed intellectual-property assignment or attorney review. Do not treat it as the final license until the LLC is formed, ownership is confirmed, contributor rights are documented, and counsel approves it.
 
-**Proposed copyright owner:** [FULL LEGAL NAME OF CLETUS LLC]  
+**Proposed copyright owner:** Cletus Technologies LLC (subject to formation and confirmation of ownership)  
 **Jurisdiction:** [STATE OF FORMATION]  
 **Effective date:** [DATE]  
 **Covered project:** Cletus software and documentation owned by the copyright owner (the “Software”).
@@ -11,7 +11,7 @@
 
 The Software is proprietary. Except for rights that cannot legally be restricted and rights expressly granted in a separate written agreement signed by the copyright owner, all right, title, and interest in and to the Software—including its source code, object code, original documentation, original designs, and original implementation—are reserved by the applicable rights holder.
 
-This draft does not itself transfer ownership from any founder, developer, contractor, or other contributor to the proposed LLC. Any such transfer must be documented separately in a valid written assignment.
+This draft does not itself transfer ownership from any founder, developer, contractor, or other contributor to Cletus Technologies LLC. Any such transfer must be documented separately in a valid written assignment.
 
 ## 2. No public license or implied permission
 
@@ -35,7 +35,7 @@ These restrictions apply only to rights the relevant rights holder is legally en
 
 The Software may include or depend on third-party software, libraries, models, data, APIs, or other materials. Those materials remain subject to their own applicable licenses and terms. This draft does not replace, expand, or restrict those third-party rights.
 
-A complete release must include an accurate third-party notices and dependency-license review. No claim is made that every component in the repository is owned by the proposed LLC.
+A complete release must include an accurate third-party notices and dependency-license review. No claim is made that every component in the repository is owned by Cletus Technologies LLC.
 
 ## 5. Trademarks, names, and digital assets
 
@@ -63,13 +63,13 @@ Any separate license may be terminated in accordance with its terms. Upon termin
 
 ## 10. Governing law and complete agreement
 
-The governing law, venue, notice details, severability, waiver, assignment, and dispute-resolution provisions must be completed by counsel after the LLC's jurisdiction and business arrangements are confirmed. This draft is not a complete or effective agreement.
+The governing law, venue, notice details, severability, waiver, assignment, and dispute-resolution provisions must be completed by counsel after Cletus Technologies LLC's formation jurisdiction and business arrangements are confirmed. This draft is not a complete or effective agreement.
 
 ---
 
 ## Adoption checklist — do not remove before legal review
 
-- [ ] Confirm the LLC's exact legal name and formation jurisdiction.
+- [ ] Confirm Cletus Technologies LLC's formation, exact legal name, and jurisdiction.
 - [ ] Confirm who currently owns each part of the code and obtain signed IP assignments from founders, employees, contractors, and other contributors as appropriate.
 - [ ] Review Git history, pull requests, generated code, external contributions, and repository access for ownership and authorization.
 - [ ] Inventory dependencies, datasets, model weights, APIs, fonts, assets, and other third-party materials; verify their license and commercial-use terms.
