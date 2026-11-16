@@ -35,8 +35,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "not signed in" }, { status: 401 });
-  if (user.termsVersion !== TERMS_VERSION || user.riskVersion !== RISK_VERSION) {
-    return NextResponse.json({ error: "Accept the current Terms and Risk steps first." }, { status: 403 });
+  if (user.ageAttestationVersion !== AGE_ATTESTATION_VERSION || user.termsVersion !== TERMS_VERSION || user.riskVersion !== RISK_VERSION) {
+    return NextResponse.json({ error: "Complete 18+ eligibility and accept the current Terms and Risk steps first." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
