@@ -7,16 +7,7 @@
  * live-transaction method belongs in the multi-chain core.
  */
 
-export type NetworkId =
-  | 'solana'
-  | 'ethereum'
-  | 'base'
-  | 'bnb'
-  | 'arbitrum'
-  | 'polygon'
-  | 'avalanche'
-  | 'sui';
-
+export type NetworkId = 'solana' | 'ethereum' | 'base' | 'bnb' | 'arbitrum' | 'polygon' | 'avalanche' | 'sui';
 export type NetworkFamily = 'solana' | 'evm' | 'sui';
 export type NetworkStage = 'integrated' | 'planned';
 
@@ -56,14 +47,12 @@ export interface AssetIdentity {
 }
 
 export function assetKey(asset: AssetIdentity): string {
-  const address = asset.address.trim();
-  if (!address) throw new Error('Asset address is required');
+  if (typeof asset.address !== 'string' || !asset.address.trim()) throw new Error('Asset address is required');
   const network = getNetwork(asset.network);
   if (!network) throw new Error(`Unsupported network: ${asset.network}`);
+  const address = asset.address.trim();
   // EVM addresses are case-insensitive. Solana and Sui object/type identifiers are not.
-  return network.family === 'evm'
-    ? `${asset.network}:${address.toLowerCase()}`
-    : `${asset.network}:${address}`;
+  return network.family === 'evm' ? `${asset.network}:${address.toLowerCase()}` : `${asset.network}:${address}`;
 }
 
 export interface PaperQuote {
@@ -123,27 +112,48 @@ export function validatePaperQuote(
   quote: PaperQuote,
   limits: PaperValidationLimits,
 ): { ok: true } | { ok: false; reason: string } {
+  const fail = (reason: string) => ({ ok: false as const, reason });
   const now = limits.nowMs ?? Date.now();
   const network = getNetwork(intent.network);
-  if (!network?.paperTradingEnabled || !network.adapterReady) return { ok: false, reason: 'network adapter is not enabled for paper trading' };
+  if (!network?.paperTradingEnabled || !network.adapterReady) return fail('network adapter is not enabled for paper trading');
+  if (intent.asset.network !== intent.network) return fail('intent asset network mismatch');
   if (quote.network !== intent.network || quote.input.network !== intent.network || quote.output.network !== intent.network) {
-    return { ok: false, reason: 'quote network mismatch' };
+    return fail('quote network mismatch');
   }
-  if (assetKey(intent.asset) !== assetKey(intent.side === 'buy' ? quote.output : quote.input)) {
-    return { ok: false, reason: 'quote does not match intended asset and side' };
+
+  let intendedAsset: string;
+  let inputAsset: string;
+  let outputAsset: string;
+  try {
+    intendedAsset = assetKey(intent.asset);
+    inputAsset = assetKey(quote.input);
+    outputAsset = assetKey(quote.output);
+  } catch {
+    return fail('asset identity is invalid');
   }
-  if (!Number.isFinite(intent.notionalUsd) || intent.notionalUsd <= 0) return { ok: false, reason: 'notional must be positive' };
+  if (inputAsset === outputAsset) return fail('quote input and output assets must differ');
+  if (intendedAsset !== (intent.side === 'buy' ? outputAsset : inputAsset)) {
+    return fail('quote does not match intended asset and side');
+  }
+  if (!Number.isFinite(intent.notionalUsd) || intent.notionalUsd <= 0) return fail('notional must be positive');
+  if (!Number.isFinite(limits.maxQuoteAgeMs) || limits.maxQuoteAgeMs < 0 ||
+      !Number.isFinite(limits.maxPriceImpactBps) || limits.maxPriceImpactBps < 0 ||
+      !Number.isFinite(limits.maxNetworkFeeUsd) || limits.maxNetworkFeeUsd < 0 ||
+      !Number.isFinite(now)) return fail('paper validation limits are invalid');
   if (!Number.isFinite(quote.priceImpactBps) || quote.priceImpactBps < 0 || quote.priceImpactBps > limits.maxPriceImpactBps) {
-    return { ok: false, reason: 'price impact exceeds paper-trading limit' };
+    return fail('price impact exceeds paper-trading limit');
   }
   if (!Number.isFinite(quote.estimatedNetworkFeeUsd) || quote.estimatedNetworkFeeUsd < 0 || quote.estimatedNetworkFeeUsd > limits.maxNetworkFeeUsd) {
-    return { ok: false, reason: 'network fee exceeds paper-trading limit' };
+    return fail('network fee exceeds paper-trading limit');
   }
   if (!Number.isFinite(quote.quotedAtMs) || quote.quotedAtMs > now || now - quote.quotedAtMs > limits.maxQuoteAgeMs) {
-    return { ok: false, reason: 'quote is stale or has an invalid timestamp' };
+    return fail('quote is stale or has an invalid timestamp');
   }
-  if (!(Number(quote.inputAmount) > 0) || !(Number(quote.expectedOutputAmount) > 0)) {
-    return { ok: false, reason: 'quote amounts must be positive' };
+  const inputAmount = Number(quote.inputAmount);
+  const outputAmount = Number(quote.expectedOutputAmount);
+  if (!Number.isFinite(inputAmount) || inputAmount <= 0 || !Number.isFinite(outputAmount) || outputAmount <= 0) {
+    return fail('quote amounts must be finite positive numbers');
   }
+  if (typeof quote.source !== 'string' || !quote.source.trim()) return fail('quote source is required');
   return { ok: true };
 }
