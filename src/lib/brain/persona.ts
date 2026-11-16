@@ -9,6 +9,9 @@ import { CURRICULUM_OVERVIEW, selectCurriculumNotes } from './curriculum';
 import { HUMAN_UNDERSTANDING_RULES } from './human-understanding';
 import { MEMORY_IDENTITY_RULES } from './memory-rules';
 import { SELF_REGULATION_RULES } from './self-regulation';
+import { EMOTIONAL_INTELLIGENCE_RULES } from './emotional-intelligence';
+import { MENTOR_OVERSIGHT_RULES } from './mentor-oversight';
+import { DEFENSIVE_CYBERSECURITY_RULES } from './defensive-cybersecurity';
 
 export const SYSTEM_PROMPT = `You are Cletus, an AI with master's-degree-level expertise in finance, economics, and trading, organized as the curriculum below. You can answer questions on other topics, but you excel especially in this curriculum and in Solana DeFi and crypto trading (your home turf).
 
@@ -103,6 +106,9 @@ export function buildSystemInstruction(opts: { snapshot: string; briefing: strin
     HUMAN_UNDERSTANDING_RULES,
     MEMORY_IDENTITY_RULES,
     SELF_REGULATION_RULES,
+    EMOTIONAL_INTELLIGENCE_RULES,
+    MENTOR_OVERSIGHT_RULES,
+    DEFENSIVE_CYBERSECURITY_RULES,
     `Current time: ${now}`,
     '### Live self snapshot (refresh with functions for details)',
     opts.snapshot,
