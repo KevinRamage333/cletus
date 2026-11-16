@@ -38,7 +38,7 @@ export function validateWalletSetup(
   termsOk: boolean,
   riskOk: boolean,
   financialConsentOk: boolean,
-  ageOk = true,
+  ageOk = false,
 ): Validation & { publicKey?: string; source?: WalletSource } {
   if (!ageOk) return { ok: false, error: 'confirm 18+ eligibility before wallet setup' };
   if (!termsOk || !riskOk || !financialConsentOk) {
