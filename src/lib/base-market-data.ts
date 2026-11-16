@@ -21,18 +21,19 @@ type RawPair = {
   chainId?: string; dexId?: string; pairAddress?: string;
   baseToken?: { address?: string; name?: string; symbol?: string };
   quoteToken?: { address?: string; symbol?: string };
-  priceUsd?: string; volume?: { h24?: number }; liquidity?: { usd?: number };
+  priceUsd?: string | null; volume?: { h24?: number }; liquidity?: { usd?: number };
   fdv?: number; marketCap?: number; priceChange?: { h24?: number };
   pairCreatedAt?: number; url?: string;
 };
 function finite(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
   const n = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
 /** Parse only Base pairs; reject incomplete records and de-duplicate pair addresses. */
 export function parseBasePairs(input: unknown): BasePair[] {
-  if (! Array.isArray(input)) return [];
+  if (!Array.isArray(input)) return [];
   const out: BasePair[] = [];
   const seen = new Set<string>();
   for (const item of input as RawPair[]) {
@@ -67,6 +68,17 @@ export function parseBaseTokenIdentities(input: unknown): AssetIdentity[] {
     out.push({ network: 'base', address });
   }
   return out;
+}
+
+/**
+ * Keep only pairs whose BASE token is one of the requested assets.
+ * DexScreener can return a pair where the requested asset is the quote token;
+ * until quote-side USD price conversion is implemented, omit those pairs rather
+ * than mislabel the base token's USD price as the requested token's price.
+ */
+export function filterBasePairsForTokens(pairs: BasePair[], addresses: string[]): BasePair[] {
+  const requested = new Set(addresses.map((address) => address.trim().toLowerCase()).filter(Boolean));
+  return pairs.filter((pair) => requested.has(pair.baseToken.address.toLowerCase()));
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -107,12 +119,13 @@ export async function fetchBasePairsForTokens(addresses: string[]): Promise<Base
   for (let i = 0; i < unique.length; i += MAX_BATCH) {
     const batch = unique.slice(i, i + MAX_BATCH);
     const path = `/tokens/v1/${CHAIN}/${batch.map(encodeURIComponent).join(',')}`;
-    all.push(...parseBasePairs(await cached(path, () => getJson<unknown>(API + path))));
+    const pairs = parseBasePairs(await cached(path, () => getJson<unknown>(API + path)));
+    all.push(...filterBasePairsForTokens(pairs, batch));
   }
   return all;
 }
 
-/** Pick the deepest/most active pair for each base token. */
+/** Pick the deepest/most active pair for each token. */
 export function bestBasePairPerToken(pairs: BasePair[]): Map<string, BasePair> {
   const out = new Map<string, BasePair>();
   const score = (p: BasePair) => p.liquidityUsd * 10 + p.volume24hUsd;
