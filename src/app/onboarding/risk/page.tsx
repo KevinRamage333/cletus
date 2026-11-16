@@ -12,7 +12,7 @@ export default function RiskPage() {
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) return setErr(j.error ?? 'failed');
-    window.location.href = j.next ?? '/onboarding/wallet';
+    window.location.href = j.next ?? '/onboarding/financial-consent';
   }
   return (
     <div className="risk-page">
