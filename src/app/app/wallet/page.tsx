@@ -14,6 +14,7 @@ import Link from 'next/link';
 import WithdrawPanel from '@/components/WithdrawPanel';
 import ConnectWallet from '@/components/ConnectWallet';
 import SimWithdrawPanel from '@/components/SimWithdrawPanel';
+import MultiChainWalletPanel from '@/components/MultiChainWalletPanel';
 
 type WalletState = {
   address: string | null;
@@ -252,6 +253,8 @@ export default function CletusWalletPage() {
             onConnected={() => window.location.reload()}
             onDisconnected={() => window.location.reload()}
           />
+
+          <MultiChainWalletPanel />
 
           {/* Fund instructions */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
