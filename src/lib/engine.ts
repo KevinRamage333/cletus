@@ -496,7 +496,7 @@ async function scanTickInner(gen: number): Promise<string> {
     const scanPicked = new Set<string>();
     const scanOutcomes = new Map<string, { decision: string; reason: string }>();
     for (const cand of qualified.slice(0, c.auditTopN)) {
-      if (marketRegimeMode !== 'off' && marketRegimeBlocksEntries(marketRegime.regime)) {
+      if (marketRegimeMode !== 'off' && marketRegime.confidence !== 'low' && marketRegimeBlocksEntries(marketRegime.regime)) {
         const reason = `broad market ${marketRegime.regime}: ${marketRegime.reasons.join('; ')}`;
         if (marketRegimeMode === 'on') {
           await log('info', `market-regime gate blocked ${cand.symbol}: ${reason}`);
