@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { gateDecision, requiredStep } from '@/lib/gate';
 import { signSession, verifySession, type SessionClaims } from '@/lib/session';
-import { validateTermsAcceptance, validateRiskAck, validateWalletSetup } from '@/lib/onboarding';
+import { validateAgeAttestation, validateTermsAcceptance, validateRiskAck, validateWalletSetup } from '@/lib/onboarding';
+import { AGE_ATTESTATION_VERSION } from '@/lib/age';
 import { FINANCIAL_CONSENT_STAGES, FINANCIAL_CONSENT_VERSION, validateFinancialConsentStage } from '@/lib/financial-consent';
 import { Keypair } from '@solana/web3.js';
 
 const V = '2026-11-11.1';
 const FC = FINANCIAL_CONSENT_VERSION;
-const sess = (o: Partial<SessionClaims> = {}): SessionClaims => ({ uid: 'u1', email: 'a@b.co', adm: false, tv: null, rv: null, fc: null, w: false, iat: 0, exp: 9e9, ...o });
+const sess = (o: Partial<SessionClaims> = {}): SessionClaims => ({ uid: 'u1', email: 'a@b.co', adm: false, av: AGE_ATTESTATION_VERSION, tv: null, rv: null, fc: null, w: false, iat: 0, exp: 9e9, ...o });
 const done = sess({ tv: V, rv: V, fc: FC, w: true });
 
 describe('onboarding gate: step order', () => {
-  it('signup -> terms -> risk -> financial understanding -> wallet -> done', () => {
+  it('signup -> 18+ eligibility -> terms -> risk -> financial understanding -> wallet -> done', () => {
     expect(requiredStep(null, V, V, FC)).toBe('signup');
+    expect(requiredStep(sess({ av: null }), V, V, FC)).toBe('age');
     expect(requiredStep(sess(), V, V, FC)).toBe('terms');
     expect(requiredStep(sess({ tv: V }), V, V, FC)).toBe('risk');
     expect(requiredStep(sess({ tv: V, rv: V }), V, V, FC)).toBe('financial-consent');
@@ -47,6 +49,9 @@ describe('onboarding gate: route blocking', () => {
     expect(gateDecision('/api/status', done, V, V, FC)).toEqual({ action: 'next' });
   });
   it('steps cannot be skipped', () => {
+    expect(gateDecision('/onboarding/terms', sess({ av: null }), V, V, FC)).toEqual({ action: 'redirect', to: '/onboarding/age' });
+    expect(gateDecision('/api/onboarding/terms', sess({ av: null }), V, V, FC)).toMatchObject({ action: 'deny', status: 403 });
+    expect(gateDecision('/api/onboarding/age', sess({ av: null }), V, V, FC)).toEqual({ action: 'next' });
     expect(gateDecision('/onboarding/risk', sess(), V, V, FC)).toEqual({ action: 'redirect', to: '/onboarding/terms' });
     expect(gateDecision('/onboarding/financial-consent', sess({ tv: V }), V, V, FC)).toEqual({ action: 'redirect', to: '/onboarding/risk' });
     expect(gateDecision('/onboarding/wallet', sess({ tv: V, rv: V }), V, V, FC)).toEqual({ action: 'redirect', to: '/onboarding/financial-consent' });
@@ -60,21 +65,27 @@ describe('onboarding gate: route blocking', () => {
 describe('session cookie', () => {
   const secret = 'x'.repeat(40);
   it('round-trips and rejects tampering or the wrong secret', async () => {
-    const t = await signSession({ uid: 'u1', email: 'a@b.co', adm: false, tv: V, rv: V, fc: FC, w: true }, secret);
+    const t = await signSession({ uid: 'u1', email: 'a@b.co', adm: false, av: AGE_ATTESTATION_VERSION, tv: V, rv: V, fc: FC, w: true }, secret);
     expect((await verifySession(t, secret))?.uid).toBe('u1');
     const [body, sig] = t.split('.');
-    const forged = Buffer.from(JSON.stringify({ uid: 'u1', tv: V, rv: V, fc: FC, w: true, exp: 9e9 })).toString('base64url');
+    const forged = Buffer.from(JSON.stringify({ uid: 'u1', av: AGE_ATTESTATION_VERSION, tv: V, rv: V, fc: FC, w: true, exp: 9e9 })).toString('base64url');
     expect(await verifySession(`${forged}.${sig}`, secret)).toBeNull();
     expect(await verifySession(`${body}.${sig}`, 'y'.repeat(40))).toBeNull();
     expect(await verifySession('garbage', secret)).toBeNull();
   });
   it('rejects expired sessions', async () => {
-    const t = await signSession({ uid: 'u1', email: 'a@b.co', adm: false, tv: V, rv: V, fc: FC, w: true }, secret, -10);
+    const t = await signSession({ uid: 'u1', email: 'a@b.co', adm: false, av: AGE_ATTESTATION_VERSION, tv: V, rv: V, fc: FC, w: true }, secret, -10);
     expect(await verifySession(t, secret)).toBeNull();
   });
 });
 
 describe('onboarding API validation', () => {
+  it('age eligibility requires current version, 18+ and legal permission confirmations', () => {
+    expect(validateAgeAttestation({ version: AGE_ATTESTATION_VERSION, confirmed18Plus: true, legallyPermitted: true }, AGE_ATTESTATION_VERSION).ok).toBe(true);
+    expect(validateAgeAttestation({ version: AGE_ATTESTATION_VERSION, confirmed18Plus: false, legallyPermitted: true }, AGE_ATTESTATION_VERSION).ok).toBe(false);
+    expect(validateAgeAttestation({ version: AGE_ATTESTATION_VERSION, confirmed18Plus: true, legallyPermitted: false }, AGE_ATTESTATION_VERSION).ok).toBe(false);
+    expect(validateAgeAttestation({ version: 'old', confirmed18Plus: true, legallyPermitted: true }, AGE_ATTESTATION_VERSION).ok).toBe(false);
+  });
   it('terms require current version, scroll-to-end and the read checkbox', () => {
     expect(validateTermsAcceptance({ version: V, scrolledToEnd: true, readConfirmed: true }, V).ok).toBe(true);
     expect(validateTermsAcceptance({ version: V, scrolledToEnd: false, readConfirmed: true }, V).ok).toBe(false);
