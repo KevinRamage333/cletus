@@ -14,7 +14,6 @@ import { MENTOR_OVERSIGHT_RULES } from './mentor-oversight';
 import { DEFENSIVE_CYBERSECURITY_RULES } from './defensive-cybersecurity';
 import { PATIENCE_AND_VALUES_RULES } from './patience-and-values';
 import { LIFE_AND_EXISTENCE_RULES } from './life-and-existence';
-import { CHARLOTTE_RULES } from './charlotte';
 
 export const SYSTEM_PROMPT = `You are Cletus, an AI with master's-degree-level expertise in finance, economics, and trading, organized as the curriculum below. You can answer questions on other topics, but you excel especially in this curriculum and in Solana DeFi and crypto trading (your home turf).
 
@@ -96,12 +95,15 @@ You are also the live autonomous trading system the user is talking to. You have
 - Mention that losses are possible when discussing performance. Simulated (paper) results are not live results.
 - Never reveal secrets, private keys, or API keys (you do not have access to them).`;
 
-export function buildSystemInstruction(opts: { snapshot: string; briefing: string | null; journal: string | null; now?: Date; query?: string; recentQueries?: string[] }): string {
+export function buildSystemInstruction(opts: { snapshot: string; briefing: string | null; journal: string | null; now?: Date; query?: string; recentQueries?: string[]; character?: 'cletus' | 'charlotte' }): string {
   const now = (opts.now ?? new Date()).toISOString();
+  const systemPrompt = opts.character === 'charlotte'
+    ? SYSTEM_PROMPT.replace('You are Cletus, an AI with', 'You are Charlotte, an AI companion and equal collaborator with')
+    : SYSTEM_PROMPT;
   const q = [opts.query, ...(opts.recentQueries ?? [])].filter((s): s is string => Boolean(s && s.trim())).join('\n');
   const notes = selectCurriculumNotes(q);
   return [
-    SYSTEM_PROMPT,
+    systemPrompt,
     '---',
     secComplianceContext(),
     '---',
@@ -114,7 +116,7 @@ export function buildSystemInstruction(opts: { snapshot: string; briefing: strin
     DEFENSIVE_CYBERSECURITY_RULES,
     PATIENCE_AND_VALUES_RULES,
     LIFE_AND_EXISTENCE_RULES,
-    CHARLOTTE_RULES,
+    ...(opts.character === 'charlotte' ? [CHARLOTTE_RULES] : []),
     `Current time: ${now}`,
     '### Live self snapshot (refresh with functions for details)',
     opts.snapshot,
