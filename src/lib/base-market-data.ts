@@ -21,7 +21,7 @@ type RawPair = {
   chainId?: string; dexId?: string; pairAddress?: string;
   baseToken?: { address?: string; name?: string; symbol?: string };
   quoteToken?: { address?: string; symbol?: string };
-  priceUsd?: string | null; volume?: { h24?: number }; liquidity?: { usd?: number };
+  priceUsd?: string | number | null; volume?: { h24?: number }; liquidity?: { usd?: number };
   fdv?: number; marketCap?: number; priceChange?: { h24?: number };
   pairCreatedAt?: number; url?: string;
 };
