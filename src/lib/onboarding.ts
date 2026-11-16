@@ -9,7 +9,8 @@ export function validateAgeAttestation(body: unknown, currentVersion: string): V
   return { ok: true };
 }
 
-export function validateTermsAcceptance(body: unknown, currentVersion: string): Validation {
+export function validateTermsAcceptance(body: unknown, currentVersion: string, ageAttestedVersion?: string | null, currentAgeVersion?: string): Validation {
+  if (currentAgeVersion && ageAttestedVersion !== currentAgeVersion) return { ok: false, error: 'confirm 18+ eligibility before accepting the Terms' };
   const b = (body ?? {}) as Record<string, unknown>;
   if (b.version !== currentVersion) return { ok: false, error: `terms version mismatch (current is ${currentVersion}); reload and read the current terms` };
   if (b.scrolledToEnd !== true) return { ok: false, error: 'you must scroll to the end of the Terms and Conditions' };
@@ -17,7 +18,8 @@ export function validateTermsAcceptance(body: unknown, currentVersion: string): 
   return { ok: true };
 }
 
-export function validateRiskAck(body: unknown, currentVersion: string, termsAcceptedVersion: string | null): Validation {
+export function validateRiskAck(body: unknown, currentVersion: string, termsAcceptedVersion: string | null, ageAttestedVersion?: string | null, currentAgeVersion?: string): Validation {
+  if (currentAgeVersion && ageAttestedVersion !== currentAgeVersion) return { ok: false, error: 'confirm 18+ eligibility before acknowledging risk' };
   const b = (body ?? {}) as Record<string, unknown>;
   if (termsAcceptedVersion !== currentVersion) return { ok: false, error: 'accept the current Terms and Conditions first' };
   if (b.version !== currentVersion) return { ok: false, error: 'risk disclaimer version mismatch; reload' };
@@ -36,9 +38,11 @@ export function validateWalletSetup(
   termsOk: boolean,
   riskOk: boolean,
   financialConsentOk: boolean,
+  ageOk = true,
 ): Validation & { publicKey?: string; source?: WalletSource } {
+  if (!ageOk) return { ok: false, error: 'confirm 18+ eligibility before wallet setup' };
   if (!termsOk || !riskOk || !financialConsentOk) {
-    return { ok: false, error: 'complete Terms, Risk, and all five Financial Understanding stages first' };
+    return { ok: false, error: 'complete age eligibility, Terms, Risk, and all five Financial Understanding stages first' };
   }
   const b = (body ?? {}) as Record<string, unknown>;
   if (SECRET_FIELDS.some((k) => k in b)) return { ok: false, error: 'only the public key may be sent to the server' };
