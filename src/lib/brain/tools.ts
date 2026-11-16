@@ -26,6 +26,7 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_blocks', description: 'Recent pre-trade security audit failures and compliance-gate blocks (why tokens were NOT traded).', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_config', description: 'Active configuration/preset: thresholds, exits, sizing tiers, schedule, compliance limits.' },
   { name: 'get_scan_candidates', description: 'Latest scanner results: tokens in the market-cap band ranked by volume/market-cap with composite scores, signals and audit results.', parameters: { type: 'OBJECT', properties: limitParam } },
+  { name: 'get_base_market_candidates', description: 'Fetch current read-only Base-chain token market snapshots (USD price, 24h volume, liquidity, FDV, 24h move, DEX and pair link). These are discovery candidates, not buy signals; Base paper trading and execution are disabled.', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_world_briefing', description: 'The latest rolling world briefing (crypto, macro, Fed, world news) plus SOL price and DexScreener trending tokens.' },
   { name: 'get_news', description: 'Recent stored news headlines, optionally by category.', parameters: { type: 'OBJECT', properties: { category: { type: 'STRING', description: 'crypto | macro | world | fed', enum: ['crypto', 'macro', 'world', 'fed'] }, ...limitParam } } },
   { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
@@ -90,6 +91,17 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
     }
     case 'get_scan_candidates':
       return mem.candidates.slice(0, lim(args)).map((x) => ({ symbol: x.symbol, mint: x.mint, marketCap: Math.round(x.marketCap), volume24h: Math.round(x.volume24h), volMcap: r2(x.volMcap), priceChangeH1: x.priceChangeH1, composite: Number(x.composite.toFixed(3)), historicalConfidence: scoreConfidence(x.composite, c.mcapPreset, Math.min(c.maxPositionSizeUsd, 500)), rejected: x.rejected ?? null, audit: x.audit ? { passed: x.audit.passed, failed: x.audit.checks.filter((k) => !k.passed).map((k) => k.name) } : null }));
+    case 'get_base_market_candidates': {
+      const { fetchBaseMarketSnapshot } = await import('../base-market-data');
+      const rows = await fetchBaseMarketSnapshot(Math.min(25, lim(args, 10)));
+      return rows.map((p) => ({
+        network: 'base', symbol: p.baseToken.symbol, name: p.baseToken.name, tokenAddress: p.baseToken.address,
+        priceUsd: p.priceUsd, marketCapOrFdvUsd: p.fdvUsd, volume24hUsd: p.volume24hUsd,
+        liquidityUsd: p.liquidityUsd, priceChange24hPct: p.priceChange24hPct,
+        pairCreatedAtMs: p.pairCreatedAtMs, dex: p.dexId, pairAddress: p.pairAddress, url: p.url,
+        note: 'Read-only discovery data; not an entry signal. Base paper trading is disabled.',
+      }));
+    }
     case 'get_world_briefing': {
       const [b, m] = await Promise.all([prisma.briefing.findFirst({ orderBy: { createdAt: 'desc' } }), prisma.marketSnapshot.findFirst({ orderBy: { createdAt: 'desc' } })]);
       return { briefing: b?.content ?? null, briefingAt: b?.createdAt ?? null, briefingSource: b?.source ?? null, solPriceUsd: m?.solPriceUsd ?? null, solChange24h: m?.solChange24h ?? null, trending: m ? JSON.parse(m.trending) : [] };
