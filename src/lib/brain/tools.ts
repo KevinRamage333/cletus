@@ -1,4 +1,7 @@
-/** Read-only "self-awareness" functions the Brain can call. None of these can place, modify, or cancel trades — the Brain is advisory only. */
+/**
+ * Read-only "self-awareness" functions the Brain can call. None of these can
+ * place, modify, or cancel trades — the Brain is advisory only.
+ */
 import { prisma } from '../db';
 import { getConfig, publicConfig } from '../config';
 import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
@@ -28,8 +31,8 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_news', description: 'Recent stored news headlines, optionally by category.', parameters: { type: 'OBJECT', properties: { category: { type: 'STRING', description: 'crypto | macro | world | fed', enum: ['crypto', 'macro', 'world', 'fed'] }, ...limitParam } } },
   { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
   { name: 'get_whale_activity', description: 'On-chain big money movers for a tracked token (Helius): whale net flow, smart-money buys/sells, dev-wallet selling, fresh-wallet bundle clusters, top-holder concentration change, the confirm/veto verdict, fast-exit signal, and Solscan links. Use it as a confirmer/veto next to order flow, never as a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
-  { name: 'get_social_hype', description: 'X (Twitter) mention velocity/acceleration, organic vs bot/shill share, and hype-vs-price/flow divergence for a tracked token (e.g. rising hype into selling = exit liquidity). Confirmer/veto only, never a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } },
-  { name: 'get_owner_plan', description: "Owner money plan for Cletus's own trading wallet: current equity sizing tier and trade size, stop/take-profit, one-position rule, profit-sweep ladder (current base, next target, total paid out), and whether the sweep is armed. Use it to explain where he is on the ladder." },
+  { name: 'get_social_hype', description: 'X (Twitter) mention velocity/acceleration, organic vs bot/shill share, and hype-vs-price/flow divergence for a tracked token (e.g. rising hype into selling = exit liquidity). Confirmer/veto only, never a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
+  { name: 'get_owner_plan', description: "Owner money plan for Cletus's own trading wallet: current equity sizing tier and trade size, stop/take-profit, one-position rule, profit-sweep ladder (current base, next target, total paid out), and whether the sweep is armed. Use this to explain where he is on the ladder." },
   { name: 'get_journal', description: "Cletus's own self-reflection journal entries (after each closed trade and daily).", parameters: { type: 'OBJECT', properties: limitParam } },
 ];
 
@@ -134,7 +137,7 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
 
 /** Compact live snapshot injected into the system instruction on every turn. */
 export async function selfSnapshot(ctx: ToolContext): Promise<string> {
-  const s = (await runTool('get_status', {}, ctx)) as Awaited<ReturnType<typeof runTool>> & Record<string, any>;
+  const s = (await runTool('get_status', {}, ctx)) as Awaited<ReturnType<typeof runTool>> & Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   const w = (await runTool('get_signal_weights', {}, ctx)) as Array<{ signal: string; weight: number; winRate: number | null }>;
   return JSON.stringify({ ...s, topWeights: w.slice(0, 4).map((x) => `${x.signal} ${(x.weight * 100).toFixed(1)}%${x.winRate !== null ? ` (win ${(x.winRate * 100).toFixed(0)}%)` : ''}`) });
 }
