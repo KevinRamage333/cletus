@@ -18,14 +18,22 @@ type ProviderDetail = {
   provider: Eip1193Provider;
 };
 
+type EvmBalance = {
+  key: string;
+  name: string;
+  symbol: string;
+  chainId: string;
+  balance: string | null;
+  status: 'ok' | 'not_configured' | 'unavailable';
+  error?: string;
+};
+
 declare global {
   interface Window {
     ethereum?: Eip1193Provider;
   }
 }
 
-// Chain IDs are the canonical EVM network IDs. This panel only requests wallet
-// network switching; it does not sign transactions or read balances.
 const NETWORKS = [
   { id: '0x1', name: 'Ethereum', symbol: 'ETH' },
   { id: '0x2105', name: 'Base', symbol: 'ETH' },
@@ -53,6 +61,9 @@ export default function MultiChainWalletPanel() {
   const [selected, setSelected] = useState<string>('');
   const [address, setAddress] = useState<string | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
+  const [balances, setBalances] = useState<EvmBalance[]>([]);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +93,24 @@ export default function MultiChainWalletPanel() {
   const active = useMemo(() => providers.find((p) => (p.info?.uuid || p.info?.rdns) === selected), [providers, selected]);
   const activeNetwork = NETWORKS.find((network) => network.id === chainId)?.name ?? (chainId ? 'Unsupported network' : 'Not connected');
 
+  async function refreshBalances(walletAddress: string) {
+    setBalancesLoading(true);
+    try {
+      const response = await fetch(`/api/protected/wallet/evm-balances?address=${encodeURIComponent(walletAddress)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Could not load EVM balances.');
+      setBalances(payload.balances || []);
+      setCheckedAt(payload.checkedAt || new Date().toISOString());
+    } catch (e) {
+      setError((e as Error).message || 'Could not load EVM balances.');
+    } finally {
+      setBalancesLoading(false);
+    }
+  }
+
   async function connect() {
     if (!active?.provider) return;
     setBusy(true); setError(null);
@@ -91,6 +120,7 @@ export default function MultiChainWalletPanel() {
       if (!accounts?.[0]) throw new Error('The wallet did not return an account.');
       setAddress(accounts[0]);
       setChainId(chain);
+      await refreshBalances(accounts[0]);
     } catch (e) {
       setError((e as Error).message || 'Wallet connection was cancelled.');
     } finally {
@@ -116,24 +146,24 @@ export default function MultiChainWalletPanel() {
   }
 
   function disconnect() {
-    // EIP-1193 has no universal disconnect method. Clear only Cletus's local view;
-    // the wallet's own site permissions remain under the user's control.
     setAddress(null);
     setChainId(null);
+    setBalances([]);
+    setCheckedAt(null);
   }
 
   return (
     <section className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4" aria-label="Multi-chain EVM wallet connections">
       <div>
         <h2 className="text-lg font-semibold">Multi-chain wallets</h2>
-        <p className="text-sm text-white/55 mt-1">Connect an EVM wallet once, then switch between the nine supported EVM networks. This is a read-only connection; it does not authorize swaps or transfers.</p>
+        <p className="text-sm text-white/55 mt-1">Connect an EVM wallet once, then view its native-coin balances across the nine supported EVM networks. Read-only only: no signing, swaps, or transfers.</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <select
           aria-label="Choose EVM wallet"
           value={selected}
-          onChange={(event) => { setSelected(event.target.value); setAddress(null); setChainId(null); }}
+          onChange={(event) => { setSelected(event.target.value); setAddress(null); setChainId(null); setBalances([]); setCheckedAt(null); }}
           className="w-full rounded-lg border border-white/15 bg-black px-3 py-3 text-sm text-white"
         >
           <option value="">Choose detected wallet…</option>
@@ -153,6 +183,31 @@ export default function MultiChainWalletPanel() {
         <code className="mt-1 block break-all text-xs text-white/80">{address}</code>
       </div>}
 
+      {address && <div className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Network balances</h3>
+            <p className="text-xs text-white/40">Native coins only · {checkedAt ? `Checked ${new Date(checkedAt).toLocaleTimeString()}` : 'Not checked yet'}</p>
+          </div>
+          <button type="button" disabled={balancesLoading} onClick={() => address && refreshBalances(address)} className="rounded-lg border border-white/15 px-3 py-2 text-xs disabled:opacity-40">
+            {balancesLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {balances.map((item) => (
+            <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <div className="text-xs text-white/50">{item.name}</div>
+              {item.status === 'ok'
+                ? <div className="mt-1 font-mono text-sm">{item.balance} <span className="text-xs text-white/40">{item.symbol}</span></div>
+                : <div className="mt-1 text-xs text-amber-200/70">{item.status === 'not_configured' ? 'RPC not configured' : 'Temporarily unavailable'}</div>}
+              {item.status === 'unavailable' && item.error && <div className="mt-1 text-[10px] text-white/30 break-words">{item.error}</div>}
+            </div>
+          ))}
+          {balances.length === 0 && <p className="col-span-full text-xs text-white/45">{balancesLoading ? 'Reading balances from the supported networks…' : 'Connect your wallet to load balances.'}</p>}
+        </div>
+        <p className="text-[11px] text-white/35">These are on-chain native-coin balances, not a USD valuation or a complete token portfolio. ERC-20 tokens, NFTs, prices, and Solana assets are separate follow-up work.</p>
+      </div>}
+
       <div>
         <div className="text-xs font-semibold uppercase tracking-wide text-white/40 mb-2">EVM networks</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -166,7 +221,7 @@ export default function MultiChainWalletPanel() {
         </div>
       </div>
       {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
-      <p className="text-[11px] text-white/35">Wallet detection uses the browser's standard provider announcements where available. Network switching is always initiated by you. Some wallets require you to add a network before switching. Wallet linking to your Cletus account and Solana/EVM identity verification are separate steps still being built.</p>
+      <p className="text-[11px] text-white/35">Wallet detection uses standard browser provider announcements where available. Network switching is always initiated by you. Cletus only reads public balances; it never receives keys or signs transactions. Some wallets require you to add a network before switching. Wallet linking to your Cletus account and Solana/EVM identity verification remain separate steps.</p>
     </section>
   );
 }
