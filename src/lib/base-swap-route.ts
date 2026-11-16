@@ -10,7 +10,6 @@ export const BASE_SWAP_ROUTER_02 = '0x2626664c2603336E57B271c5C0b26F421741e481';
 const EXACT_INPUT_SINGLE_SELECTOR = '0x04e45aaf';
 const ALLOWED_FEE_TIERS = new Set([500, 3000, 10000]);
 const UINT24_MAX = (1n << 24n) - 1n;
-const UINT160_MAX = (1n << 160n) - 1n;
 
 export interface BaseExactInputSingleRequest {
   tokenIn: string;
