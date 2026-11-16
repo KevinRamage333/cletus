@@ -62,7 +62,10 @@ function connectThroughProxy() {
   });
 }
 
+const clients = new Set();
 const server = net.createServer((client) => {
+  clients.add(client);
+  client.once('close', () => clients.delete(client));
   connectThroughProxy().then((upstream) => {
     client.setTimeout(0);
     upstream.setTimeout(0);
@@ -88,7 +91,7 @@ server.listen(listenPort, listenHost, () => {
 
 function shutdown() {
   server.close(() => process.exit(0));
-  server.closeAllConnections?.();
+  for (const client of clients) client.destroy();
 }
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
