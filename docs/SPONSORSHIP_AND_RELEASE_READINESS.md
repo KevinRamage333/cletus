@@ -93,3 +93,21 @@ The following should be assembled and kept current:
 - No private keys, recovery phrases, API keys, bank details, or tax forms in issues, PRs, logs, screenshots, or agent prompts.
 - No live trading, token minting, staking, lending, custody, or money movement as part of a sponsorship demo.
 - Do not claim GitHub, a registry, a security auditor, or any partner endorses Cletus unless that endorsement is verified in writing.
+
+## 8. Draft sponsor-profile language (not yet published)
+
+**Short description**
+
+Support the ongoing development of Cletus: an experimental, simulation-first software project focused on transparent digital-asset research, risk education, and user-controlled tools. Sponsorship supports open-source engineering, testing, documentation, accessibility, and security work. It is not an investment and provides no share of revenue, trading profits, tokens, or financial returns.
+
+**Long description**
+
+Cletus is being developed around a simple principle: people should understand the risks and remain in control of their own financial decisions. The project is built in public only when its licensing and security boundaries are ready. Current work prioritizes paper trading, honest performance reporting, clear loss disclosures, adult eligibility, optional non-custodial wallet connection, and independent safety review. Sponsors help fund maintainable code, reproducible tests, documentation, and responsible community operations. The project does not promise profits or passive income.
+
+**Illustrative support levels (use only if the owner can deliver them)**
+
+- Community supporter: public development notes and changelog.
+- Sustaining supporter: the same public updates plus a quarterly project progress report.
+- Project patron: the same public updates plus acknowledgement in a public supporters list, only with the sponsor's permission.
+
+No tier should promise investment access, trading privileges, token allocation, influence over user funds, private financial advice, or preferential trading outcomes.
