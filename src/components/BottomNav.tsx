@@ -7,6 +7,7 @@ export const NAV = [
   { href: '/app/chart', label: 'Chart', icon: '📈' },
   { href: '/app/signals', label: 'Signals', icon: '⚡' },
   { href: '/app/ai', label: 'Cletus AI', icon: '🪿' },
+  { href: '/app/world', label: 'The Grove', icon: '🌳' },
   { href: '/app/trade', label: 'Simulate', icon: '▶️' },
   { href: '/app/config', label: 'Config', icon: '⚙️' },
   { href: '/app/community', label: 'Community', icon: '💬' },
