@@ -91,7 +91,7 @@ describe('swap submission path', () => {
 describe('extra pre-trade checks', () => {
   const P = { maxHolderConcentration: 0.3, requireLiquidityLock: true, minLpLockedPct: 80, maxAuditRiskScore: 69, maxSellPriceImpactPct: 25, maxTop10HolderPct: 30, devSellCheck: true, blockIfDevExited: true, devExitLookbackHours: 24 };
   const sell = { routeFound: true, priceImpactPct: 1 };
-  const base = { markets: [{ lp: { lpLockedPct: 100 } }], topHolders: Array.from({ length: 10 }, () => ({ address: Math.random().toString(), pct: 2 })), score_normalised: 10 };
+  const base = { mintAuthority: null, freezeAuthority: null, rugged: false, transferFee: { pct: 0 }, risks: [], markets: [{ lp: { lpLockedPct: 100 } }], topHolders: Array.from({ length: 10 }, (_, i) => ({ address: `holder-${i}`, pct: 2 })), score_normalised: 10 };
   it('passes a clean token', () => {
     expect(evaluateAudit(base, sell, P).passed).toBe(true);
   });
