@@ -57,7 +57,7 @@ export async function inspectAddress(address: string): Promise<Inspection> {
   const info = await safe('account', () => rpcCall<AccInfo>('getAccountInfo', [address, { encoding: 'jsonParsed' }]));
   const v = info?.value;
   r.solBalance = v ? v.lamports / 1e9 : 0;
-  r.source.push('Helius RPC');
+  r.source.push('Solana RPC');
   const parsed = (v?.data as { parsed?: { type?: string; info?: Record<string, any> } })?.parsed; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (v && TOKEN_PROGRAMS.includes(v.owner) && parsed?.type === 'mint') r.kind = 'token';
   else if (v?.executable) r.kind = 'program';
@@ -66,6 +66,7 @@ export async function inspectAddress(address: string): Promise<Inspection> {
   if (r.kind === 'token' && parsed?.info) {
     const i = parsed.info; const decimals = Number(i.decimals); const supply = Number(i.supply) / 10 ** decimals;
     const largest = await safe('holders', () => rpcCall<{ value: { address: string; uiAmount: number }[] }>('getTokenLargestAccounts', [address]));
+    if (largest) r.source.push('Solana RPC largest token accounts');
     let top: { owner: string; pct: number }[] = [];
     if (largest?.value?.length) {
       const accs = largest.value.slice(0, 10);
