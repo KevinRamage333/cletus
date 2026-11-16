@@ -83,6 +83,8 @@ model Position {
   id             String    @id @default(cuid())
   accountId      String
   account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // Chain namespace for this asset. Existing rows default to Solana because all legacy positions were created by the Solana-only engine.
+  network        String    @default("solana")
   mint           String
   symbol         String
   pairAddress    String?
@@ -112,7 +114,8 @@ model Position {
   partialCostUsd Float     @default(0) // cost basis already sold via partial take-profits
 
   @@index([accountId, status])
-  @@index([accountId, mint])
+  @@index([accountId, mint]) // Legacy Solana lookup compatibility
+  @@index([accountId, network, mint])
   @@schema("app")
 }
 
