@@ -87,6 +87,9 @@ describe('onboarding API validation', () => {
   });
   it('five financial stages require the right answer and explicit confirmation in order', () => {
     const first = FINANCIAL_CONSENT_STAGES[0];
+    for (const stage of FINANCIAL_CONSENT_STAGES) {
+      expect(validateFinancialConsentStage({ version: FC, stage: stage.id, answer: stage.correctValue, confirmed: true }, FC, stage.id).ok).toBe(true);
+    }
     expect(validateFinancialConsentStage({ version: FC, stage: first.id, answer: first.correctValue, confirmed: true }, FC, first.id).ok).toBe(true);
     expect(validateFinancialConsentStage({ version: FC, stage: first.id, answer: 'principal-protected', confirmed: true }, FC, first.id).ok).toBe(false);
     expect(validateFinancialConsentStage({ version: FC, stage: first.id, answer: first.correctValue, confirmed: false }, FC, first.id).ok).toBe(false);
