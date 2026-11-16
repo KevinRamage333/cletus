@@ -3,7 +3,7 @@
 
 **Status:** Foundational product and community policy  
 **Policy version:** 1.0  
-**Terms version:** 2026-11-16.1
+**Terms version:** 2026-11-16.2
 
 ## 1. What makes Cletus different
 
