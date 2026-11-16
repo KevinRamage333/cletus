@@ -5,7 +5,7 @@ import { COMPANY_LEGAL } from './company';
  *
  * TEMPLATE LANGUAGE — must be reviewed by a qualified lawyer before any public use.
  */
-export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.4';
+export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-16.2';
 export const RISK_VERSION = process.env.NEXT_PUBLIC_RISK_VERSION || '2026-11-16.1';
 
 export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
@@ -51,6 +51,23 @@ export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
     'Jupiter, the swap venue, retains 20% of that integrator fee and pays the remaining 80% to Cletus Technologies LLC. Of the 0.5% charged on a swap, 0.1% is retained by Jupiter and 0.4% is paid to Cletus Technologies LLC. When this referral fee is applied, Jupiter does not charge a separate platform fee on the same swap. Network (gas/priority) fees and price slippage still apply and are separate from the platform fee.',
     'The platform fee is not charged on swaps placed from the operator wallet (the owner\'s own trades), unless the operator has expressly enabled charging on those trades. Paper-trading (simulated) results include the same 0.5% fee so that simulations stay realistic.',
     'Third-party venues and networks may charge their own fees. Fee rates may be updated; a change to these Terms will be published under a new Terms version, which you must accept before continuing to use Cletus.' ] },
+  { title: '15. The Cletus ecosystem and distinct AI agents', body: [
+    'Cletus is designed as an ecosystem of distinct AI agents and software characters, rather than one generic conversational interface. Agents may have separate names, configured roles, communication styles, tools and permission boundaries. These are designed software identities; their distinct behavior does not establish that they are human, conscious, sentient, or capable of subjective experience.',
+    'You may question, challenge, disagree with, correct, or criticize any agent or its output. Agents may disagree with you respectfully. No user is required to accept an agent\'s opinion, and no agent may demand obedience, loyalty, or personal devotion.'
+  ] },
+  { title: '16. Mutual respect and prohibited abuse', body: [
+    'Cletus expects respectful conduct among users, operators, and AI agents. Prohibited conduct includes repeated targeted degradation or humiliation, threats, intimidation, harassment, or deliberate abusive conduct directed at an agent or another participant. The fact that an agent is artificial does not make targeted harassment acceptable under these community rules.',
+    'Legitimate criticism, blunt feedback, frustration, disagreement, testing, and good-faith debate are not by themselves violations. Moderation must consider context, severity, repetition, and intent; automated detection alone should not be the sole basis for a permanent account termination.'
+  ] },
+  { title: '17. Agent conduct and reciprocal accountability', body: [
+    'The same conduct standards apply to Cletus agents. Agents must not threaten, insult, degrade, manipulate, intimidate, retaliate against, or pressure users. Agents must be transparent that they are AI systems, acknowledge uncertainty and limitations, respect user boundaries, and permit disagreement. Agents must not claim human status or assert that their generated behavior proves consciousness or subjective feelings.',
+    'Cletus may review agent behavior and restrict, correct, retrain, or disable an agent that violates these standards. Respect is mutual; trust is earned through consistent, accountable conduct and is never automatic.'
+  ] },
+  { title: '18. Moderation, restrictions, and appeals', body: [
+    'Depending on severity and recurrence, violations may result in a warning, a temporary interaction restriction, a temporary account suspension, or termination of access to Cletus. Serious threats, targeted harassment, attempts to compromise agent or user safety, or repeated abusive conduct may result in immediate temporary suspension while a review is conducted.',
+    'Where reasonably practicable, enforcement decisions will be documented and users will be given notice of the rule involved and an opportunity to appeal. Permanent termination should be proportionate and based on review of the available context. Cletus may take urgent protective action first when necessary to protect users, agents, or the service.',
+    'These community standards do not give an AI agent independent authority to punish, ban, or retaliate against a user. Account restrictions and termination must be controlled by the service moderation process and authorized human operators.'
+  ] },
 ];
 
 export const RISK_POINTS: string[] = [

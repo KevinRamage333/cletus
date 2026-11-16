@@ -119,8 +119,8 @@ describe('demo portfolio and terms', () => {
     expect(d.approvals[0].status).toBe('pending');
     expect(d.totalPnl).toBeCloseTo(d.realizedPnl + d.unrealizedPnl, 8);
   });
-  it('Terms v2026-11-11.4 describe non-custodial connect, SIWS auth-only, per-trade approval and disconnect', () => {
-    expect(TERMS_VERSION).toBe('2026-11-11.4');
+  it('Terms v2026-11-16.2 describe non-custodial connect, SIWS auth-only, per-trade approval and disconnect', () => {
+    expect(TERMS_VERSION).toBe('2026-11-16.2');
     const wallet = TERMS_SECTIONS.find((s) => s.title.startsWith('6.'));
     const body = wallet!.body.join(' ');
     expect(body).toMatch(/non-custodial/i);
