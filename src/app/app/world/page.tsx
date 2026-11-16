@@ -47,6 +47,91 @@ export default function WorldPage() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('A small, safe first world. Your conversations are saved separately for each companion.');
 
+  type VoiceRecognition = {
+    lang: string;
+    interimResults: boolean;
+    onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+    onerror: (() => void) | null;
+    onend: (() => void) | null;
+    start: () => void;
+    stop: () => void;
+  };
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceNames, setVoiceNames] = useState<Record<Character, string>>({ cletus: '', charlotte: '' });
+  const [listening, setListening] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState('');
+  const recognitionRef = useRef<VoiceRecognition | null>(null);
+
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+    const loadVoices = () => {
+      const available = window.speechSynthesis.getVoices();
+      setVoices(available);
+      setVoiceNames((old) => ({
+        cletus: old.cletus || available.find((voice) => voice.lang.toLowerCase().startsWith('en') && /male|david|daniel|alex|guy/i.test(voice.name))?.name || available.find((voice) => voice.lang.toLowerCase().startsWith('en'))?.name || '',
+        charlotte: old.charlotte || available.find((voice) => voice.lang.toLowerCase().startsWith('en') && /female|samantha|zira|aria|jenny/i.test(voice.name))?.name || available.filter((voice) => voice.lang.toLowerCase().startsWith('en'))[1]?.name || available[0]?.name || '',
+      }));
+    };
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+  }, []);
+
+  const speak = (character: Character, text: string) => {
+    if (!('speechSynthesis' in window)) {
+      setVoiceNotice('Speech playback is not supported by this browser.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const chosen = voices.find((voice) => voice.name === voiceNames[character]);
+    if (chosen) utterance.voice = chosen;
+    utterance.lang = chosen?.lang || 'en-US';
+    utterance.rate = character === 'cletus' ? 1.02 : 0.96;
+    utterance.pitch = character === 'cletus' ? 0.92 : 1.08;
+    window.speechSynthesis.speak(utterance);
+    setVoiceNotice(`Playing ${character === 'cletus' ? 'Cletus' : 'Charlotte'}'s voice. The voice is provided by your device/browser.`);
+  };
+
+  const startListening = () => {
+    const SpeechRecognitionAPI = (window as Window & {
+      SpeechRecognition?: new () => VoiceRecognition;
+      webkitSpeechRecognition?: new () => VoiceRecognition;
+    }).SpeechRecognition || (window as Window & {
+      webkitSpeechRecognition?: new () => VoiceRecognition;
+    }).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      setVoiceNotice('Microphone dictation is not supported here. You can still use the keyboard or another browser.');
+      return;
+    }
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map((result) => result[0]?.transcript || '').join(' ').trim();
+      if (transcript) setDraft((old) => old ? `${old} ${transcript}` : transcript);
+    };
+    recognition.onerror = () => {
+      setVoiceNotice('Microphone input stopped. Check browser microphone permission and try again.');
+      setListening(false);
+    };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+      setVoiceNotice('Listening… speak your message, then press Send.');
+    } catch {
+      setListening(false);
+      setVoiceNotice('Could not start the microphone. Check browser permission and try again.');
+    }
+  };
+
   const move = useCallback((character: Character, dx: number, dy: number) => {
     setPositions((old) => {
       const next = { x: Math.max(0, Math.min(8, old[character].x + dx)), y: Math.max(0, Math.min(8, old[character].y + dy)) };
@@ -196,12 +281,22 @@ export default function WorldPage() {
               <button onClick={() => setActive('charlotte')} className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${active === 'charlotte' ? 'bg-pink-300 text-black' : 'bg-white/5 text-white/60'}`}>🌸 Charlotte</button>
             </div>
             <p className="mt-3 text-xs text-white/45">Private conversation with {activeName}. Each companion has a separate conversation history.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="text-xs text-white/50" htmlFor="companion-voice">Voice</label>
+              <select id="companion-voice" value={voiceNames[active]} onChange={(event) => setVoiceNames((old) => ({ ...old, [active]: event.target.value }))} className="max-w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white">
+                {voices.length ? voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>) : <option value="">Device default voice</option>}
+              </select>
+              <button type="button" onClick={() => speak(active, active === 'cletus' ? "Hey there. Ready to build something? I promise to keep the spreadsheets mostly house-trained." : "Hello there. Let's make something useful, fair, and perhaps a little less boring.")} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">Test voice</button>
+              <button type="button" onClick={() => { window.speechSynthesis?.cancel(); setVoiceNotice('Voice playback stopped.'); }} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs hover:bg-white/20">Stop</button>
+            </div>
+            {voiceNotice && <p className="mt-2 text-xs text-emerald-100/50" role="status">{voiceNotice}</p>}
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {activeMessages.map((message, index) => (
               <div key={`${active}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${message.role === 'user' ? 'bg-emerald-300 text-black' : 'bg-white/8 text-white/90'}`}>
                   {message.content}
+                  {message.role === 'model' && <button type="button" onClick={() => speak(active, message.content)} className="mt-2 block text-xs text-emerald-200/70 hover:text-emerald-100">🔊 Read aloud</button>}
                 </div>
               </div>
             ))}
@@ -210,6 +305,7 @@ export default function WorldPage() {
           <form onSubmit={send} className="border-t border-white/10 p-3">
             <div className="flex gap-2">
               <input value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={4000} placeholder={`Talk with ${activeName}…`} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-300/40" />
+              <button type="button" onClick={startListening} aria-label={listening ? 'Stop microphone' : 'Start voice input'} className={`rounded-xl px-3 py-2 text-sm font-semibold ${listening ? 'bg-rose-400 text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}>{listening ? '■ Stop' : '🎙 Speak'}</button>
               <button disabled={!canSend} className="rounded-xl bg-emerald-300 px-4 py-2 text-sm font-bold text-black disabled:opacity-40">Send</button>
             </div>
           </form>
