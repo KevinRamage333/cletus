@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser, setSessionCookie } from "@/lib/auth";
+import { TERMS_VERSION, RISK_VERSION } from "@/lib/legal";
 import { FINANCIAL_CONSENT_STAGES, FINANCIAL_CONSENT_VERSION, validateFinancialConsentStage } from "@/lib/financial-consent";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +35,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "not signed in" }, { status: 401 });
-  if (!user.termsVersion || !user.riskVersion) {
-    return NextResponse.json({ error: "Complete Terms and Risk steps first." }, { status: 403 });
+  if (user.termsVersion !== TERMS_VERSION || user.riskVersion !== RISK_VERSION) {
+    return NextResponse.json({ error: "Accept the current Terms and Risk steps first." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
