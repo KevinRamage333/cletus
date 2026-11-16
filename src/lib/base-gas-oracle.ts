@@ -33,7 +33,7 @@ export function encodeGetL1FeeCall(unsignedRlpTransaction: string): string {
   const byteLength = tx.length / 2;
   const padded = tx.padEnd(Math.ceil(tx.length / 64) * 64, '0');
   return GET_L1_FEE_SELECTOR
-    + '0'.repeat(63) + '20'
+    + '0'.repeat(62) + '20'
     + byteLength.toString(16).padStart(64, '0')
     + padded;
 }
