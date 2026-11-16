@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+type FlowIntel = {
+  status: { enabled: boolean; xEnabled: boolean; heliusCreditsToday: number; watchedWallets: number };
+  flow: { found: boolean; note?: string; summary?: string; features?: { whaleNetUsd: number; smartBuyUsd: number; smartSellUsd: number; devSoldUsd: number; freshCluster: { buyers: number; totalUsd: number } | null }; bigMovers?: Array<{ side: string; usd: number; wallet: string; tag: string | null; time: string; solscan: string }> };
+  social: { found: boolean; note?: string; message?: string; divergence?: string };
+  disclaimer: string;
+};
+
 type Intelligence = {
   mint: string;
   fetchedAt: string;
@@ -25,14 +32,17 @@ export default function TokenIntelligencePage() {
   const [data, setData] = useState<Intelligence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [flowData, setFlowData] = useState<FlowIntel | null>(null);
   async function analyze(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setError(''); setData(null);
+    setLoading(true); setError(''); setData(null); setFlowData(null);
     try {
       const r = await fetch(`/api/tokens/intelligence?mint=${encodeURIComponent(mint.trim())}`, { cache: 'no-store' });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Token intelligence unavailable');
       setData(j);
+      const flowResponse = await fetch(`/api/tokens/flow?mint=${encodeURIComponent(mint.trim())}`, { cache: 'no-store' });
+      if (flowResponse.ok) setFlowData(await flowResponse.json());
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }
@@ -52,6 +62,22 @@ export default function TokenIntelligencePage() {
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{data.identity.name || 'Unknown token'} {data.identity.symbol && <span className="text-amber-300">({data.identity.symbol})</span>}</h2><p className="text-xs font-mono text-white/40 break-all">{data.mint}</p></div><div className="text-right"><div className="text-xs text-white/40">Cletus composite · {data.scoreMode}</div><div className="text-3xl font-bold">{data.compositeScore == null ? '—' : `${data.compositeScore}/100`}</div></div></div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{[['Price',usd(data.market?.priceUsd)],['Market cap',usd(data.market?.marketCapUsd)],['Liquidity',usd(data.market?.liquidityUsd)],['24h volume',usd(data.market?.volume.h24)]].map(([k,v])=><div key={k} className="rounded-lg bg-white/[0.04] p-3"><div className="text-xs text-white/40">{k}</div><div className="font-mono mt-1">{v}</div></div>)}</div>
           {data.market?.pairUrl && <a className="text-xs text-amber-300 underline" href={data.market.pairUrl} target="_blank" rel="noreferrer">Open market pair</a>}
+        </section>
+        <section className="rounded-2xl border border-white/10 bg-[#101010] p-5 space-y-3">
+          <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Whale & smart-money flow</h3><span className="text-[10px] text-white/35">{flowData?.status.enabled ? 'COLLECTOR ON' : 'COLLECTOR OFF'}</span></div>
+          {!flowData ? <p className="text-sm text-white/40">Flow snapshot unavailable.</p> : !flowData.flow.found ? <p className="text-sm text-white/45">{flowData.flow.note || 'No recent flow snapshot for this token.'}</p> : <>
+            <p className="text-sm text-white/75">{flowData.flow.summary}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-lg bg-white/[0.04] p-3"><div className="text-xs text-white/40">Whale net</div><div className="font-mono mt-1">{usd(flowData.flow.features?.whaleNetUsd ?? null)}</div></div>
+              <div className="rounded-lg bg-white/[0.04] p-3"><div className="text-xs text-white/40">Smart buys</div><div className="font-mono mt-1">{usd(flowData.flow.features?.smartBuyUsd ?? null)}</div></div>
+              <div className="rounded-lg bg-white/[0.04] p-3"><div className="text-xs text-white/40">Smart sells</div><div className="font-mono mt-1">{usd(flowData.flow.features?.smartSellUsd ?? null)}</div></div>
+              <div className="rounded-lg bg-white/[0.04] p-3"><div className="text-xs text-white/40">Dev sells</div><div className="font-mono mt-1">{usd(flowData.flow.features?.devSoldUsd ?? null)}</div></div>
+            </div>
+            {flowData.flow.features?.freshCluster && <p className="text-xs text-amber-200">Possible coordinated fresh-wallet cluster: {flowData.flow.features.freshCluster.buyers} wallets · {usd(flowData.flow.features.freshCluster.totalUsd)}.</p>}
+            <div className="space-y-2">{(flowData.flow.bigMovers ?? []).map((m,i)=><div key={i} className="flex flex-wrap justify-between gap-2 text-xs border-t border-white/5 pt-2"><span className={m.side === 'buy' ? 'text-emerald-300' : 'text-red-300'}>{m.side.toUpperCase()} · {usd(m.usd)}{m.tag ? ' · ' + m.tag : ''}</span><a href={m.solscan} target="_blank" rel="noreferrer" className="text-amber-300 underline">{m.wallet.slice(0,6)}…{m.wallet.slice(-5)}</a></div>)}</div>
+          </>}
+          <div className="border-t border-white/5 pt-3"><div className="text-xs text-white/50">Social activity</div><p className="text-sm text-white/70 mt-1">{flowData?.social.found ? flowData.social.message || flowData.social.divergence : flowData?.social.note || 'No social data available.'}</p></div>
+          <p className="text-[11px] text-white/35">{flowData?.disclaimer || 'Flow data is optional and may be incomplete.'} {flowData?.status.watchedWallets ?? 0} watched wallets · {flowData?.status.heliusCreditsToday ?? 0} Helius credits used today.</p>
         </section>
         <section className="grid md:grid-cols-2 gap-4">
           <div className="rounded-2xl border border-white/10 bg-[#101010] p-5"><h3 className="font-semibold mb-3">Signal breakdown</h3>{data.signals ? <div className="space-y-3">{Object.entries(data.signals).map(([k,v])=><div key={k}><div className="flex justify-between text-xs mb-1"><span className="text-white/65">{label(k)}</span><span className="font-mono">{v}/100</span></div><div className="h-1.5 rounded bg-white/10 overflow-hidden"><div className="h-full bg-amber-400" style={{width:`${v}%`}} /></div></div>)}</div> : <p className="text-sm text-white/45">Market pair data unavailable.</p>}</div>
