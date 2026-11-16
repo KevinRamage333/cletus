@@ -12,7 +12,7 @@ if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   kill "$(cat "$PIDFILE")" 2>/dev/null || true
   sleep 0.2
 fi
-nohup python3 "$ROOT/scripts/neon-proxy-tunnel.py" >> "$LOG" 2>&1 &
+nohup node "$ROOT/scripts/neon-proxy-tunnel.mjs" >> "$LOG" 2>&1 &
 echo $! > "$PIDFILE"
 # wait briefly for the listen socket
 for i in 1 2 3 4 5 6 7 8 9 10; do
