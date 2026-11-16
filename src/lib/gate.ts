@@ -24,7 +24,7 @@ const STEP_APIS: Array<[string, Step]> = [
   ['/api/onboarding/wallet', 'wallet'],
 ];
 
-const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/owner', '/live', '/_next/', '/favicon', '/icon', '/robots.txt',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 PUBLIC_PREFIXES.push('/whitepaper', '/cletus-whitepaper.pdf');
 
