@@ -7,7 +7,7 @@ const clean: RugcheckReport = {
   markets: [{ pubkey: 'POOL', lp: { lpLockedPct: 100 } }],
   knownAccounts: { POOL: { name: 'Pump Fun', type: 'AMM' } },
   topHolders: [{ owner: 'POOL', address: 'a1', pct: 60 }, { owner: 'w1', address: 'a2', pct: 4 }],
-  totalMarketLiquidity: 20000,
+  totalMarketLiquidity: 20000, transferFee: { pct: 0 },
 };
 const sellOk = { routeFound: true, priceImpactPct: 1.2 };
 const failed = (r: ReturnType<typeof evaluateAudit>) => r.checks.filter((c) => !c.passed).map((c) => c.name);
@@ -34,6 +34,12 @@ describe('pre-trade security audit', () => {
     expect(failed(evaluateAudit({ ...clean, score_normalised: 90 }, sellOk, P))).toContain('risk_score');
     expect(failed(evaluateAudit({ ...clean, risks: [{ name: 'Large Amount of LP Unlocked', level: 'danger' }] }, sellOk, P))).toContain('no_danger_risks');
     expect(failed(evaluateAudit({ ...clean, rugged: true }, sellOk, P))).toContain('not_rugged');
+  });
+  it('fails closed when critical audit fields are missing', () => {
+    const incomplete = { ...clean, mintAuthority: undefined, freezeAuthority: undefined, rugged: undefined, score_normalised: undefined, transferFee: undefined, topHolders: [] };
+    const result = evaluateAudit(incomplete, { routeFound: true, priceImpactPct: null }, P);
+    expect(result.passed).toBe(false);
+    expect(failed(result)).toEqual(expect.arrayContaining(['mint_authority', 'freeze_authority', 'not_rugged', 'holder_concentration', 'risk_score', 'transfer_fee', 'honeypot']));
   });
   it('fails closed when the report is unavailable', () => expect(evaluateAudit(null, sellOk, P).passed).toBe(false));
 });
