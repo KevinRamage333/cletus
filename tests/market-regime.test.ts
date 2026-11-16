@@ -17,8 +17,8 @@ describe('market regime intelligence', () => {
     expect(r.regime).toBe('risk_on'); expect(marketRegimeBlocksEntries(r.regime)).toBe(false);
   });
   it('flags extreme volatility even when the median direction is flat', () => {
-    const r = assessMarketRegime(Array.from({ length: 12 }, (_, i) => ({ h1: i % 2 ? 20 : -20 })));
-    expect(r.regime).toBe('high_volatility'); expect(marketRegimeBlocksEntries(r.regime)).toBe(true);
+    const r = assessMarketRegime(Array.from({ length: 20 }, (_, i) => ({ h1: i % 2 ? 20 : -20 })));
+    expect(r.regime).toBe('high_volatility'); expect(r.confidence).toBe('moderate'); expect(marketRegimeBlocksEntries(r.regime)).toBe(true);
   });
   it('uses the median so one extreme token cannot create a false risk-on regime', () => {
     const r = assessMarketRegime([{ h1: 1000 }, ...Array.from({ length: 19 }, () => ({ h1: -1 }))]);
