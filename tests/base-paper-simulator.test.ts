@@ -23,6 +23,22 @@ describe('Base paper quote primitives', () => {
     expect(() => applySlippage(1_000n, 301)).toThrow('Slippage must be between 0 and 300 bps');
   });
 
+  it('preserves all 18 token decimals in a paper-fill preview', () => {
+    const quote: BasePaperQuote = {
+      network: 'base', chainId: 8453, tokenAddress: '0x0000000000000000000000000000000000000001',
+      side: 'buy', inputToken: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+      outputToken: '0x0000000000000000000000000000000000000001',
+      inputAmount: '1', expectedOutputAmount: '1.123456789123456789',
+      inputDecimals: 6, outputDecimals: 18, poolFeeTier: 500, quotedAtMs: 1,
+      quoteSource: 'uniswap-v3-quoter-v2', estimatedL2GasUnits: '1',
+      gasPriceWei: '1', ethUsd: 3000, estimatedL2FeeUsd: 0.000001,
+      l1DataFeeUsd: null, feeEstimateComplete: false, estimatedTotalFeeUsd: 0.000001,
+      slippageBps: 0, minimumOutputAmount: '1.123456789123456789',
+      referencePriceUsd: 1, warnings: [],
+    };
+    expect(simulateBasePaperFill(quote).simulatedOutputAmount).toBe('1.123456789123456789');
+  });
+
   it('creates a paper-only preview and clearly marks the incomplete L1 fee estimate', () => {
     const quote: BasePaperQuote = {
       network: 'base', chainId: 8453, tokenAddress: '0x0000000000000000000000000000000000000001',
