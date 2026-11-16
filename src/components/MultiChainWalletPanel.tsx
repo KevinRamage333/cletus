@@ -28,6 +28,14 @@ type EvmBalance = {
   error?: string;
 };
 
+type SolanaToken = {
+  mint: string;
+  amount: string;
+  decimals: number;
+  tokenAccounts: number;
+  program: string;
+};
+
 type SolanaPortfolio = {
   address: string | null;
   solBalance: number | null;
@@ -73,6 +81,9 @@ export default function MultiChainWalletPanel() {
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [solanaPortfolio, setSolanaPortfolio] = useState<SolanaPortfolio | null>(null);
+  const [solanaTokens, setSolanaTokens] = useState<SolanaToken[]>([]);
+  const [solanaTokensLoading, setSolanaTokensLoading] = useState(false);
+  const [solanaTokensError, setSolanaTokensError] = useState<string | null>(null);
   const [solanaLoading, setSolanaLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +112,33 @@ export default function MultiChainWalletPanel() {
     loadSolanaPortfolio();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSolanaTokens() {
+      if (!solanaPortfolio?.address) {
+        setSolanaTokens([]);
+        return;
+      }
+      setSolanaTokensLoading(true);
+      setSolanaTokensError(null);
+      try {
+        const response = await fetch('/api/protected/wallet/solana-tokens', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Could not load Solana token holdings.');
+        if (!cancelled) setSolanaTokens(Array.isArray(payload.tokens) ? payload.tokens : []);
+      } catch (e) {
+        if (!cancelled) setSolanaTokensError((e as Error).message || 'Could not load Solana token holdings.');
+      } finally {
+        if (!cancelled) setSolanaTokensLoading(false);
+      }
+    }
+    loadSolanaTokens();
+    return () => { cancelled = true; };
+  }, [solanaPortfolio?.address]);
 
   useEffect(() => {
     const found = new Map<string, ProviderDetail>();
@@ -221,7 +259,7 @@ export default function MultiChainWalletPanel() {
       {(address || solanaPortfolio?.address || solanaLoading) && <div className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-4" data-testid="unified-portfolio">
         <div>
           <h3 className="text-sm font-semibold">Portfolio overview</h3>
-          <p className="text-xs text-white/40">Read-only native balances across your linked Solana wallet and connected EVM wallet. Quantities only; no combined USD value is claimed.</p>
+          <p className="text-xs text-white/40">Read-only native balances across your linked Solana wallet and connected EVM wallet, plus Solana SPL token quantities. No combined USD value is claimed.</p>
         </div>
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-white/45">Solana</div>
@@ -238,6 +276,30 @@ export default function MultiChainWalletPanel() {
               </div>
             </div>
             {!solanaPortfolio.balancesKnown && <p className="text-[11px] text-amber-200/70">Solana balance data is not currently available{solanaPortfolio.balanceError ? `: ${solanaPortfolio.balanceError}` : '.'}</p>}
+            <div className="pt-2 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-white/45">SPL token holdings</div>
+                <span className="text-[10px] text-white/35">{solanaTokens.length} assets</span>
+              </div>
+              {solanaTokensLoading
+                ? <p className="text-xs text-white/45">Reading SPL and Token-2022 balances…</p>
+                : solanaTokensError
+                  ? <p className="text-xs text-amber-200/70">{solanaTokensError}</p>
+                  : solanaTokens.length === 0
+                    ? <p className="text-xs text-white/45">No non-zero SPL token balances found.</p>
+                    : <div className="max-h-72 overflow-y-auto divide-y divide-white/5">
+                      {solanaTokens.map((token) => (
+                        <div key={token.mint} className="py-2 flex items-center gap-2 text-xs">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-white/80">{token.mint.slice(0, 6)}…{token.mint.slice(-6)}</div>
+                            <div className="text-[10px] text-white/35">{token.program} · {token.tokenAccounts} account{token.tokenAccounts === 1 ? '' : 's'}</div>
+                          </div>
+                          <div className="font-mono text-right text-white/75 break-all">{token.amount}</div>
+                        </div>
+                      ))}
+                    </div>}
+              <p className="text-[10px] text-white/30">Token names and dollar values are not shown until verified metadata and pricing are available.</p>
+            </div>
           </> : <p className="text-xs text-white/45">No Solana wallet is linked to this Cletus account.</p>}
         </div>
         <div className="space-y-2">
@@ -263,7 +325,7 @@ export default function MultiChainWalletPanel() {
             </div>
           </> : <p className="text-xs text-white/45">Connect an EVM wallet above to include its nine supported networks.</p>}
         </div>
-        <p className="text-[11px] text-white/35">This first portfolio view includes Solana SOL/USDC and EVM native coins only. SPL/ERC-20 tokens, NFTs, market prices, and USD valuation are not included yet. Wallets remain separate and self-custodied; Cletus does not sign or move funds.</p>
+        <p className="text-[11px] text-white/35">This view includes Solana SOL/USDC, Solana SPL and Token-2022 quantities, and EVM native coins. ERC-20 tokens, NFTs, verified token names, market prices, and combined USD valuation are still to come. Wallets remain separate and self-custodied; Cletus does not sign or move funds.</p>
       </div>}
 
       <div>
