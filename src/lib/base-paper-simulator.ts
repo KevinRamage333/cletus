@@ -87,7 +87,7 @@ function parseUnits(value: string, decimals: number): bigint {
   if (raw <= 0n) throw new Error('Amount must be greater than zero');
   return raw;
 }
-function formatUnits(value: bigint, decimals: number, precision = Math.min(decimals, 8)): string {
+function formatUnits(value: bigint, decimals: number, precision = decimals): string {
   const base = 10n ** BigInt(decimals);
   const whole = value / base;
   const fraction = (value % base).toString().padStart(decimals, '0').slice(0, precision).replace(/0+$/, '');
