@@ -9,6 +9,7 @@ import { mockBrainAnswer, detectIntent } from './mock';
 import { providerOrder, withFallback, type Provider } from '../providers';
 import { xaiChat } from './xai-chat';
 import { xaiConfig } from '../xai';
+import { isWorldConversationTitle } from './conversation-scope';
 
 export const isActionRequest = (q: string) => detectIntent(q) === 'execute';
 
@@ -43,8 +44,8 @@ export interface BrainReply { conversationId: string; answer: string; source: 'g
 export async function brainChat(opts: { userId: string; accountId: string; isAdmin: boolean; message: string; conversationId?: string | null; character?: 'cletus' | 'charlotte' }): Promise<BrainReply> {
   const scope = opts.character ? `[World:${opts.character === 'charlotte' ? 'Charlotte' : 'Cletus'}] ` : '';
   let conv = opts.conversationId ? await prisma.conversation.findFirst({ where: { id: opts.conversationId, userId: opts.userId } }) : null;
-  // A character may only continue its own conversation. This keeps their memories separate.
-  if (conv && scope && !conv.title.startsWith(scope)) conv = null;
+  // Keep each world character in its own history, and keep world histories out of ordinary Brain chat.
+  if (conv && (scope ? !conv.title.startsWith(scope) : isWorldConversationTitle(conv.title))) conv = null;
   if (!conv) conv = await prisma.conversation.create({ data: { userId: opts.userId, title: `${scope}${opts.message.slice(0, 60) || 'New conversation'}` } });
   const history = (await prisma.chatMessage.findMany({ where: { conversationId: conv.id }, orderBy: { createdAt: 'desc' }, take: 30 })).reverse();
   await prisma.chatMessage.create({ data: { conversationId: conv.id, role: 'user', content: opts.message } });

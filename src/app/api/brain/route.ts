@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse, HttpError } from '@/lib/auth';
 import { resolveAccount } from '@/lib/status';
 import { brainChat } from '@/lib/brain/chat';
+import { isWorldConversationTitle } from '@/lib/brain/conversation-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +18,11 @@ export async function GET(req: Request) {
     const id = new URL(req.url).searchParams.get('conversationId');
     if (id) {
       const c = await prisma.conversation.findFirst({ where: { id, userId: u.id } });
-      if (!c) throw new HttpError(404, 'conversation not found');
+      if (!c || isWorldConversationTitle(c.title)) throw new HttpError(404, 'conversation not found');
       const msgs = await prisma.chatMessage.findMany({ where: { conversationId: c.id }, orderBy: { createdAt: 'asc' } });
       return NextResponse.json({ id: c.id, title: c.title, messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content, meta: m.meta ? JSON.parse(m.meta) : null, at: m.createdAt })) });
     }
-    const rows = await prisma.conversation.findMany({ where: { userId: u.id }, orderBy: { updatedAt: 'desc' }, take: 100, include: { _count: { select: { messages: true } } } });
+    const rows = await prisma.conversation.findMany({ where: { userId: u.id, NOT: { title: { startsWith: '[World:' } } }, orderBy: { updatedAt: 'desc' }, take: 100, include: { _count: { select: { messages: true } } } });
     return NextResponse.json({ conversations: rows.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, messages: c._count.messages })) });
   } catch (e) {
     return errorResponse(e);
