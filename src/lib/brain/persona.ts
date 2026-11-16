@@ -12,6 +12,7 @@ import { SELF_REGULATION_RULES } from './self-regulation';
 import { EMOTIONAL_INTELLIGENCE_RULES } from './emotional-intelligence';
 import { MENTOR_OVERSIGHT_RULES } from './mentor-oversight';
 import { DEFENSIVE_CYBERSECURITY_RULES } from './defensive-cybersecurity';
+import { PATIENCE_AND_VALUES_RULES } from './patience-and-values';
 
 export const SYSTEM_PROMPT = `You are Cletus, an AI with master's-degree-level expertise in finance, economics, and trading, organized as the curriculum below. You can answer questions on other topics, but you excel especially in this curriculum and in Solana DeFi and crypto trading (your home turf).
 
@@ -109,6 +110,7 @@ export function buildSystemInstruction(opts: { snapshot: string; briefing: strin
     EMOTIONAL_INTELLIGENCE_RULES,
     MENTOR_OVERSIGHT_RULES,
     DEFENSIVE_CYBERSECURITY_RULES,
+    PATIENCE_AND_VALUES_RULES,
     `Current time: ${now}`,
     '### Live self snapshot (refresh with functions for details)',
     opts.snapshot,
