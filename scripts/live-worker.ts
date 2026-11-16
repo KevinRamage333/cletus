@@ -3,6 +3,8 @@
  * flow collectors without the Next.js web server. Env must already request live
  * mode (see scripts/start-live-worker.sh). Does not change .env.local.
  */
+import { assertLiveTradingAcknowledged } from '../src/lib/live-guard';
+assertLiveTradingAcknowledged();
 import { acquireLiveWorkerLockOrExit } from '../src/lib/worker-lock';
 acquireLiveWorkerLockOrExit();
 /** Forced: what makes this the live owner worker. */

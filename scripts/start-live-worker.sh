@@ -2,6 +2,12 @@
 # Start the box-only live trading worker. Does not change .env.local TRADING_MODE
 # (Next dev and Vercel stay in simulation).
 set -euo pipefail
+# Live execution is opt-in even on the private worker host. Simulation remains the default.
+LIVE_ACK="I_UNDERSTAND_THIS_CAN_LOSE_FUNDS"
+if [[ "${CLETUS_LIVE_TRADING_ACK:-}" != "$LIVE_ACK" ]]; then
+  echo "Live worker blocked. To explicitly authorize live trading, set CLETUS_LIVE_TRADING_ACK=$LIVE_ACK" >&2
+  exit 1
+fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 # Production start never honors test overrides (a tainted env must not redirect the entry).

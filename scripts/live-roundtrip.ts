@@ -4,6 +4,8 @@
  * Never logs secrets.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { assertLiveTradingAcknowledged } from '../src/lib/live-guard';
+assertLiveTradingAcknowledged();
 import { buildConfig } from '../src/lib/config';
 import { executeSwap, tokenBalanceRaw, solBalance, connection, SOL_MINT } from '../src/lib/executor';
 import { getOperatorPublicKey } from '../src/lib/wallet';

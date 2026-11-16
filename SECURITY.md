@@ -18,6 +18,16 @@
 | `XAI_API_KEY` | Alternate Brain provider | Server env |
 | Vercel project + token (or another host) | Deployment | The host's secret store, never the repo |
 
+## Explicit live-execution acknowledgement
+
+All scripts that can start the live worker, sign a live round-trip, or close a live position require this exact opt-in environment value:
+
+```bash
+CLETUS_LIVE_TRADING_ACK=I_UNDERSTAND_THIS_CAN_LOSE_FUNDS
+```
+
+Without it, the live entry points stop before starting execution. This is an additional safety interlock, not a substitute for the kill switch, tiny-size testing, or independent review. Keep normal development and public deployments in `TRADING_MODE=simulation`.
+
 ## Guarantees in code
 - The private key is loaded only server-side (`src/lib/wallet.ts`) and never returned by any API or printed. `src/lib/redact.ts` scrubs long base58 strings, 32+ byte arrays and API-key-looking values from every log line.
 - `.secrets/` and `.env*` are gitignored (only `.env.example` is tracked).
