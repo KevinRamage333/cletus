@@ -6,6 +6,8 @@
  * Never logs secrets. Profit sweep stays off in this process (WITHDRAW_LIVE_ENABLED unset).
  */
 import { execSync } from 'node:child_process';
+import { assertLiveTradingAcknowledged } from '../src/lib/live-guard';
+assertLiveTradingAcknowledged();
 
 process.env.TRADING_MODE = 'live';
 process.env.ALLOW_LIVE_IN_BETA = 'true';
