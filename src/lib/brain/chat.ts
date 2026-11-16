@@ -40,9 +40,12 @@ async function latestJournalText(accountId: string): Promise<string | null> {
 
 export interface BrainReply { conversationId: string; answer: string; source: 'gemini' | 'gemini-grounded' | 'xai' | 'xai-web' | 'mock'; provider?: Provider; model?: string; tools: string[]; sources: Array<{ title?: string; uri?: string; url?: string }>; refused?: string; error?: string }
 
-export async function brainChat(opts: { userId: string; accountId: string; isAdmin: boolean; message: string; conversationId?: string | null }): Promise<BrainReply> {
+export async function brainChat(opts: { userId: string; accountId: string; isAdmin: boolean; message: string; conversationId?: string | null; character?: 'cletus' | 'charlotte' }): Promise<BrainReply> {
+  const scope = opts.character ? `[World:${opts.character === 'charlotte' ? 'Charlotte' : 'Cletus'}] ` : '';
   let conv = opts.conversationId ? await prisma.conversation.findFirst({ where: { id: opts.conversationId, userId: opts.userId } }) : null;
-  if (!conv) conv = await prisma.conversation.create({ data: { userId: opts.userId, title: opts.message.slice(0, 60) } });
+  // A character may only continue its own conversation. This keeps their memories separate.
+  if (conv && scope && !conv.title.startsWith(scope)) conv = null;
+  if (!conv) conv = await prisma.conversation.create({ data: { userId: opts.userId, title: `${scope}${opts.message.slice(0, 60) || 'New conversation'}` } });
   const history = (await prisma.chatMessage.findMany({ where: { conversationId: conv.id }, orderBy: { createdAt: 'desc' }, take: 30 })).reverse();
   await prisma.chatMessage.create({ data: { conversationId: conv.id, role: 'user', content: opts.message } });
 
@@ -55,7 +58,7 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
   let system: string | null = null;
   const getSystem = async () => (system ??= buildSystemInstruction({
     snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId),
-    query: opts.message, recentQueries: history.filter((m) => m.role === 'user').slice(-3).map((m) => m.content),
+    query: opts.message, recentQueries: history.filter((m) => m.role === 'user').slice(-3).map((m) => m.content), character: opts.character,
   }));
   const { provider, result, errors } = await withFallback(order, async (p): Promise<Omit<BrainReply, 'conversationId'>> => {
     if (p === 'gemini' && key) {
