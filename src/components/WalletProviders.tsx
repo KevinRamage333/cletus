@@ -18,13 +18,13 @@ const CompatibleConnectionProvider = ConnectionProvider as unknown as ComponentT
 >;
 const CompatibleWalletProvider = WalletProvider as unknown as ComponentType<
   PropsWithChildren<{
-    wallets: ReturnType<typeof useWalletAdapters>;
+    wallets: ReturnType<typeof createWalletAdapters>;
     autoConnect?: boolean;
     localStorageKey?: string;
   }>
 >;
 
-function useWalletAdapters() {
+function createWalletAdapters() {
   return [
     new PhantomWalletAdapter(),
     new SolflareWalletAdapter(),
@@ -46,7 +46,7 @@ export default function WalletProviders({ children }: { children: React.ReactNod
       (window as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
     }
   }, []);
-  const wallets = useMemo(() => useWalletAdapters(), []);
+  const wallets = useMemo(() => createWalletAdapters(), []);
   return (
     <CompatibleConnectionProvider endpoint={endpoint}>
       <CompatibleWalletProvider wallets={wallets} autoConnect={false} localStorageKey="cletus.wallet.adapter">
