@@ -28,6 +28,14 @@ type EvmBalance = {
   error?: string;
 };
 
+type SolanaPortfolio = {
+  address: string | null;
+  solBalance: number | null;
+  usdcBalance: number | null;
+  balancesKnown: boolean;
+  balanceError?: string | null;
+};
+
 declare global {
   interface Window {
     ethereum?: Eip1193Provider;
@@ -64,8 +72,35 @@ export default function MultiChainWalletPanel() {
   const [balances, setBalances] = useState<EvmBalance[]>([]);
   const [balancesLoading, setBalancesLoading] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [solanaPortfolio, setSolanaPortfolio] = useState<SolanaPortfolio | null>(null);
+  const [solanaLoading, setSolanaLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSolanaPortfolio() {
+      setSolanaLoading(true);
+      try {
+        const response = await fetch('/api/protected/wallet/status', { credentials: 'include', cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not load the linked Solana wallet.');
+        const payload = await response.json();
+        if (!cancelled) setSolanaPortfolio({
+          address: payload.address ?? null,
+          solBalance: payload.balancesKnown ? Number(payload.solBalance) : null,
+          usdcBalance: payload.balancesKnown ? Number(payload.usdcBalance) : null,
+          balancesKnown: Boolean(payload.balancesKnown),
+          balanceError: payload.balanceError ?? null,
+        });
+      } catch {
+        if (!cancelled) setSolanaPortfolio(null);
+      } finally {
+        if (!cancelled) setSolanaLoading(false);
+      }
+    }
+    loadSolanaPortfolio();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const found = new Map<string, ProviderDetail>();
@@ -183,29 +218,52 @@ export default function MultiChainWalletPanel() {
         <code className="mt-1 block break-all text-xs text-white/80">{address}</code>
       </div>}
 
-      {address && <div className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold">Network balances</h3>
-            <p className="text-xs text-white/40">Native coins only · {checkedAt ? `Checked ${new Date(checkedAt).toLocaleTimeString()}` : 'Not checked yet'}</p>
-          </div>
-          <button type="button" disabled={balancesLoading} onClick={() => address && refreshBalances(address)} className="rounded-lg border border-white/15 px-3 py-2 text-xs disabled:opacity-40">
-            {balancesLoading ? 'Refreshing…' : 'Refresh'}
-          </button>
+      {(address || solanaPortfolio?.address || solanaLoading) && <div className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-4" data-testid="unified-portfolio">
+        <div>
+          <h3 className="text-sm font-semibold">Portfolio overview</h3>
+          <p className="text-xs text-white/40">Read-only native balances across your linked Solana wallet and connected EVM wallet. Quantities only; no combined USD value is claimed.</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {balances.map((item) => (
-            <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-xs text-white/50">{item.name}</div>
-              {item.status === 'ok'
-                ? <div className="mt-1 font-mono text-sm">{item.balance} <span className="text-xs text-white/40">{item.symbol}</span></div>
-                : <div className="mt-1 text-xs text-amber-200/70">{item.status === 'not_configured' ? 'RPC not configured' : 'Temporarily unavailable'}</div>}
-              {item.status === 'unavailable' && item.error && <div className="mt-1 text-[10px] text-white/30 break-words">{item.error}</div>}
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-white/45">Solana</div>
+          {solanaLoading ? <p className="text-xs text-white/45">Loading linked Solana wallet…</p> : solanaPortfolio?.address ? <>
+            <code className="block break-all text-[11px] text-white/35">{solanaPortfolio.address}</code>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs text-white/50">SOL</div>
+                <div className="mt-1 font-mono text-sm">{solanaPortfolio.balancesKnown && solanaPortfolio.solBalance !== null ? `${solanaPortfolio.solBalance.toFixed(6)} SOL` : 'Unavailable'}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs text-white/50">USDC</div>
+                <div className="mt-1 font-mono text-sm">{solanaPortfolio.balancesKnown && solanaPortfolio.usdcBalance !== null ? `${solanaPortfolio.usdcBalance.toFixed(2)} USDC` : 'Unavailable'}</div>
+              </div>
             </div>
-          ))}
-          {balances.length === 0 && <p className="col-span-full text-xs text-white/45">{balancesLoading ? 'Reading balances from the supported networks…' : 'Connect your wallet to load balances.'}</p>}
+            {!solanaPortfolio.balancesKnown && <p className="text-[11px] text-amber-200/70">Solana balance data is not currently available{solanaPortfolio.balanceError ? `: ${solanaPortfolio.balanceError}` : '.'}</p>}
+          </> : <p className="text-xs text-white/45">No Solana wallet is linked to this Cletus account.</p>}
         </div>
-        <p className="text-[11px] text-white/35">These are on-chain native-coin balances, not a USD valuation or a complete token portfolio. ERC-20 tokens, NFTs, prices, and Solana assets are separate follow-up work.</p>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-white/45">EVM networks</div>
+            <button type="button" disabled={!address || balancesLoading} onClick={() => address && refreshBalances(address)} className="rounded-lg border border-white/15 px-3 py-2 text-xs disabled:opacity-40">
+              {balancesLoading ? 'Refreshing…' : 'Refresh EVM'}
+            </button>
+          </div>
+          {address ? <>
+            <code className="block break-all text-[11px] text-white/35">{address}</code>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {balances.map((item) => (
+                <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-xs text-white/50">{item.name}</div>
+                  {item.status === 'ok'
+                    ? <div className="mt-1 font-mono text-sm">{item.balance} <span className="text-xs text-white/40">{item.symbol}</span></div>
+                    : <div className="mt-1 text-xs text-amber-200/70">{item.status === 'not_configured' ? 'RPC not configured' : 'Temporarily unavailable'}</div>}
+                  {item.status === 'unavailable' && item.error && <div className="mt-1 text-[10px] text-white/30 break-words">{item.error}</div>}
+                </div>
+              ))}
+              {balances.length === 0 && <p className="col-span-full text-xs text-white/45">{balancesLoading ? 'Reading EVM balances…' : 'No EVM balances loaded yet.'}</p>}
+            </div>
+          </> : <p className="text-xs text-white/45">Connect an EVM wallet above to include its nine supported networks.</p>}
+        </div>
+        <p className="text-[11px] text-white/35">This first portfolio view includes Solana SOL/USDC and EVM native coins only. SPL/ERC-20 tokens, NFTs, market prices, and USD valuation are not included yet. Wallets remain separate and self-custodied; Cletus does not sign or move funds.</p>
       </div>}
 
       <div>
