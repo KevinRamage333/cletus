@@ -9,6 +9,15 @@ import { AGE_ATTESTATION_VERSION } from '@/lib/age';
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isDemo()) {
+    const publicBeforeAge = ['/onboarding/age', '/api/onboarding/age', '/whitepaper', '/cletus-whitepaper.pdf', '/legal', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt', '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
+    const exempt = publicBeforeAge.some((p) => pathname === p.replace(/\\/$/, '') || pathname.startsWith(p));
+    if (!exempt) {
+      const demoClaims = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+      if (demoClaims?.av !== AGE_ATTESTATION_VERSION) {
+        const url = req.nextUrl.clone(); url.pathname = '/onboarding/age'; url.search = '';
+        return NextResponse.redirect(url);
+      }
+    }
     const d = demoGateDecision(pathname);
     if (d.action === 'next') return NextResponse.next();
     if (d.action === 'soon') return NextResponse.json({ error: 'coming_online_soon', demo: true, message: 'Accounts and trading are coming online soon. This is a public demo.' }, { status: 503 });
