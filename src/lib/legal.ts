@@ -6,7 +6,7 @@ import { COMPANY_LEGAL } from './company';
  * TEMPLATE LANGUAGE — must be reviewed by a qualified lawyer before any public use.
  */
 export const TERMS_VERSION = process.env.NEXT_PUBLIC_TERMS_VERSION || '2026-11-11.4';
-export const RISK_VERSION = TERMS_VERSION;
+export const RISK_VERSION = process.env.NEXT_PUBLIC_RISK_VERSION || '2026-11-16.1';
 
 export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
   { title: '1. Acceptance of these Terms', body: [
@@ -54,7 +54,7 @@ export const TERMS_SECTIONS: Array<{ title: string; body: string[] }> = [
 ];
 
 export const RISK_POINTS: string[] = [
-  'There are NO guaranteed gains. Cletus can and will lose money.',
+  'There are no guaranteed gains. Cletus can lose money, and you can lose some or all of the funds you choose to put at risk.',
   'Losses do occur — individual trades, losing streaks, and the loss of your entire balance are all possible.',
   'Crypto micro-cap tokens are extremely volatile: prices can move 50–100% in minutes, liquidity can vanish, and tokens can be rugged or become unsellable (honeypots).',
   'Security checks and signals are heuristics on third-party data and can be wrong.',
