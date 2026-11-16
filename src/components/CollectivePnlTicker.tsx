@@ -69,14 +69,14 @@ export default function CollectivePnlTicker() {
   return (
     <section
       aria-label="Community collective paper trading performance"
-      className="rounded-2xl border border-white/10 bg-[#0d0d0d] overflow-hidden"
+      className="rounded-2xl border border-[#D4AF37]/25 bg-[#0d0d0d] overflow-hidden"
       data-testid="collective-pnl-ticker"
     >
-      <div className="px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-3">
+      <div className="px-4 py-2.5 border-b border-[#D4AF37]/15 flex items-center justify-between gap-3">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">
           Community collective P&L
         </span>
-        <span className="text-[10px] uppercase tracking-wider text-sky-300/80">
+        <span className="text-[10px] uppercase tracking-wider text-[#E5C76B]/90">
           Paper trading · Aggregate
         </span>
       </div>

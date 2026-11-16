@@ -371,7 +371,7 @@ export default function CommunityPage() {
             <section className="lg:col-span-3 flex flex-col rounded-xl border border-white/10 bg-[#0a0a0a] overflow-hidden min-h-[420px]">
               <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                 <span className="text-sm font-semibold">Live chat</span>
-                <span className="text-xs text-emerald-400/80 flex items-center gap-1.5">
+                <span className="text-xs text-[#E5C76B]/80 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   On-site users
                 </span>
@@ -442,12 +442,12 @@ export default function CommunityPage() {
                       }
                     }}
                     placeholder="Message the community…"
-                    className="flex-1 text-sm px-3 py-2.5 rounded-lg bg-black border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500/40"
+                    className="flex-1 text-sm px-3 py-2.5 rounded-lg bg-black border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]/50"
                   />
                   <button
                     type="button"
                     onClick={sendChat}
-                    className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-500 text-black hover:bg-emerald-400 transition-all"
+                    className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-[#D4AF37] text-black hover:bg-[#E5C76B] transition-all"
                   >
                     Send
                   </button>

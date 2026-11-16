@@ -214,9 +214,9 @@ export default function AppDashboardPage() {
           <CollectivePnlTicker />
           {/* Trial strip */}
           {stats.trialActive && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+                <div className="text-xs font-semibold text-[#E5C76B] uppercase tracking-wider">
                   Free trial active
                 </div>
                 <p className="text-sm text-white/70 mt-0.5">
@@ -225,7 +225,7 @@ export default function AppDashboardPage() {
               </div>
               <Link
                 href="/tax"
-                className="shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold bg-emerald-500 text-black text-center hover:bg-emerald-400 transition-colors"
+                className="shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold bg-[#D4AF37] text-black text-center hover:bg-[#E5C76B] transition-colors"
               >
                 Tax center
               </Link>
