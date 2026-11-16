@@ -88,11 +88,13 @@ describe('onboarding API validation', () => {
   });
   it('terms require current version, scroll-to-end and the read checkbox', () => {
     expect(validateTermsAcceptance({ version: V, scrolledToEnd: true, readConfirmed: true }, V).ok).toBe(true);
+    expect(validateTermsAcceptance({ version: V, scrolledToEnd: true, readConfirmed: true }, V, null, AGE_ATTESTATION_VERSION).ok).toBe(false);
     expect(validateTermsAcceptance({ version: V, scrolledToEnd: false, readConfirmed: true }, V).ok).toBe(false);
     expect(validateTermsAcceptance({ version: 'old', scrolledToEnd: true, readConfirmed: true }, V).ok).toBe(false);
   });
   it('risk acknowledgement requires accepted current terms', () => {
     expect(validateRiskAck({ version: V, acknowledged: true }, V, V).ok).toBe(true);
+    expect(validateRiskAck({ version: V, acknowledged: true }, V, V, null, AGE_ATTESTATION_VERSION).ok).toBe(false);
     expect(validateRiskAck({ version: V, acknowledged: true }, V, null).ok).toBe(false);
     expect(validateRiskAck({ version: V, acknowledged: false }, V, V).ok).toBe(false);
   });
@@ -110,15 +112,16 @@ describe('onboarding API validation', () => {
   });
   it('wallet setup is blocked until terms, risk and financial understanding are complete', () => {
     const pk = Keypair.generate().publicKey.toBase58();
-    expect(validateWalletSetup({ source: 'paper' }, true, true, true).ok).toBe(true);
-    expect(validateWalletSetup({ source: 'paper' }, true, true, false).ok).toBe(false);
-    expect(validateWalletSetup({ source: 'paper' }, true, false, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 'sig', message: 'msg', challenge: 'tok' }, true, true, true).ok).toBe(true);
-    expect(validateWalletSetup({ publicKey: pk, source: 'connected' }, true, true, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: 'not-a-key', source: 'connected', signature: 's', message: 'm', challenge: 'c' }, true, true, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: pk, source: 'created' }, true, true, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: pk, source: 'imported' }, true, true, true).ok).toBe(false);
-    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 's', message: 'm', challenge: 'c', mnemonic: 'abandon ...' }, true, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ source: 'paper' }, true, true, true, true).ok).toBe(true);
+    expect(validateWalletSetup({ source: 'paper' }, true, true, true, false).ok).toBe(false);
+    expect(validateWalletSetup({ source: 'paper' }, true, true, false, true).ok).toBe(false);
+    expect(validateWalletSetup({ source: 'paper' }, true, false, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 'sig', message: 'msg', challenge: 'tok' }, true, true, true, true).ok).toBe(true);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected' }, true, true, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: 'not-a-key', source: 'connected', signature: 's', message: 'm', challenge: 'c' }, true, true, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'created' }, true, true, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'imported' }, true, true, true, true).ok).toBe(false);
+    expect(validateWalletSetup({ publicKey: pk, source: 'connected', signature: 's', message: 'm', challenge: 'c', mnemonic: 'abandon ...' }, true, true, true, true).ok).toBe(false);
   });
   it('wallet challenge sub-route is allowed only after financial consent', () => {
     expect(gateDecision('/api/onboarding/wallet/challenge', sess({ tv: V, rv: V, fc: FC }), V, V, FC)).toEqual({ action: 'next' });
