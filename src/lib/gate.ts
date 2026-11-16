@@ -1,14 +1,15 @@
 /**
- * Onboarding gate (pure; unit-tested). Order: sign up -> Terms -> Risk -> Financial Understanding -> Wallet -> app.
+ * Onboarding gate (pure; unit-tested). Order: sign up -> 18+ eligibility -> Terms -> Risk -> Financial Understanding -> Wallet -> app.
  * Every page and API outside the public allowlist is blocked until all current-version steps are complete.
  */
 import type { SessionClaims } from './session';
 
-export type Step = 'signup' | 'terms' | 'risk' | 'financial-consent' | 'wallet' | 'done';
-export const STEP_ORDER: Step[] = ['signup', 'terms', 'risk', 'financial-consent', 'wallet', 'done'];
+export type Step = 'signup' | 'age' | 'terms' | 'risk' | 'financial-consent' | 'wallet' | 'done';
+export const STEP_ORDER: Step[] = ['signup', 'age', 'terms', 'risk', 'financial-consent', 'wallet', 'done'];
 
 export const STEP_PAGES: Record<Exclude<Step, 'done'>, string> = {
   signup: '/signup',
+  age: '/onboarding/age',
   terms: '/onboarding/terms',
   risk: '/onboarding/risk',
   'financial-consent': '/onboarding/financial-consent',
@@ -16,6 +17,7 @@ export const STEP_PAGES: Record<Exclude<Step, 'done'>, string> = {
 };
 
 const STEP_APIS: Array<[string, Step]> = [
+  ['/api/onboarding/age', 'age'],
   ['/api/onboarding/terms', 'terms'],
   ['/api/onboarding/risk', 'risk'],
   ['/api/onboarding/financial-consent', 'financial-consent'],
@@ -31,8 +33,10 @@ export function requiredStep(
   currentTermsVersion: string,
   currentRiskVersion = currentTermsVersion,
   currentFinancialConsentVersion = currentTermsVersion,
+  currentAgeVersion = '2026-11-16.1',
 ): Step {
   if (!s) return 'signup';
+  if (s.av !== currentAgeVersion) return 'age';
   if (s.tv !== currentTermsVersion) return 'terms';
   if (s.rv !== currentRiskVersion) return 'risk';
   if (s.fc !== currentFinancialConsentVersion) return 'financial-consent';
@@ -48,9 +52,10 @@ export function gateDecision(
   currentTermsVersion: string,
   currentRiskVersion = currentTermsVersion,
   currentFinancialConsentVersion = currentTermsVersion,
+  currentAgeVersion = '2026-11-16.1',
 ): GateDecision {
   if (PUBLIC_PREFIXES.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
-  const step = requiredStep(s, currentTermsVersion, currentRiskVersion, currentFinancialConsentVersion);
+  const step = requiredStep(s, currentTermsVersion, currentRiskVersion, currentFinancialConsentVersion, currentAgeVersion);
   const reached = STEP_ORDER.indexOf(step);
   const isApi = pathname.startsWith('/api/');
 
