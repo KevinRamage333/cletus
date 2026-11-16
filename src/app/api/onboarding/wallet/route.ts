@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSessionUser, setSessionCookie } from '@/lib/auth';
 import { RISK_VERSION, TERMS_VERSION } from '@/lib/legal';
+import { AGE_ATTESTATION_VERSION } from '@/lib/age';
 import { FINANCIAL_CONSENT_VERSION } from '@/lib/financial-consent';
 import { validateWalletSetup } from '@/lib/onboarding';
 import { getSessionSecret } from '@/lib/session';
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
     u.termsVersion === TERMS_VERSION,
     u.riskVersion === RISK_VERSION,
     u.financialConsentVersion === FINANCIAL_CONSENT_VERSION,
+    u.ageAttestationVersion === AGE_ATTESTATION_VERSION,
   );
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
