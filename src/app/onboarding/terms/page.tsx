@@ -28,7 +28,7 @@ export default function TermsPage() {
   return (
     <div className="center-page">
       <div className="card narrow" style={{ maxWidth: 880 }}>
-        <Steps at={1} />
+        <Steps at={2} />
         <h1>Terms and Conditions</h1>
         <p className="muted">Version {TERMS_VERSION}. Scroll through the entire document to enable acceptance.</p>
         <div className="terms-box" ref={boxRef} onScroll={check} data-testid="terms-box">

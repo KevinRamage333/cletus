@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSessionUser, setSessionCookie } from '@/lib/auth';
 import { RISK_VERSION, TERMS_VERSION } from '@/lib/legal';
+import { AGE_ATTESTATION_VERSION } from '@/lib/age';
 import { validateRiskAck } from '@/lib/onboarding';
 
 export async function POST(req: Request) {
   const u = await getSessionUser();
   if (!u) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
-  const v = validateRiskAck(body, RISK_VERSION, u.termsVersion === TERMS_VERSION ? RISK_VERSION : null);
+  const v = validateRiskAck(body, RISK_VERSION, u.termsVersion === TERMS_VERSION ? RISK_VERSION : null, u.ageAttestationVersion, AGE_ATTESTATION_VERSION);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
   const now = new Date();
   const [user] = await prisma.$transaction([

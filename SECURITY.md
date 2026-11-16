@@ -33,7 +33,7 @@ Without it, the live entry points stop before starting execution. This is an add
 - `.secrets/` and `.env*` are gitignored (only `.env.example` is tracked).
 - Live mode is refused without a key, and refused in beta unless `ALLOW_LIVE_IN_BETA=true`. An unreadable wallet in live mode trips the kill switch.
 - Session cookies are HttpOnly, SameSite=Lax, HMAC-SHA256 signed, and Secure in production. A dev-default secret is rejected in production.
-- Middleware blocks every route until onboarding is complete, and APIs re-check onboarding against the DB.
+- Middleware blocks application routes until the current 18+ eligibility attestation, Terms, Risk disclosure, five financial-understanding stages, and wallet choice are complete. The API handlers re-check eligibility and required acknowledgements against the database. The age check is self-attestation only, not identity verification.
 - Non-custodial: users optionally connect Jupiter, Phantom, Solflare or Backpack (Wallet Standard / wallet-adapter) on their own volition, or continue in paper mode. Cletus never stores or sees private keys or seed phrases. Sign-In-With-Solana is a message signature for auth only. Live swaps are unsigned Jupiter V2 `/order` transactions that the user approves in their wallet; there are no delegated or session keys. The onboarding API rejects any payload containing secret fields and stores only the public key (or none, in paper mode). Users can disconnect at any time.
 - RPC URLs are used only server-side. `/api/health` and the dashboard expose only endpoint names, latencies and error kinds.
 - No tax IDs, SSNs or other government identifiers are collected; the tax API rejects such fields. The tax acknowledgment stores only a timestamp.

@@ -18,10 +18,14 @@ model User {
   email           String       @unique
   isAdmin         Boolean      @default(false)
   createdAt       DateTime     @default(now())
+  ageAttestationVersion String?
+  ageAttestedAt   DateTime?
   termsVersion    String?
   termsAcceptedAt DateTime?
-  riskVersion     String?
-  riskAckAt       DateTime?
+  riskVersion          String?
+  riskAckAt             DateTime?
+  financialConsentVersion String?
+  financialConsentAt    DateTime?
   walletPublicKey String?
   walletSource    String?      // "connected" | "paper" (legacy: "created" | "imported")
   walletSetupAt   DateTime?
@@ -44,7 +48,7 @@ model Acceptance {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kind      String   // "terms" | "risk" | "wallet"
+  kind      String   // "age-18+" | "terms" | "risk" | "wallet" | "financial-consent:<stage>"
   version   String
   userAgent String?
   createdAt DateTime @default(now())

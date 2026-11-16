@@ -2,7 +2,15 @@ import { PublicKey } from '@solana/web3.js';
 
 export type Validation = { ok: true } | { ok: false; error: string };
 
-export function validateTermsAcceptance(body: unknown, currentVersion: string): Validation {
+export function validateAgeAttestation(body: unknown, currentVersion: string): Validation {
+  const value = (body ?? {}) as Record<string, unknown>;
+  if (value.version !== currentVersion) return { ok: false, error: 'age attestation version changed; reload and review the requirement' };
+  if (value.confirmed18Plus !== true || value.legallyPermitted !== true) return { ok: false, error: 'you must confirm that you are at least 18 and legally permitted to use Cletus where you live' };
+  return { ok: true };
+}
+
+export function validateTermsAcceptance(body: unknown, currentVersion: string, ageAttestedVersion?: string | null, currentAgeVersion?: string): Validation {
+  if (currentAgeVersion && ageAttestedVersion !== currentAgeVersion) return { ok: false, error: 'confirm 18+ eligibility before accepting the Terms' };
   const b = (body ?? {}) as Record<string, unknown>;
   if (b.version !== currentVersion) return { ok: false, error: `terms version mismatch (current is ${currentVersion}); reload and read the current terms` };
   if (b.scrolledToEnd !== true) return { ok: false, error: 'you must scroll to the end of the Terms and Conditions' };
@@ -10,7 +18,8 @@ export function validateTermsAcceptance(body: unknown, currentVersion: string): 
   return { ok: true };
 }
 
-export function validateRiskAck(body: unknown, currentVersion: string, termsAcceptedVersion: string | null): Validation {
+export function validateRiskAck(body: unknown, currentVersion: string, termsAcceptedVersion: string | null, ageAttestedVersion?: string | null, currentAgeVersion?: string): Validation {
+  if (currentAgeVersion && ageAttestedVersion !== currentAgeVersion) return { ok: false, error: 'confirm 18+ eligibility before acknowledging risk' };
   const b = (body ?? {}) as Record<string, unknown>;
   if (termsAcceptedVersion !== currentVersion) return { ok: false, error: 'accept the current Terms and Conditions first' };
   if (b.version !== currentVersion) return { ok: false, error: 'risk disclaimer version mismatch; reload' };
@@ -24,8 +33,17 @@ export type WalletSource = (typeof WALLET_SOURCES)[number];
 const SECRET_FIELDS = ['secretKey', 'mnemonic', 'privateKey', 'seed', 'recoveryPhrase', 'secret'];
 
 /** Non-custodial wallet step: connect an existing wallet (SIWS) or continue in paper mode. Secrets are always rejected. */
-export function validateWalletSetup(body: unknown, termsOk: boolean, riskOk: boolean): Validation & { publicKey?: string; source?: WalletSource } {
-  if (!termsOk || !riskOk) return { ok: false, error: 'complete the Terms and Risk Disclaimer steps first' };
+export function validateWalletSetup(
+  body: unknown,
+  termsOk: boolean,
+  riskOk: boolean,
+  financialConsentOk: boolean,
+  ageOk = false,
+): Validation & { publicKey?: string; source?: WalletSource } {
+  if (!ageOk) return { ok: false, error: 'confirm 18+ eligibility before wallet setup' };
+  if (!termsOk || !riskOk || !financialConsentOk) {
+    return { ok: false, error: 'complete age eligibility, Terms, Risk, and all five Financial Understanding stages first' };
+  }
   const b = (body ?? {}) as Record<string, unknown>;
   if (SECRET_FIELDS.some((k) => k in b)) return { ok: false, error: 'only the public key may be sent to the server' };
   if (b.source === 'created' || b.source === 'imported') {

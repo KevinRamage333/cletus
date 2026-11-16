@@ -4,10 +4,12 @@ import type { User } from '@prisma/client';
 import { prisma } from './db';
 import { SESSION_COOKIE, signSession, verifySession } from './session';
 import { TERMS_VERSION, RISK_VERSION } from './legal';
+import { FINANCIAL_CONSENT_VERSION } from './financial-consent';
+import { AGE_ATTESTATION_VERSION } from './age';
 import { requiredStep } from './gate';
 
 export function claimsForUser(u: User) {
-  return { uid: u.id, email: u.email, adm: u.isAdmin, tv: u.termsVersion, rv: u.riskVersion, w: Boolean(u.walletSetupAt) };
+  return { uid: u.id, email: u.email, adm: u.isAdmin, av: u.ageAttestationVersion, tv: u.termsVersion, rv: u.riskVersion, fc: u.financialConsentVersion, w: Boolean(u.walletSetupAt) };
 }
 
 export async function setSessionCookie(res: NextResponse, u: User) {
@@ -29,7 +31,7 @@ export async function getSessionUser(): Promise<User | null> {
 
 /** DB-backed onboarding status (source of truth). */
 export function onboardingStep(u: User | null) {
-  return requiredStep(u ? { ...claimsForUser(u), iat: 0, exp: 0 } : null, TERMS_VERSION, RISK_VERSION);
+  return requiredStep(u ? { ...claimsForUser(u), iat: 0, exp: 0 } : null, TERMS_VERSION, RISK_VERSION, FINANCIAL_CONSENT_VERSION, AGE_ATTESTATION_VERSION);
 }
 
 export class HttpError extends Error {

@@ -12,12 +12,13 @@ export default function RiskPage() {
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) return setErr(j.error ?? 'failed');
-    window.location.href = j.next ?? '/onboarding/wallet';
+    window.location.href = j.next ?? '/onboarding/financial-consent';
   }
   return (
     <div className="risk-page">
-      <Steps at={2} />
-      <h1 style={{ fontSize: 40, color: '#fca5a5' }}>⚠️ Risk Disclaimer</h1>
+      <Steps at={3} />
+      <h1 style={{ fontSize: 40, color: '#fca5a5' }}>⚠️ Risk Disclosure</h1>
+      <p style={{ fontSize: 22, fontWeight: 800, maxWidth: 820, textAlign: 'center' }}>The only guarantee is that you can lose money — including all the money you choose to put at risk.</p>
       <p style={{ fontSize: 18, maxWidth: 820, textAlign: 'center' }}>Read this carefully. Trading crypto micro-caps with an automated bot is extremely risky.</p>
       <ul>{RISK_POINTS.map((p) => <li key={p}>{p}</li>)}</ul>
       {err && <div className="err">{err}</div>}

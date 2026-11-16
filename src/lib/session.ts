@@ -9,8 +9,10 @@ export interface SessionClaims {
   uid: string;
   email: string;
   adm: boolean;
+  av: string | null; // age attestation version
   tv: string | null; // accepted terms version
   rv: string | null; // acknowledged risk version
+  fc: string | null; // completed five-stage financial consent version
   w: boolean; // wallet set up
   iat: number;
   exp: number;
@@ -59,9 +61,10 @@ export async function verifySession(token: string | undefined | null, secret = g
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
   if (diff !== 0) return null;
   try {
-    const claims = JSON.parse(new TextDecoder().decode(fromB64url(body))) as SessionClaims;
-    if (!claims.uid || claims.exp < Math.floor(Date.now() / 1000)) return null;
-    return claims;
+    const raw = JSON.parse(new TextDecoder().decode(fromB64url(body))) as Partial<SessionClaims>;
+    if (!raw.uid || !raw.email || typeof raw.exp !== 'number' || raw.exp < Math.floor(Date.now() / 1000)) return null;
+    // Older sessions must re-enter any newly introduced eligibility/consent gates.
+    return { ...raw, av: typeof raw.av === 'string' ? raw.av : null, fc: typeof raw.fc === 'string' ? raw.fc : null } as SessionClaims;
   } catch {
     return null;
   }

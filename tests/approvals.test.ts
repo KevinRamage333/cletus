@@ -132,6 +132,6 @@ describe('demo portfolio and terms', () => {
     expect(RISK_POINTS.some((p) => /own volition|paper mode/i.test(p))).toBe(true);
   });
   it('paper mode does not require a public key', () => {
-    expect(validateWalletSetup({ source: 'paper' }, true, true)).toMatchObject({ ok: true, source: 'paper' });
+    expect(validateWalletSetup({ source: 'paper' }, true, true, true, true)).toMatchObject({ ok: true, source: 'paper' });
   });
 });
