@@ -12,7 +12,7 @@ export async function GET() {
       prisma.position.findMany({ where: { accountId: account.id, status: 'open', simulated: true }, select: { mint: true, entryPrice: true, sizeUsd: true, symbol: true, openedAt: true } }),
       prisma.engineState.findUnique({ where: { id: 'global' }, select: { lastScanAt: true, scanCount: true, killSwitch: true, pausedUntil: true, lastError: true } }).catch(() => null),
     ]);
-    const open = new Map(positions.map(p => [p.mint, p]));
+    const open = new Map(positions.map(p => [p.mint, p] as const));
     const tokens = mem.candidates.slice(0, 100).map(c => {
       const p = open.get(c.mint), price = mem.prices.get(c.mint) ?? c.priceUsd;
       const pnl = p && p.entryPrice > 0 ? (price / p.entryPrice - 1) * p.sizeUsd : null;
