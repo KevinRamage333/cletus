@@ -76,7 +76,7 @@ export function gateDecision(
 }
 
 /** Demo-mode gate (public preview without a database). Pure; unit-tested. */
-const DEMO_PUBLIC = ['/demo', '/live', '/owner', '/legal', '/api/demo/', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
+const DEMO_PUBLIC = ['/onboarding/age', '/api/onboarding/age', '/demo', '/live', '/owner', '/legal', '/api/demo/', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf');
 export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
