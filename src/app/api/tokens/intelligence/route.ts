@@ -41,10 +41,11 @@ export async function GET(req: Request) {
     // The sell-route check is quote-only: it does not sign or submit a transaction.
     let audit = null;
     let auditError: string | null = null;
-    if (pair?.priceUsd && pair.priceUsd > 0) {
+    const marketPriceUsd = Number(pair?.priceUsd ?? 0);
+    if (Number.isFinite(marketPriceUsd) && marketPriceUsd > 0) {
       try {
         audit = await auditToken(mint, {
-          priceUsd: Number(pair.priceUsd),
+          priceUsd: marketPriceUsd,
           sizeUsd: 10,
           params: {
             maxHolderConcentration: c.maxHolderConcentration,
