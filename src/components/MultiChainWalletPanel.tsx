@@ -259,7 +259,7 @@ export default function MultiChainWalletPanel() {
       {(address || solanaPortfolio?.address || solanaLoading) && <div className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-4" data-testid="unified-portfolio">
         <div>
           <h3 className="text-sm font-semibold">Portfolio overview</h3>
-          <p className="text-xs text-white/40">Read-only native balances across your linked Solana wallet and connected EVM wallet. Quantities only; no combined USD value is claimed.</p>
+          <p className="text-xs text-white/40">Read-only native balances across your linked Solana wallet and connected EVM wallet, plus Solana SPL token quantities. No combined USD value is claimed.</p>
         </div>
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-white/45">Solana</div>
@@ -294,7 +294,7 @@ export default function MultiChainWalletPanel() {
                             <div className="font-mono text-white/80">{token.mint.slice(0, 6)}…{token.mint.slice(-6)}</div>
                             <div className="text-[10px] text-white/35">{token.program} · {token.tokenAccounts} account{token.tokenAccounts === 1 ? '' : 's'}</div>
                           </div>
-                          <div className="font-mono text-right text-white/75 break-all">{Number(token.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })}</div>
+                          <div className="font-mono text-right text-white/75 break-all">{token.amount}</div>
                         </div>
                       ))}
                     </div>}
@@ -325,7 +325,7 @@ export default function MultiChainWalletPanel() {
             </div>
           </> : <p className="text-xs text-white/45">Connect an EVM wallet above to include its nine supported networks.</p>}
         </div>
-        <p className="text-[11px] text-white/35">This first portfolio view includes Solana SOL/USDC and EVM native coins only. SPL/ERC-20 tokens, NFTs, market prices, and USD valuation are not included yet. Wallets remain separate and self-custodied; Cletus does not sign or move funds.</p>
+        <p className="text-[11px] text-white/35">This view includes Solana SOL/USDC, Solana SPL and Token-2022 quantities, and EVM native coins. ERC-20 tokens, NFTs, verified token names, market prices, and combined USD valuation are still to come. Wallets remain separate and self-custodied; Cletus does not sign or move funds.</p>
       </div>}
 
       <div>
