@@ -14,29 +14,29 @@ datasource db {
 }
 
 model User {
-  id                    String       @id @default(cuid())
-  email                 String       @unique
-  isAdmin               Boolean      @default(false)
-  createdAt             DateTime     @default(now())
-  termsVersion          String?
-  termsAcceptedAt       DateTime?
-  riskVersion           String?
+  id              String       @id @default(cuid())
+  email           String       @unique
+  isAdmin         Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+  riskVersion          String?
   riskAckAt             DateTime?
   financialConsentVersion String?
   financialConsentAt    DateTime?
-  walletPublicKey       String?
-  walletSource          String?      // "connected" | "paper" (legacy: "created" | "imported")
-  walletSetupAt         DateTime?
-  acceptances            Acceptance[]
-  account                Account?
-  feedback               Feedback[]
-  conversations          Conversation[]
-  displayName            String?
-  bio                    String?
-  banned                 Boolean      @default(false)
-  trialStartedAt         DateTime?    // 30-day trial flag (informational; no billing)
-  taxAckAt               DateTime?    // tax-responsibility acknowledgment (no tax IDs are collected)
-  communityMessages      CommunityMessage[]
+  walletPublicKey String?
+  walletSource    String?      // "connected" | "paper" (legacy: "created" | "imported")
+  walletSetupAt   DateTime?
+  acceptances     Acceptance[]
+  account         Account?
+  feedback        Feedback[]
+  conversations   Conversation[]
+  displayName     String?
+  bio             String?
+  banned          Boolean      @default(false)
+  trialStartedAt  DateTime?    // 30-day trial flag (informational; no billing)
+  taxAckAt        DateTime?    // tax-responsibility acknowledgment (no tax IDs are collected)
+  communityMessages CommunityMessage[]
   @@schema("app")
 }
 
@@ -57,26 +57,26 @@ model Acceptance {
 
 
 model Account {
-  id                String     @id @default(cuid())
-  userId            String?    @unique
-  user              User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name              String
-  isOperator        Boolean    @default(false)
-  labPreset         String?    @unique // paper-only preset-comparison account (DEGEN | BALANCED | SAFER)
-  startingBalance   Float
-  cashUsd           Float
-  realizedPnl       Float     @default(0)
-  peakEquity        Float
-  paused            Boolean   @default(false)
-  pauseReason       String?
-  recoveryMode      Boolean   @default(false)
-  consecutiveWins   Int       @default(0)
-  consecutiveLosses Int       @default(0)
-  settings          String?   // JSON AccountSettings from the Config page (src/lib/user-settings.ts)
-  createdAt         DateTime  @default(now())
-  positions         Position[]
-  logs              LogEntry[]
-  approvals         TradeApproval[]
+  id              String     @id @default(cuid())
+  userId          String?    @unique
+  user            User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  isOperator      Boolean    @default(false)
+  labPreset       String?    @unique // paper-only preset-comparison account (DEGEN | BALANCED | SAFER)
+  startingBalance Float
+  cashUsd         Float
+  realizedPnl     Float      @default(0)
+  peakEquity      Float
+  paused          Boolean    @default(false)
+  pauseReason     String?
+  recoveryMode    Boolean    @default(false)
+  consecutiveWins Int        @default(0)
+  consecutiveLosses Int      @default(0)
+  settings        String?    // JSON AccountSettings from the Config page (src/lib/user-settings.ts)
+  createdAt       DateTime   @default(now())
+  positions       Position[]
+  logs            LogEntry[]
+  approvals       TradeApproval[]
   @@schema("app")
 }
 
@@ -113,7 +113,7 @@ model Position {
   narrative      String?
   creator        String?   // dev/creator wallet from RugCheck (correlation cap)
   partialPnlUsd  Float     @default(0)
-  partialCostUsd Float     @default(0)
+  partialCostUsd Float     @default(0) // cost basis already sold via partial take-profits
 
   @@index([accountId, status])
   @@index([accountId, mint]) // Legacy Solana lookup compatibility
@@ -165,7 +165,7 @@ model Feedback {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kind      String
+  kind      String   // bug | feedback | idea
   message   String
   page      String?
   severity  String?
@@ -193,9 +193,9 @@ model ChatMessage {
   id             String       @id @default(cuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String
+  role           String       // user | model
   content        String
-  meta           String?
+  meta           String?      // JSON: { source, model, tools: [...], grounded }
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
@@ -207,7 +207,7 @@ model ChatMessage {
 model NewsItem {
   id          String   @id @default(cuid())
   source      String
-  category    String
+  category    String   // crypto | macro | world | fed
   title       String
   url         String   @unique
   summary     String?
@@ -223,7 +223,7 @@ model MarketSnapshot {
   id          String   @id @default(cuid())
   solPriceUsd Float?
   solChange24h Float?
-  trending    String
+  trending    String   // JSON array of { symbol, mint, priceChangeH1, volume24h, marketCap }
   createdAt   DateTime @default(now())
   @@schema("app")
 }
@@ -232,9 +232,9 @@ model MarketSnapshot {
 model Briefing {
   id         String   @id @default(cuid())
   content    String
-  source     String
+  source     String   // gemini | gemini-grounded | heuristic
   itemsCount Int
-  sources    String?
+  sources    String?  // JSON array of grounding/source links
   createdAt  DateTime @default(now())
   @@schema("app")
 }
@@ -243,13 +243,13 @@ model Briefing {
 // ── Self-reflection journal ───────────────────────────────────────────────
 model JournalEntry {
   id         String   @id @default(cuid())
-  kind       String
+  kind       String   // trade | daily
   accountId  String?
   positionId String?  @unique
-  dayKey     String?
+  dayKey     String?  // YYYY-MM-DD for daily entries (per account)
   title      String
   content    String
-  source     String
+  source     String   // gemini | heuristic
   createdAt  DateTime @default(now())
 
   @@index([accountId, createdAt])
@@ -263,7 +263,7 @@ model CommunityMessage {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   body      String
-  kind      String   @default("user")
+  kind      String   @default("user") // user | audit | system
   hidden    Boolean  @default(false)
   hiddenBy  String?
   createdAt DateTime @default(now())
@@ -277,9 +277,9 @@ model Withdrawal {
   id              String   @id @default(cuid())
   userId          String
   toAddress       String
-  lamports        String
-  mode            String
-  status          String
+  lamports        String   // integer lamports as a string (avoids float/BigInt JSON issues)
+  mode            String   // simulation | live
+  status          String   // simulated | sent | failed | refused
   signature       String?
   closedPositions Int      @default(0)
   error           String?
@@ -297,7 +297,7 @@ model TradeApproval {
   account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   mint           String
   symbol         String
-  side           String
+  side           String    // buy | sell
   sizeUsd        Float
   inputMint      String
   outputMint     String
@@ -305,9 +305,9 @@ model TradeApproval {
   inAmount       String?
   outAmount      String?
   requestId      String?
-  transaction    String?
-  signature      String?
-  status         String    @default("pending")
+  transaction    String?   // unsigned swap (base64) from Jupiter /order; never a signed tx or a key
+  signature      String?   // on-chain signature after the user signs and /execute lands
+  status         String    @default("pending") // pending | rejected | expired | executed | failed
   expiresAt      DateTime
   operatorFeeBps Int       @default(50)
   operatorFeeUsd Float     @default(0)
@@ -323,6 +323,7 @@ model TradeApproval {
   @@index([expiresAt])
   @@schema("app")
 }
+
 
 
 /// Owner profit-sweep ladder (operator wallet only). One row (id = "owner").
@@ -353,8 +354,8 @@ model ProfitSweepPayout {
   amountLamports String
   toAddress      String
   memo           String?
-  mode           String
-  status         String
+  mode           String           // simulation | live
+  status         String           // pending | sent | simulated | failed | skipped
   signature      String?
   error          String?
   createdAt      DateTime         @default(now())
@@ -362,3 +363,5 @@ model ProfitSweepPayout {
   @@index([createdAt])
   @@index([status])
   @@schema("app")
+}
+
