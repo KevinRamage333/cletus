@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
+import { evaluateShadowStrategies } from '@/lib/shadow-strategies';
+import { getConfig } from '@/lib/config';
 import { poolOhlcv } from '@/lib/gecko';
 import { EVM_ADDRESS, geckoNetworkFor, selectEvmMarket } from '@/lib/evm-market';
 
@@ -44,6 +46,10 @@ export async function GET(req: Request) {
     const candles = await poolOhlcv(market.pool, range, network);
     return NextResponse.json({
       network: chain, address, ...market,
+      shadowStrategies: evaluateShadowStrategies(chain, {
+        freshMarket: candles.stale || candles.limited ? false : undefined,
+        liquidity: market.liquidityUsd === null ? undefined : market.liquidityUsd >= getConfig().minLiquidityUsd,
+      }),
       candles: candles.v ?? [], rateLimited: candles.limited, candlesStale: candles.stale,
       markers: [], whaleMarkers: [],
       embeds: {
