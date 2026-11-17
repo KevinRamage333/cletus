@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const system = `${SYSTEM_PROMPT}\n\n${secComplianceContext()}\n\n${DEMO_RULES}\n\n${selectCurriculumNotes([message, ...history.filter((m) => m.role === 'user').map((m) => m.content)].join('\n'))}`;
   // Same order as the full Brain: Gemini first, then Grok, switching on 429 / 503 / quota / any provider error.
   const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xai.key) }).filter((p) => p !== 'mock');
-  if (!order.length) return NextResponse.json({ answer: "I'm Cletus. In this demo my Brain is offline, but I scan Solana tokens, audit each one, score it on 8 signals, and paper-trade in the beta. Accounts are coming online soon.", source: 'mock' });
+  if (!order.length) return NextResponse.json({ error: 'A Brain provider is currently unavailable.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   try {
     const { provider, result } = await withFallback(order, async (p) => {
       if (p === 'gemini' && key) {
