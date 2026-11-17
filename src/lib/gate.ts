@@ -36,6 +36,16 @@ export function isSitePublic(pathname: string): boolean {
   return SITE_PUBLIC_PREFIXES.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p || pathname.startsWith(p + '/')));
 }
 
+/** Exact match, or a path segment under the prefix ("/owner" matches /owner, /owner/x and /owner.ext, never /ownerx). Prefixes ending in "/" match anything below; file names match exactly. */
+export function matchesPublicPrefix(pathname: string, list: readonly string[]): boolean {
+  return list.some((p) => {
+    if (p.endsWith('/')) return pathname === p.slice(0, -1) || pathname.startsWith(p);
+    if (/\.[a-z0-9]+$/i.test(p)) return pathname === p;
+    return pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '.');
+  });
+}
+export const isPublicPath = (pathname: string): boolean => matchesPublicPrefix(pathname, PUBLIC_PREFIXES);
+
 export function requiredStep(
   s: SessionClaims | null,
   currentTermsVersion: string,
@@ -64,7 +74,7 @@ export function gateDecision(
 ): GateDecision {
   if (pathname === '/' && !s) return { action: 'next' };
   if (pathname === '/demo' || pathname === '/demo/') return { action: 'next' };
-  if (PUBLIC_PREFIXES.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  if (isPublicPath(pathname)) return { action: 'next' };
   // Machine-to-machine endpoint. The route validates the cron bearer secret.
   if (pathname === '/api/cron/paper-engine') return { action: 'next' };
   const step = requiredStep(s, currentTermsVersion, currentRiskVersion, currentFinancialConsentVersion, currentAgeVersion);
@@ -98,7 +108,7 @@ export function demoGateDecision(pathname: string): DemoDecision {
   if (pathname === '/') return { action: 'next' };
   if (pathname === '/signup') return { action: 'redirect', to: '/app' };
   if (DEMO_APP_ROUTES.includes(pathname.replace(/\/$/, '') || '/')) return { action: 'next' };
-  if (DEMO_PUBLIC.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  if (matchesPublicPrefix(pathname, DEMO_PUBLIC)) return { action: 'next' };
   if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest|pdf)$/.test(pathname)) return { action: 'next' };
   if (pathname.startsWith('/api/')) return { action: 'soon' };
   return { action: 'redirect', to: `/app?soon=${encodeURIComponent(pathname)}` };

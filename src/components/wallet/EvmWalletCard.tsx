@@ -33,7 +33,8 @@ export default function EvmWalletCard() {
     void Promise.all(connectors.map(async (c) => [c.uid, !!(await c.getProvider().catch(() => null))] as const)).then((r) => { if (live) setDetected(Object.fromEntries(r)); });
     return () => { live = false; };
   }, [connectors]);
-  useEffect(() => { setProof(null); }, [address]);
+  const [connectedAt, setConnectedAt] = useState<number | null>(null);
+  useEffect(() => { setProof(null); setConnectedAt(address ? Date.now() : null); }, [address, chainId]);
   const supported = EVM_CHAINS.some((c) => c.id === chainId);
   // De-duplicate by EIP-6963 rdns (or connector id), never by display name.
   const list = dedupeEvmConnectors(connectors);
@@ -50,7 +51,7 @@ export default function EvmWalletCard() {
 
   return (
     <section className="panel panel-hi p-5" data-testid="evm-card">
-      <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-bold uppercase tracking-[.16em] text-[#e3c06a]">EVM · Ethereum, Base, BNB, Polygon, Cronos</h3>{isConnected && <Refreshed at={Date.now()} label="Live" />}</div>
+      <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-bold uppercase tracking-[.16em] text-[#e3c06a]">EVM · Ethereum, Base, BNB, Polygon, Cronos</h3>{isConnected && connectedAt !== null && <Refreshed at={connectedAt} label="Connected" />}</div>
       {isConnected && address ? (
         <div className="mt-4 space-y-3">
           <div><p className="text-xs text-[#8a8478]">{connector?.name} · {supported ? EVM_CHAIN_META[chainId!].name : `unsupported network (${chainId})`}</p><p className="num break-all text-sm text-[#f6f1e4]" data-testid="evm-address">{address}</p></div>

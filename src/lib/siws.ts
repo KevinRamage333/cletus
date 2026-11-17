@@ -199,6 +199,9 @@ export async function verifySiwsResponse(opts: {
   if (fields.address !== opts.address) return 'sign-in message address does not match the wallet';
   if (fields.nonce !== claims.nonce) return 'sign-in message nonce does not match the challenge';
   if (fields.domain !== claims.domain) return 'sign-in message domain does not match the challenge';
+  if (fields.uri !== claims.uri) return 'sign-in message URI does not match the challenge';
+  const iat = Date.parse(fields.issuedAt);
+  if (!Number.isFinite(iat) || Math.abs(Math.floor(iat / 1000) - claims.iat) > 5) return 'sign-in message issue time does not match the challenge';
   if (fields.statement !== SIWS_STATEMENT) return 'sign-in message statement was altered';
   if (fields.version !== SIWS_VERSION || fields.chainId !== SIWS_CHAIN) return 'unsupported sign-in message version';
   const exp = Date.parse(fields.expirationTime);

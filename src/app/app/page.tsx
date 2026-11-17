@@ -21,7 +21,8 @@ export default function DashboardPage() {
   const { quotes, fetchedAt } = useQuotes(account?.positions.map((p) => p.mint) ?? [], 20_000);
   const val = account ? valueAccount(account, Object.fromEntries(Object.values(quotes).map((q) => [q.mint, q.priceUsd]))) : null;
   const top = useMemo(() => (data ? sortMovers(data.tokens, 'movers').slice(0, 6) : []), [data]);
-  const totalVol = data?.tokens.reduce((s, t) => s + (t.volume1hUsd ?? 0), 0) ?? null;
+  const vols = data?.tokens.map((t) => t.volume1hUsd).filter((v): v is number => typeof v === 'number' && Number.isFinite(v)) ?? [];
+  const totalVol = vols.length ? vols.reduce((s, v) => s + v, 0) : null;
   const gainers = data?.tokens.filter((t) => (t.change1hPct ?? 0) > 0).length ?? null;
   const stale = !!data && (data.stale || freshness(data.fetchedAt) === 'stale' || !!error);
 

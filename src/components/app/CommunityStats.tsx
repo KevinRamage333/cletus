@@ -61,7 +61,7 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
             <td className="py-2.5 pr-3">{n.walletConnect ? <span className="text-green-300">● Ready</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
             <td className="py-2.5 pr-3">{n.marketData ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
             <td className="py-2.5 pr-3">{n.paperTrading ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
-            <td className="num py-2.5">{d ? d.tokensPerNetwork[n.id] ?? 0 : <span className="text-[#8a8478]" title={naSub}>—</span>}</td>
+            <td className="num py-2.5">{d && d.tokensPerNetwork[n.id] != null ? d.tokensPerNetwork[n.id] : <span className="text-[#8a8478]" title={naSub}>—</span>}</td>
           </tr>
         ))}</tbody>
       </table></div>
