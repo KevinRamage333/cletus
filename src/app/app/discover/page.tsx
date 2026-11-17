@@ -1,29 +1,83 @@
 'use client';
-import {useCallback,useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import Link from 'next/link';
 import TokenChart from '@/components/TokenChart';
 import PaperPlan from '@/components/PaperPlan';
 type Token={mint:string;pool:string;symbol:string;name:string;dex:string;priceUsd:number;marketCapUsd:number;liquidityUsd:number|null;volume24hUsd:number;change1hPct:number;change24hPct:number|null;score:number;rejected:string|null;openPaperPosition:boolean;paperPnlUsd:number|null;paperPnlPct:number|null};
-type Feed={tokens:Token[];scanAt:string|null;scanCount:number;scanning:boolean;summary:string;engine:{killSwitch:boolean}};
+type Feed={tokens:Token[];scanAt:string|null;candidateScanAt:string|null;scanCount:number;scanning:boolean;summary:string;cachedCandidates?:boolean;engine:{killSwitch:boolean;stateAvailable:boolean}};
 type Intel={identity:{mintAuthority:string|null;freezeAuthority:string|null};security:{audit:{passed:boolean;checks:Array<{name:string;passed:boolean;detail:string}>}|null;auditError:string|null;holderConcentration:Array<{owner:string;pct:number}>;sources:string[]}};
 const money=(n:number|null|undefined)=>n==null?'—':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:n<1?7:2}).format(n);
 const short=(n:number|null|undefined)=>n==null?'—':n>=1e9?'$'+(n/1e9).toFixed(2)+'B':n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':money(n);
 const change=(n:number|null)=>n==null?'—':(n>=0?'+':'')+n.toFixed(2)+'%';
 export default function DiscoverPage(){
  const [feed,setFeed]=useState<Feed|null>(null),[selected,setSelected]=useState<Token|null>(null),[intel,setIntel]=useState<Intel|null>(null),[error,setError]=useState(''),[query,setQuery]=useState(''),[sort,setSort]=useState('score'),[filter,setFilter]=useState('all');
- const load=useCallback(async()=>{try{const r=await fetch('/api/tokens/discover',{cache:'no-store'});const j=await r.json();if(r.ok)setFeed(j);}catch{}},[]);
- useEffect(()=>{void load();const t=setInterval(()=>void load(),5000);return()=>clearInterval(t);},[load]);
+ const [feedError, setFeedError] = useState('');
+ const [loadingFeed, setLoadingFeed] = useState(true);
+ const [now, setNow] = useState(0);
+ const feedRequest = useRef<AbortController | null>(null);
+
+ const load = useCallback(async () => {
+   setNow(Date.now());
+   if (feedRequest.current) return;
+   const controller = new AbortController();
+   feedRequest.current = controller;
+   setLoadingFeed(true);
+   const timeout = window.setTimeout(() => controller.abort(), 8_000);
+   try {
+     const response = await fetch('/api/tokens/discover', { cache: 'no-store', signal: controller.signal });
+     if (!response.ok) throw new Error('Discovery request failed');
+     const next: Feed = await response.json();
+     if (!Array.isArray(next?.tokens) || !next.engine) throw new Error('Invalid discovery feed');
+     if (feedRequest.current === controller) {
+       setFeed(previous => !Number.isFinite(Date.parse(next.candidateScanAt ?? '')) && previous?.candidateScanAt
+         ? { ...next, candidateScanAt: previous.candidateScanAt, tokens: previous.tokens, cachedCandidates: true }
+         : next);
+       setFeedError('');
+     }
+   } catch {
+     if (feedRequest.current === controller) setFeedError('Discovery could not refresh.');
+   } finally {
+     window.clearTimeout(timeout);
+     if (feedRequest.current === controller) {
+       feedRequest.current = null;
+       setLoadingFeed(false);
+     }
+   }
+ }, []);
+
+ useEffect(() => {
+   void load();
+   const timer = window.setInterval(() => void load(), 5_000);
+   return () => {
+     window.clearInterval(timer);
+     const active = feedRequest.current;
+     feedRequest.current = null;
+     active?.abort();
+   };
+ }, [load]);
+
+ const candidateAt = feed?.candidateScanAt ? Date.parse(feed.candidateScanAt) : NaN;
+ const snapshotAvailable = Number.isFinite(candidateAt);
+ const candidateStale = snapshotAvailable && now - candidateAt > 120_000;
+ const feedStatus = feedError ? (snapshotAvailable ? 'Refresh failed' : 'Unavailable')
+   : candidateStale ? 'Snapshot stale'
+   : feed?.cachedCandidates ? 'Cached snapshot'
+   : snapshotAvailable ? 'Snapshot available'
+   : loadingFeed ? 'Loading feed' : 'Waiting for snapshot';
  useEffect(()=>{if(!selected)return;let live=true;setIntel(null);setError('');fetch('/api/tokens/intelligence?mint='+encodeURIComponent(selected.mint),{cache:'no-store'}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||'Intelligence unavailable');if(live)setIntel(j);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;}},[selected?.mint]);
  const rows=useMemo(()=>[...(feed?.tokens??[])].filter(t=>(filter==='all'||(filter==='qualified'?!t.rejected:t.openPaperPosition))&&(!query||[t.symbol,t.name,t.mint].some(x=>x.toLowerCase().includes(query.toLowerCase())))).sort((a,b)=>sort==='volume'?b.volume24hUsd-a.volume24hUsd:sort==='momentum'?b.change1hPct-a.change1hPct:b.score-a.score),[feed,filter,query,sort]);
  return <main className="min-h-screen bg-black text-white p-3 sm:p-5"><div className="max-w-6xl mx-auto space-y-4">
- <header className="flex justify-between items-center"><div><Link href="/app" className="text-xs text-amber-300">← Dashboard</Link><h1 className="text-2xl font-black mt-1">CLETUS <span className="text-amber-300">DISCOVERY</span></h1><p className="text-xs text-white/40">Live Solana token scanner · paper trading</p></div><div className="text-right text-xs">{feed?.scanning?'● SCANNING':'○ WAITING'}<div className="text-white/35">{feed?.scanAt?new Date(feed.scanAt).toLocaleTimeString():'No scan yet'}</div></div></header>
- <div className="grid grid-cols-3 gap-2">{[['Candidates',feed?.tokens.length??0],['Scan cycles',feed?.scanCount??0],['Engine',feed?.engine.killSwitch?'PAUSED':'PAPER']].map(([k,v])=><div key={String(k)} className="bg-white/[.04] border border-white/10 rounded-xl p-3"><div className="text-[10px] text-white/40">{k}</div><b>{v}</b></div>)}</div>
- {selected?<section className="space-y-3"><button onClick={()=>{setSelected(null);setIntel(null)}} className="text-amber-300 text-sm">← Back to tokens</button><div className="bg-[#101010] border border-white/10 rounded-xl p-4 flex justify-between gap-3"><div><b className="text-xl">{selected.name} <span className="text-amber-300">${selected.symbol}</span></b><p className="text-[10px] text-white/40 break-all">{selected.mint}</p></div><div className="text-right"><b className="text-xl font-mono">{money(selected.priceUsd)}</b><p className="text-xs text-amber-300">Cletus {selected.score}/100</p></div></div>
+ <header className="flex justify-between items-center"><div><Link href="/app" className="text-xs text-amber-300">← Dashboard</Link><h1 className="text-2xl font-black mt-1">CLETUS <span className="text-amber-300">DISCOVERY</span></h1><p className="text-xs text-white/40">Solana token scanner · paper trading</p></div><div className="text-right text-xs">{feedStatus}<div className="text-white/35">{snapshotAvailable ? new Date(candidateAt).toLocaleTimeString() : 'No candidate timestamp'}</div></div></header>
+ <div className="grid grid-cols-3 gap-2">{[['Candidates',snapshotAvailable ? feed?.tokens.length ?? 0 : '—'],['Scan cycles',feed?.scanCount??'—'],['Engine',feed?.engine.stateAvailable ? (feed.engine.killSwitch ? 'PAUSED' : 'PAPER') : '—']].map(([k,v])=><div key={String(k)} className="bg-white/[.04] border border-white/10 rounded-xl p-3"><div className="text-[10px] text-white/40">{k}</div><b>{v}</b></div>)}</div>
+ {feedError && <p role="status" className="text-sm text-amber-300">{feedError}{snapshotAvailable ? ' Showing the last available snapshot.' : ''}</p>}
+ {candidateStale && <p className="text-sm text-amber-300">The candidate snapshot is over 2 minutes old.</p>}
+ {feed?.scanAt && !snapshotAvailable && !feedError && <p className="text-sm text-amber-300">The worker recorded a scan, but its candidate snapshot is unavailable on this server.</p>}
+ {selected?<section className="space-y-3"><button onClick={()=>{setSelected(null);setIntel(null)}} className="text-amber-300 text-sm">← Back to tokens</button><div className="bg-[#101010] border border-white/10 rounded-xl p-4 flex justify-between gap-3"><div><b className="text-xl">{selected.name} <span className="text-amber-300">${selected.symbol}</span></b><p className="text-[10px] text-white/40 break-all">{selected.mint}</p></div><div className="text-right"><b className="text-xl font-mono">{money(selected.priceUsd)}</b><p className="text-[10px] text-white/40">Price when selected</p><p className="text-xs text-amber-300">Cletus {selected.score}/100</p></div></div>
  <TokenChart key={selected.mint} address={selected.mint} pool={selected.pool} height={430}/>
  <PaperPlan key={selected.mint} symbol={selected.symbol} referencePrice={selected.priceUsd}/>
  <div className="grid md:grid-cols-2 gap-3"><div className="bg-[#101010] border border-white/10 rounded-xl p-4"><h2 className="font-bold mb-2">Cletus trade read</h2><p className="text-sm text-white/60">1h {change(selected.change1hPct)} · 24h {change(selected.change24hPct)} · liquidity {short(selected.liquidityUsd)} · volume {short(selected.volume24hUsd)}</p><p className="text-xs text-white/40 mt-3">Score is a heuristic rank, not a probability of profit. Trade plans and orders must pass the existing risk and paper-fill engine.</p>{selected.openPaperPosition&&<p className="mt-2 text-sm">Paper P&amp;L: <b className={(selected.paperPnlUsd??0)>=0?'text-emerald-400':'text-red-400'}>{money(selected.paperPnlUsd)} ({change(selected.paperPnlPct)})</b></p>}</div>
  <div className="bg-[#101010] border border-white/10 rounded-xl p-4 space-y-2"><h2 className="font-bold">Developer &amp; security</h2>{!intel&&!error&&<p className="text-xs text-white/40">Inspecting authorities, holders and sell-route risk…</p>}{error&&<p className="text-xs text-red-300">{error}</p>}{intel&&<><p className="text-xs">Mint authority: <b>{intel.identity.mintAuthority?'Enabled':'Revoked / unavailable'}</b></p><p className="text-xs">Freeze authority: <b>{intel.identity.freezeAuthority?'Enabled':'Revoked / unavailable'}</b></p><p className="text-xs">Pre-trade audit: <b>{intel.security.audit?(intel.security.audit.passed?'Passed':'Failed'):(intel.security.auditError||'Unavailable')}</b></p><p className="text-xs">Top holders: {intel.security.holderConcentration.length}</p>{intel.security.audit?.checks.map((c,i)=><p key={i} className="text-[11px] text-white/55">{c.passed?'✓':'⚠'} {c.name}: {c.detail}</p>)}<p className="text-[10px] text-white/30">{intel.security.sources.join(', ')}</p></>}</div></div></section>
- :<><div className="flex flex-wrap gap-2"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search ticker, name or mint" className="flex-1 min-w-[170px] bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"/><select value={filter} onChange={e=>setFilter(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="all">All scanned</option><option value="qualified">Qualified</option><option value="held">Open paper trades</option></select><select value={sort} onChange={e=>setSort(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="score">Cletus score</option><option value="volume">24h volume</option><option value="momentum">1h momentum</option></select><button onClick={()=>void load()} className="bg-amber-300 text-black rounded-lg px-4 text-sm font-bold">↻</button></div>
- <section className="rounded-xl border border-white/10 overflow-hidden bg-[#090909]"><div className="grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 px-3 py-2 text-[9px] uppercase text-white/35"><span>Token / score</span><span>Price</span><span>1h move</span><span>24h vol</span><span>Paper P&amp;L</span></div>{rows.length?rows.map(t=><button key={t.mint} onClick={()=>setSelected(t)} className="w-full text-left grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 items-center px-3 py-3 border-t border-white/[.06] hover:bg-white/[.04]"><span className="min-w-0"><b className="block text-sm truncate">{t.symbol} <small className="text-white/30">{t.dex}</small></b><small className="text-white/40 truncate block">{t.name} · {t.score}/100 {t.rejected?'· filtered':''}</small></span><span className="text-xs font-mono">{money(t.priceUsd)}</span><span><b className={'text-xs '+(t.change1hPct>=0?'text-emerald-400':'text-red-400')}>{change(t.change1hPct)}</b><span className="block h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden"><i className={'block h-full '+(t.change1hPct>=0?'bg-emerald-400':'bg-red-400')} style={{width:Math.min(100,Math.abs(t.change1hPct)*4)+'%'}}/></span></span><span className="text-xs">{short(t.volume24hUsd)}</span><span className="text-xs">{t.paperPnlUsd==null?'—':money(t.paperPnlUsd)}</span></button>):<p className="p-8 text-center text-white/40">No candidates yet. Feed appears after the next scan.</p>}</section></>}
+ :<><div className="flex flex-wrap gap-2"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search ticker, name or mint" className="flex-1 min-w-[170px] bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"/><select value={filter} onChange={e=>setFilter(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="all">All scanned</option><option value="qualified">Qualified</option><option value="held">Open paper trades</option></select><select value={sort} onChange={e=>setSort(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="score">Cletus score</option><option value="volume">24h volume</option><option value="momentum">1h momentum</option></select><button onClick={()=>void load()} aria-label="Refresh discovery feed" disabled={loadingFeed} className="bg-amber-300 text-black rounded-lg px-4 text-sm font-bold disabled:opacity-50">↻</button></div>
+ <section className="rounded-xl border border-white/10 overflow-hidden bg-[#090909]"><div className="grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 px-3 py-2 text-[9px] uppercase text-white/35"><span>Token / score</span><span>Price</span><span>1h move</span><span>24h vol</span><span>Paper P&amp;L</span></div>{rows.length?rows.map(t=><button key={t.mint} onClick={()=>setSelected(t)} className="w-full text-left grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 items-center px-3 py-3 border-t border-white/[.06] hover:bg-white/[.04]"><span className="min-w-0"><b className="block text-sm truncate">{t.symbol} <small className="text-white/30">{t.dex}</small></b><small className="text-white/40 truncate block">{t.name} · {t.score}/100 {t.rejected?'· filtered':''}</small></span><span className="text-xs font-mono">{money(t.priceUsd)}</span><span><b className={'text-xs '+(t.change1hPct>=0?'text-emerald-400':'text-red-400')}>{change(t.change1hPct)}</b><span className="block h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden"><i className={'block h-full '+(t.change1hPct>=0?'bg-emerald-400':'bg-red-400')} style={{width:Math.min(100,Math.abs(t.change1hPct)*4)+'%'}}/></span></span><span className="text-xs">{short(t.volume24hUsd)}</span><span className="text-xs">{t.paperPnlUsd==null?'—':money(t.paperPnlUsd)}</span></button>):<p className="p-8 text-center text-white/40">{!feed && loadingFeed ? 'Loading the discovery feed…' : !snapshotAvailable ? 'Waiting for a candidate snapshot.' : feed?.tokens.length ? 'No tokens match these filters.' : 'This scan returned no candidates.'}</p>}</section></>}
  <p className="text-[10px] text-white/30">{feed?.summary} · refreshes every 5 seconds. Market movement is not P&amp;L; only open paper positions show simulated P&amp;L.</p></div></main>;
 }
