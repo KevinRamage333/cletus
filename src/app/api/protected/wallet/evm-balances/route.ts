@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
       try {
         const balance = await readBalance(rpcUrl, address);
         return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance, status: 'ok' as const };
-      } catch (error) {
-        return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance: null, status: 'unavailable' as const, error: (error as Error).message };
+      } catch {
+        return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance: null, status: 'unavailable' as const, error: 'Balance provider temporarily unavailable.' };
       }
     }));
 
