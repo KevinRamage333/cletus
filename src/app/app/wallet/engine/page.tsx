@@ -14,7 +14,6 @@ import Link from 'next/link';
 import WithdrawPanel from '@/components/WithdrawPanel';
 import ConnectWallet from '@/components/ConnectWallet';
 import SimWithdrawPanel from '@/components/SimWithdrawPanel';
-import MultiChainWalletPanel from '@/components/MultiChainWalletPanel';
 
 type WalletState = {
   address: string | null;
@@ -134,7 +133,7 @@ export default function CletusWalletPage() {
             <Link href="/app/signals" className="text-white/50 hover:text-white transition-colors">
               Signals
             </Link>
-            <Link href="/tax" className="text-white/50 hover:text-white transition-colors">
+            <Link href="/app/tax" className="text-white/50 hover:text-white transition-colors">
               Tax Center
             </Link>
           </nav>
@@ -254,7 +253,7 @@ export default function CletusWalletPage() {
             onDisconnected={() => window.location.reload()}
           />
 
-          <MultiChainWalletPanel />
+          <p className="text-xs text-white/50">EVM wallets (Ethereum, Base, BNB, Polygon, Cronos) connect on the <a href="/app/wallet" className="text-amber-300 underline">Wallets</a> page.</p>
 
           {/* Fund instructions */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-3">
