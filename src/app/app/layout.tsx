@@ -1,13 +1,18 @@
-import BottomNav from '@/components/BottomNav';
+import AppShell from '@/components/app/AppShell';
 import WalletProviders from '@/components/WalletProviders';
-import Link from 'next/link';
 import { getSessionUser } from '@/lib/auth';
-export const metadata = { title: 'Cletus' };
+import { isDemo } from '@/lib/demo';
+
+export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Cletus App', description: 'Signals, paper trading, portfolio, tax, audit, community and wallets. Paper mode; live trading disabled.' };
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getSessionUser();
+  const demo = isDemo();
+  // The public preview has no database; never query it there.
+  const user = demo ? null : await getSessionUser().catch(() => null);
   return (
     <WalletProviders>
-      <div className="tw bg-black text-white min-h-screen pb-20 md:pb-0"><BottomNav />{user?.isAdmin && <div className="border-b border-[#D4AF37]/20 bg-[#D4AF37]/10 px-4 py-2 text-center text-xs"><Link href="/app/operations" className="font-semibold text-[#E5C76B] hover:underline">Operations Desk · Admin access</Link></div>}{children}</div>
+      <AppShell demo={demo} isAdmin={!!user?.isAdmin}>{children}</AppShell>
     </WalletProviders>
   );
 }

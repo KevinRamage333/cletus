@@ -13,7 +13,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import CollectivePnlTicker from '@/components/CollectivePnlTicker';
 
 type ChatMessage = {
   id: string;
@@ -220,7 +219,7 @@ export default function CommunityPage() {
             </p>
           </div>
 
-          <CollectivePnlTicker />
+          {/* Collective P&L moved to the Community stats above. */}
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Chat — 3 cols */}

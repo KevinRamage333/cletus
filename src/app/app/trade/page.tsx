@@ -345,7 +345,7 @@ export default function ActiveTradingPage() {
                   {session.mode === 'paper'
                     ? 'Paper trades are simulated and have no on-chain transactions. Every fill, fee and exit reason is in the engine log and in your trade-history CSV (Tax Center).'
                     : 'Live trades record their Solana transaction signatures; open them on Solscan to verify each swap.'}{' '}
-                  <a href="/tax" className="text-emerald-400 hover:underline">Export trades</a>
+                  <a href="/app/tax" className="text-emerald-400 hover:underline">Export trades</a>
                 </p>
               </div>
             </div>
