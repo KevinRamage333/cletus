@@ -11,6 +11,7 @@ function GuestOverview() {
         <p className="max-w-2xl text-zinc-300">Cletus is a Solana market-intelligence and paper-trading platform. You can review recorded results and the project whitepaper without an account.</p>
         <div className="flex flex-wrap gap-4">
           <Link href="/live" className="font-semibold text-amber-300">Recorded performance</Link>
+          <Link href="/live/paper" className="font-semibold text-amber-300">Paper trading report</Link>
           <Link href="/whitepaper" className="font-semibold text-amber-300">Whitepaper</Link>
           <Link href="/signup" className="font-semibold text-amber-300">Open an account</Link>
         </div>
