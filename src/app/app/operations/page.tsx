@@ -36,7 +36,7 @@ export default async function AdminOperationsPage() {
       </header>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{cards.map(card => <div key={card.label} className="rounded-xl border border-[#D4AF37]/20 bg-[#121212] p-4"><div className="text-xs text-white/50">{card.label}</div><div className="mt-2 text-xl font-semibold">{card.value}</div></div>)}</div>
       <section className="rounded-xl border border-white/10 bg-[#121212] p-4 space-y-2"><h2 className="font-semibold">Scanner heartbeat</h2><p className="text-sm text-white/60">Last recorded scan: {engine?.lastScanAt ? engine.lastScanAt.toISOString() : 'Unavailable'}</p><p className="text-xs text-white/40">These counters are database snapshots, not proof of a currently running worker or successful live trading.</p></section>
-      <nav className="flex flex-wrap gap-3 text-sm"><Link className="text-[#E5C76B] underline" href="/app/discover">Discovery</Link><Link className="text-[#E5C76B] underline" href="/app/community">Community</Link><Link className="text-[#E5C76B] underline" href="/app/config">Risk settings</Link></nav>
+      <nav className="flex flex-wrap gap-3 text-sm"><Link className="text-[#E5C76B] underline" href="/app/discover">Discovery</Link><Link className="text-[#E5C76B] underline" href="/app/community">Community</Link><Link className="text-[#E5C76B] underline" href="/app/config">Risk settings</Link><Link className="text-[#E5C76B] underline" href="/app/operations/strategy-analytics">Verified strategy analytics</Link></nav>
     </div>
   </main>;
 }
