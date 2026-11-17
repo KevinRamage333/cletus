@@ -3,7 +3,7 @@
  * the bot trade LESS: block entries, cap size, or pause the account.
  */
 export interface RiskParams {
-  dailyLossLimitUsd: number; // negative USD, e.g. -300
+  dailyLossLimitUsd: number; // negative USD, e.g. -300; 0 disables
   maxDailyLossPct: number; // % of start-of-day equity; 0 disables
   maxPositionPctOfEquity: number; // % of wallet/equity per position; 0 disables
   maxConsecutiveLosses: number; // auto-pause after N losses in a row; 0 disables
@@ -11,7 +11,7 @@ export interface RiskParams {
 export interface RiskState { dayPnlUsd: number; equityUsd: number; consecutiveLosses: number }
 
 export function hardRiskBlock(s: RiskState, p: RiskParams): string | null {
-  if (s.dayPnlUsd <= p.dailyLossLimitUsd) return `max daily loss hit ($${s.dayPnlUsd.toFixed(2)} <= $${p.dailyLossLimitUsd})`;
+  if (p.dailyLossLimitUsd < 0 && s.dayPnlUsd <= p.dailyLossLimitUsd) return `max daily loss hit ($${s.dayPnlUsd.toFixed(2)} <= $${p.dailyLossLimitUsd})`;
   if (p.maxDailyLossPct > 0) {
     const startEquity = s.equityUsd - s.dayPnlUsd;
     if (startEquity > 0 && s.dayPnlUsd < 0 && (-s.dayPnlUsd / startEquity) * 100 >= p.maxDailyLossPct) return `max daily loss ${p.maxDailyLossPct}% of equity hit`;

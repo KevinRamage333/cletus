@@ -34,12 +34,17 @@ vi.mock('@/lib/executor', () => ({
 }));
 vi.mock('@/lib/db', () => {
   const engineState = () => h.state;
-  return {
-    prisma: {
+  const db = {
       engineState: { upsert: vi.fn(async () => engineState()), update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => Object.assign(h.state, data)) },
       position: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) => h.positions.get(where.id) ?? null),
         update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => Object.assign(h.positions.get(where.id)!, data)),
+        updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+          const row = h.positions.get(String(where.id));
+          if (!row || !Object.entries(where).every(([key, value]) => row[key] === value)) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        }),
         findMany: h.findMany,
         aggregate: h.aggregate,
       },
@@ -49,8 +54,8 @@ vi.mock('@/lib/db', () => {
         update: vi.fn(async () => h.account),
       },
       signalWeight: { findMany: vi.fn(async () => []), upsert: vi.fn(), update: vi.fn() },
-    },
   };
+  return { prisma: { ...db, $transaction: async <T>(run: (tx: typeof db) => Promise<T>) => run(db) } };
 });
 
 import { closePosition, entryBlockReason, resolveLiveFillAmount, mem } from '@/lib/engine';
@@ -58,7 +63,7 @@ import { buildConfig, applyOwnerPlan } from '@/lib/config';
 
 const MINT = 'Mint1111111111111111111111111111111111111111';
 function livePosition(over: Record<string, unknown> = {}) {
-  return { id: 'p1', accountId: 'op', mint: MINT, symbol: 'RUG', status: 'open', simulated: false, entryPrice: 0.001, sizeUsd: 6, tokenAmount: 6000, feesUsd: 0.02, partialPnlUsd: 0, partialCostUsd: 0, signals: '{}', lastPrice: 0.001, highestPrice: 0.001, openedAt: new Date(), ...over };
+  return { id: 'p1', accountId: 'op', mint: MINT, symbol: 'RUG', status: 'open', simulated: false, entryPrice: 0.001, sizeUsd: 6, tokenAmount: 6000, feesUsd: 0.02, partialPnlUsd: 0, partialCostUsd: 0, partialsTaken: 0, signals: '{}', lastPrice: 0.001, highestPrice: 0.001, openedAt: new Date(), ...over };
 }
 
 beforeEach(() => {
@@ -110,26 +115,27 @@ describe('live-exit helpers', () => {
   });
 });
 
-describe('item 1: live sell can never lock the bot up', () => {
-  it('zero on-chain balance (confirmed twice) closes the position as external_zero', async () => {
+describe('live exit reconciliation', () => {
+  it('zero on-chain balance leaves the position open for reconciliation', async () => {
     h.positions.set('p1', livePosition());
     h.tokenBalanceRaw.mockResolvedValue({ raw: 0n, decimals: 6 });
     await closePosition('p1', 0.001, 'stop_loss');
     expect(h.tokenBalanceRaw).toHaveBeenCalledTimes(2);
     expect(h.executeSwap).not.toHaveBeenCalled();
-    expect(h.positions.get('p1')).toMatchObject({ status: 'closed', exitReason: 'external_zero', exitPrice: 0 });
+    expect(h.positions.get('p1')).toMatchObject({ status: 'open' });
   });
 
   it('a one-off zero read that recovers still sells normally', async () => {
     h.positions.set('p1', livePosition());
-    h.tokenBalanceRaw.mockResolvedValueOnce({ raw: 0n, decimals: 6 }).mockResolvedValue({ raw: 6_000_000_000n, decimals: 6 });
+    h.tokenBalanceRaw.mockResolvedValueOnce({ raw: 0n, decimals: 6 }).mockResolvedValue({ raw: 7_000_000_000n, decimals: 6 });
     h.executeSwap.mockResolvedValue({ signature: 'sig', inAmount: '6000000000', outAmount: String(0.03 * 1e9) });
     await closePosition('p1', 0.001, 'take_profit');
+    expect(h.executeSwap.mock.calls[0]?.[1]).toMatchObject({ amountRaw: 6_000_000_000n });
     expect(h.positions.get('p1')).toMatchObject({ status: 'closed', exitReason: 'take_profit', exitTx: 'sig' });
     expect(h.positions.get('p1')!.exitPrice).toBeCloseTo((0.03 * 160) / 6000, 8);
   });
 
-  it('stop-loss sells widen slippage on each retry; no-route failures write off and free the slot', async () => {
+  it('stop-loss retries back off and retain unfilled positions', async () => {
     h.positions.set('p1', livePosition());
     h.tokenBalanceRaw.mockResolvedValue({ raw: 6_000_000_000n, decimals: 6 });
     h.executeSwap.mockRejectedValue(new Error('jupiter /order: No route found'));
@@ -141,9 +147,9 @@ describe('item 1: live sell can never lock the bot up', () => {
       await closePosition('p1', 0.0009, 'stop_loss');
     }
     expect(slips).toEqual([500, 800, 1500, 3000]);
-    expect(h.positions.get('p1')).toMatchObject({ status: 'closed', exitReason: 'stuck_written_off' });
-    expect(h.logs.some((l) => l.level === 'warn' && l.msg.includes('STUCK'))).toBe(true);
-    expect(mem.sellFailures.has('p1')).toBe(false);
+    expect(h.positions.get('p1')).toMatchObject({ status: 'open' });
+    expect(h.logs.some((l) => l.level === 'warn' && l.msg.includes('remains open for reconciliation'))).toBe(true);
+    expect(mem.sellFailures.has('p1')).toBe(true);
     // Sell failures don't bump the global self-heal counter, so they can't pause scanning.
     expect(h.state.consecutiveFailures).toBe(0);
   });
