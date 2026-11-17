@@ -6,12 +6,13 @@ import {
 } from "../src/lib/agents/registry";
 import { analyzeAllocation } from "../src/lib/agents/signal-allocator";
 import { auditSubscriptions, auditTokenomics } from "../src/lib/agents/charlotte";
+import { assessOperations } from "../src/lib/agents/operations";
 import { triageForDefender } from "../src/lib/agents/defender";
 
 describe("Cletus agent council", () => {
-  it("registers the three bounded specialist agents", () => {
+  it("registers the bounded specialist agents", () => {
     expect(AGENT_DEFINITIONS.map((agent) => agent.id)).toEqual([
-      "signal-allocator", "charlotte", "defender",
+      "signal-allocator", "charlotte", "defender", "operations",
     ]);
   });
 
@@ -98,5 +99,35 @@ describe("Cletus agent council", () => {
     expect(result.decision.triggerEmergencyStop).toBe(true);
     expect(result.decision.allowAutonomousRepair).toBe(false);
     expect(result.ticket.ownerApprovalRequired).toBe(true);
+  });
+});
+
+describe("Operations Steward", () => {
+  const now = new Date("2026-11-16T00:05:00Z");
+  const latest = new Date(now.getTime() - 60_000);
+  const input = { now, demo: false, engineDisabled: false, cron: true, mode: "simulation" as const, databaseOk: true, heartbeatAt: latest, completedMonitorAt: latest, scanAt: latest };
+
+  it("distinguishes an available database from a missing worker heartbeat", () => {
+    const report = assessOperations({ ...input, heartbeatAt: null });
+    expect(report.database.status).toBe("healthy");
+    expect(report.worker.status).toBe("unavailable");
+  });
+
+  it("flags incomplete position checks even with a fresh heartbeat", () => {
+    const report = assessOperations({ ...input, completedMonitorAt: new Date(latest.getTime() - 30_000) });
+    expect(report.worker.status).toBe("degraded");
+    expect(report.scanner.status).toBe("healthy");
+  });
+
+  it("recognizes healthy checks and flags stale scans", () => {
+    expect(assessOperations(input).worker.status).toBe("healthy");
+    expect(assessOperations({ ...input, scanAt: new Date(now.getTime() - 360_000) }).scanner.status).toBe("degraded");
+  });
+
+  it("reports inactive demo services and keeps operations read-only", () => {
+    const report = assessOperations({ ...input, demo: true });
+    expect([report.database.status, report.worker.status, report.scanner.status]).toEqual(["inactive", "inactive", "inactive"]);
+    expect(agentCan("operations", "read:service-health")).toBe(true);
+    expect(agentCan("operations", "create:maintenance-ticket")).toBe(false);
   });
 });
