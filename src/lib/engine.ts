@@ -534,6 +534,13 @@ async function scanTickInner(gen: number): Promise<string> {
       for (const a of accounts) {
         stage(`enter ${cand.symbol}`);
         assertCurrent(mem.scanFence, gen, 'scan');
+        // Re-read the authoritative kill switch immediately before each entry.
+        // Audits and network calls above can take long enough for an operator to pause trading.
+        const entryState = await getEngineState();
+        if (entryState.killSwitch || isPaused({ ...entryState })) {
+          scanOutcomes.set(cand.mint, { decision: 'blocked', reason: 'engine kill switch or self-heal pause' });
+          return (mem.lastScanSummary = 'trading halted before entry: engine kill switch or self-heal pause');
+        }
         if (await tryEnter(a, cand, audit, c, gen, scanOutcomes)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
       }
     }
