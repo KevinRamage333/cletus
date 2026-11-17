@@ -50,7 +50,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
       - name: Verify the paper ledger and scheduled worker
-        run: npm test -- tests/paper-settlement.pg.test.ts tests/paper-worker.pg.test.ts
+        run: npm test -- tests/paper-settlement.pg.test.ts tests/paper-worker.pg.test.ts tests/paper-lifecycle.pg.test.ts
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
           PAPER_SETTLEMENT_PG_TEST: '1'
