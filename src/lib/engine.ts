@@ -406,13 +406,13 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
 export const scanDeadlineMs = () => envNum('SCAN_TICK_DEADLINE_MS', 150_000);
 export const monitorDeadlineMs = () => envNum('MONITOR_TICK_DEADLINE_MS', 45_000);
 
-export async function scanTick(): Promise<string> {
+export async function scanTick(deadlineMs = scanDeadlineMs()): Promise<string> {
   if (mem.scanning) return 'scan already running';
   mem.scanning = true;
   const gen = nextGen(mem.scanFence);
   const started = Date.now();
   try {
-    const out = await withDeadline(scanTickInner(gen), scanDeadlineMs(), 'scan tick');
+    const out = await withDeadline(scanTickInner(gen), deadlineMs, 'scan tick');
     mem.lastScanDoneAt = Date.now();
     return out;
   } catch (e) {
@@ -1151,13 +1151,13 @@ async function fastRecheck(mint: string, signature?: string) {
   } catch { /* polling is the backstop */ }
 }
 
-export async function monitorTick(): Promise<boolean> {
+export async function monitorTick(deadlineMs = monitorDeadlineMs()): Promise<boolean> {
   if (mem.monitoring) return false;
   mem.monitoring = true;
   const gen = nextGen(mem.monitorFence);
   const started = Date.now();
   try {
-    const completed = await withDeadline(monitorTickInner(gen), monitorDeadlineMs(), 'monitor tick');
+    const completed = await withDeadline(monitorTickInner(gen), deadlineMs, 'monitor tick');
     if (completed) mem.lastMonitorDoneAt = Date.now();
     return completed;
   } catch (e) {
