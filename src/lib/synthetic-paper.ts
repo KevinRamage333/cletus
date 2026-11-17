@@ -10,14 +10,20 @@ const ENTRY = 1;
 const EXIT = 1.1;
 const FEE = 0.1;
 
-/** Test-only switch. Live mode never enables it, even if the env flag is present. */
-export function syntheticPaperAllowed(env: NodeJS.ProcessEnv = process.env, mode: string = 'simulation'): boolean {
-  return env.CLETUS_SYNTHETIC_PAPER === '1' && mode !== 'live';
+type SyntheticEnv = { CLETUS_SYNTHETIC_PAPER?: string };
+
+function envFlag(env?: SyntheticEnv): SyntheticEnv {
+  return env ?? { CLETUS_SYNTHETIC_PAPER: process.env.CLETUS_SYNTHETIC_PAPER };
 }
 
-export function assertSyntheticPaper(env: NodeJS.ProcessEnv = process.env, mode = getConfig().mode): void {
+/** Test-only switch. Live mode never enables it, even if the env flag is present. */
+export function syntheticPaperAllowed(env?: SyntheticEnv, mode: string = 'simulation'): boolean {
+  return envFlag(env).CLETUS_SYNTHETIC_PAPER === '1' && mode !== 'live';
+}
+
+export function assertSyntheticPaper(env?: SyntheticEnv, mode = getConfig().mode): void {
   if (mode === 'live') throw new HttpError(403, 'Synthetic paper fills stay off while live trading is on.');
-  if (!syntheticPaperAllowed(env, mode)) throw new HttpError(404, 'Not found.');
+  if (!syntheticPaperAllowed(envFlag(env), mode)) throw new HttpError(404, 'Not found.');
 }
 
 /** Book a simulated fill locally. No quote, signature, or broadcast. */
