@@ -44,6 +44,11 @@ type TradeSession = {
   takeProfitPercent: number;
   maxPositions: number;
   withinHours: boolean;
+  engineLastScanAt: string | null;
+  engineScanCount: number;
+  engineLastError: string | null;
+  paperWorkerLastAt: string | null;
+  paperWorkerMessage: string | null;
 };
 
 const EMPTY: TradeSession = {
@@ -62,6 +67,11 @@ const EMPTY: TradeSession = {
   takeProfitPercent: 0,
   maxPositions: 0,
   withinHours: true,
+  engineLastScanAt: null,
+  engineScanCount: 0,
+  engineLastError: null,
+  paperWorkerLastAt: null,
+  paperWorkerMessage: null,
 };
 
 function formatUsd(n: number, showSign = false) {
@@ -112,6 +122,11 @@ export default function ActiveTradingPage() {
           takeProfitPercent: Number(data.takeProfitPercent) || 0,
           maxPositions: Number(data.maxPositions) || 0,
           withinHours: data.withinHours !== false,
+          engineLastScanAt: data.engineLastScanAt ? String(data.engineLastScanAt) : null,
+          engineScanCount: Number(data.engineScanCount) || 0,
+          engineLastError: data.engineLastError ? String(data.engineLastError) : null,
+          paperWorkerLastAt: data.paperWorkerLastAt ? String(data.paperWorkerLastAt) : null,
+          paperWorkerMessage: data.paperWorkerMessage ? String(data.paperWorkerMessage) : null,
         });
       }
     } catch {
@@ -143,6 +158,14 @@ export default function ActiveTradingPage() {
     [session.openPositions]
   );
   const totalSessionPnl = session.dailyRealizedPnl + unrealizedPnl;
+  const workerAgeSeconds = session.paperWorkerLastAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(session.paperWorkerLastAt).getTime()) / 1000))
+    : null;
+  const scanAgeSeconds = session.engineLastScanAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(session.engineLastScanAt).getTime()) / 1000))
+    : null;
+  const workerFresh = workerAgeSeconds !== null && workerAgeSeconds <= 120;
+  const scanFresh = scanAgeSeconds !== null && scanAgeSeconds <= 180;
 
   const profitPct =
     session.dailyProfitTarget > 0
@@ -314,6 +337,33 @@ export default function ActiveTradingPage() {
               </div>
             </div>
           </section>
+
+          {/* Persisted worker health — separate from the user's enabled/paused preference. */}
+          {session.mode === 'paper' && (
+            <section className="rounded-2xl border border-white/10 bg-[#121212] p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">Paper engine health</h2>
+                <span className={`text-[10px] px-2 py-1 rounded-full ${workerFresh && scanFresh ? 'bg-emerald-500/15 text-emerald-400' : 'bg-yellow-500/15 text-yellow-300'}`}>
+                  {workerFresh && scanFresh ? 'UPDATING' : 'STALE / NOT VERIFIED'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-black/40 p-3">
+                  <div className="text-[10px] text-white/40 uppercase">Worker heartbeat</div>
+                  <div className="text-sm font-mono mt-1">{workerAgeSeconds === null ? 'Never received' : workerAgeSeconds < 60 ? `${workerAgeSeconds}s ago` : `${Math.floor(workerAgeSeconds / 60)}m ago`}</div>
+                </div>
+                <div className="rounded-xl bg-black/40 p-3">
+                  <div className="text-[10px] text-white/40 uppercase">Last successful scan</div>
+                  <div className="text-sm font-mono mt-1">{scanAgeSeconds === null ? 'Never scanned' : scanAgeSeconds < 60 ? `${scanAgeSeconds}s ago` : `${Math.floor(scanAgeSeconds / 60)}m ago`}</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-white/40">
+                {session.engineScanCount.toLocaleString()} successful market scans recorded. Dashboard refreshes every 8 seconds; the Vercel paper worker is scheduled once per minute.
+              </div>
+              {session.engineLastError && <div className="text-[11px] text-yellow-300/80">Last engine error: {session.engineLastError}</div>}
+              {session.paperWorkerMessage && <div className="text-[10px] text-white/25 font-mono break-all">{session.paperWorkerMessage}</div>}
+            </section>
+          )}
 
           {/* Daily PnL limits — matches screenshot */}
           <section className="rounded-2xl border border-white/10 bg-[#121212] p-4 space-y-4">
