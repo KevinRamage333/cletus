@@ -18,22 +18,26 @@ export async function GET() {
   try {
     const { a, c } = await appContext();
     const paperTrades = { accountId: a.id, status: 'closed', simulated: true };
-    const [equity, allClosed, newestClosed, daily] = await Promise.all([
+    const [equity, [allClosed, newestClosed, daily]] = await Promise.all([
       accountEquity(a),
-      prisma.position.aggregate({ where: paperTrades, _sum: { pnlUsd: true }, _count: { _all: true } }),
-      prisma.position.findMany({
-        where: paperTrades,
-        orderBy: [{ closedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
-        take: 5000,
-        select: { id: true, symbol: true, mint: true, network: true, sizeUsd: true, entryPrice: true, exitPrice: true, feesUsd: true, pnlUsd: true, pnlPct: true, openedAt: true, closedAt: true, exitReason: true, simulated: true, signals: true },
-      }),
-      prisma.position.aggregate({
-        where: { ...paperTrades, closedAt: { gte: new Date(Date.now() - 86_400_000) } },
-        _sum: { pnlUsd: true, feesUsd: true }, _count: { _all: true },
-      }),
+      prisma.$transaction([
+        prisma.position.aggregate({ where: paperTrades, _sum: { pnlUsd: true }, _count: { _all: true } }),
+        prisma.position.findMany({
+          where: paperTrades,
+          orderBy: [{ closedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
+          take: 5000,
+          select: { id: true, symbol: true, mint: true, network: true, sizeUsd: true, entryPrice: true, exitPrice: true, feesUsd: true, pnlUsd: true, pnlPct: true, openedAt: true, closedAt: true, exitReason: true, simulated: true, signals: true },
+        }),
+        prisma.position.aggregate({
+          where: { ...paperTrades, closedAt: { gte: new Date(Date.now() - 86_400_000) } },
+          _sum: { pnlUsd: true, feesUsd: true }, _count: { _all: true },
+        }),
+      ], { isolationLevel: 'Serializable' }),
     ]);
 
-    const closed = [...newestClosed].reverse();
+    const closed = [...newestClosed].reverse().sort((a, b) =>
+      (a.closedAt ?? a.openedAt).getTime() - (b.closedAt ?? b.openedAt).getTime(),
+    );
     const closedCount = allClosed._count._all;
     const truncated = closedCount > closed.length;
     const analyzedPnl = closed.reduce((sum, trade) => sum + (trade.pnlUsd ?? 0), 0);
