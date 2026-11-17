@@ -10,6 +10,7 @@ export const NAV = [
   { href: '/app/ai', label: 'Cletus AI', icon: '🪿' },
   { href: '/app/world', label: 'The Grove', icon: '🌳' },
   { href: '/app/trade', label: 'Simulate', icon: '▶️' },
+  { href: '/app/base', label: 'Base Desk', icon: '🔵' },
   { href: '/app/config', label: 'Config', icon: '⚙️' },
   { href: '/app/community', label: 'Community', icon: '💬' },
   { href: '/app/dev-wallet', label: 'Dev Wallet', icon: '🔎' },
