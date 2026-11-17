@@ -24,15 +24,15 @@ test.describe('live charts (public preview)', () => {
     await expect(page.getByRole('heading', { name: /Trades as they close/ })).toBeVisible();
     await expect(page.getByTestId('public-live')).toBeVisible();
     const chart = page.getByTestId('live-chart');
-    const state = await expectChart(chart);
+    await expectChart(chart);
     const picks = page.getByTestId('feed-chart-pick');
     if (await picks.count() > 1) {
-      const second = picks.nth(1);
-      const label = (await second.innerText()).replace(/^◆\s*/, '').split(/\s/)[0];
-      await second.click();
-      await expect(second).toHaveAttribute('aria-selected', 'true');
-      await expectChart(page.getByTestId('live-chart'));
-      if (state === 'live') await expect(page.getByTestId('live-chart-symbol')).toContainText(label, { timeout: 30_000 });
+      await picks.nth(1).click();
+      const chosen = page.locator('[data-testid=feed-chart-pick][aria-selected=true]');
+      await expect(chosen).toHaveCount(1);
+      const label = (await chosen.innerText()).replace(/^◆\s*/, '').split(/\s/)[0];
+      const after = await expectChart(page.getByTestId('live-chart'));
+      if (after === 'live') await expect(page.getByTestId('live-chart-symbol')).toContainText(label, { timeout: 30_000 });
       await page.getByRole('tab', { name: '4H' }).click();
       await expect(page.getByRole('tab', { name: '4H' })).toHaveAttribute('aria-selected', 'true');
     }

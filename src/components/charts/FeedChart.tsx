@@ -10,7 +10,7 @@ type Pick = { key: string; label: string; address?: string; symbol?: string; poo
 export default function FeedChart() {
   const { data: board, state } = useMovers(20_000);
   const [feedSyms, setFeedSyms] = useState<string[]>([]);
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<Pick | null>(null);
 
   useEffect(() => {
     let on = true;
@@ -34,8 +34,10 @@ export default function FeedChart() {
     return [...fromFeed, ...movers];
   }, [board, feedSyms]);
 
-  useEffect(() => { if (!sel && picks.length) setSel(picks[0].key); }, [picks, sel]);
-  const cur = picks.find((p) => p.key === sel) ?? null;
+  useEffect(() => { if (!sel && picks.length) setSel(picks[0]); }, [picks, sel]);
+  // Keep the chosen token even if it drops off the refreshed movers list.
+  const cur = sel;
+  const shown = sel && !picks.some((p) => p.key === sel.key) ? [sel, ...picks] : picks;
 
   return (
     <section className="space-y-3" data-testid="feed-chart">
@@ -44,9 +46,9 @@ export default function FeedChart() {
         <p className="text-[11px] text-[#8a8478]">◆ from the trade feed · others from the live Solana movers board</p>
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="listbox" aria-label="Token to chart" data-testid="feed-chart-picks">
-        {picks.map((p) => (
-          <button key={p.key} type="button" role="option" aria-selected={sel === p.key} onClick={() => setSel(p.key)} data-testid="feed-chart-pick"
-            className={`num shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${sel === p.key ? 'border-[#d4af37] bg-[#d4af37]/12 text-[#f3dc95]' : 'border-[rgba(212,175,55,.2)] text-[#a39c8f] hover:text-[#f2ede2]'}`}>
+        {shown.map((p) => (
+          <button key={p.key} type="button" role="option" aria-selected={sel?.key === p.key} onClick={() => setSel(p)} data-testid="feed-chart-pick"
+            className={`num shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${sel?.key === p.key ? 'border-[#d4af37] bg-[#d4af37]/12 text-[#f3dc95]' : 'border-[rgba(212,175,55,.2)] text-[#a39c8f] hover:text-[#f2ede2]'}`}>
             {p.source === 'feed' ? '◆ ' : ''}{p.label}
             {p.change != null && <span className={`ml-1.5 ${p.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(p.change)}</span>}
           </button>
