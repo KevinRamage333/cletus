@@ -40,6 +40,9 @@ model User {
   taxAckAt        DateTime?    // tax-responsibility acknowledgment (no tax IDs are collected)
   communityMessages CommunityMessage[]
   verificationRequests DeveloperVerification[]
+  communityOptIn    CommunityOptIn?
+  communityPosts    CommunityPost[]
+  communityReports  CommunityReport[]
   @@schema("app")
 }
 
@@ -273,6 +276,68 @@ model CommunityMessage {
   hiddenBy  String?
   createdAt DateTime @default(now())
   @@index([createdAt])
+  @@schema("app")
+}
+
+/// Explicit community membership. Posting locks this row so an opt-out cannot race a new post.
+model CommunityOptIn {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  optedIn   Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  @@schema("app")
+}
+
+/// Moderated community post. New rows stay PENDING until a moderator decision.
+model CommunityPost {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId         String?
+  parent           CommunityPost?  @relation("CommunityThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies          CommunityPost[] @relation("CommunityThread")
+  body             String
+  status           String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  moderationReason String?
+  moderatedAt      DateTime?
+  moderatedBy      String?
+  flagged          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  events           CommunityModerationEvent[]
+  reports          CommunityReport[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([parentId, createdAt])
+  @@schema("app")
+}
+
+/// Append-only moderation decisions. A post's status change and its event are written together.
+model CommunityModerationEvent {
+  id               String        @id @default(cuid())
+  postId           String
+  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  moderatorUserId  String
+  action           String // APPROVED | REJECTED
+  reason           String?
+  createdAt        DateTime      @default(now())
+
+  @@index([postId, createdAt])
+  @@schema("app")
+}
+
+model CommunityReport {
+  id             String        @id @default(cuid())
+  postId         String
+  post           CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reporterUserId String
+  reporter       User          @relation(fields: [reporterUserId], references: [id], onDelete: Cascade)
+  reason         String
+  createdAt      DateTime      @default(now())
+
+  @@unique([postId, reporterUserId])
+  @@index([postId])
   @@schema("app")
 }
 
