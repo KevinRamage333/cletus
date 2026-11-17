@@ -15,18 +15,40 @@ export const SYMBOL_QUERY = /^[A-Za-z0-9$._-]{1,20}$/;
 
 export interface PnlPoint { time: number; value: number }
 
-/** Closed trades -> cumulative realized P&L, one point per bucket (default one day, UTC). */
-export function cumulativePnlSeries(rows: Array<{ closedAt: Date | string | null | undefined; pnlUsd: number | null | undefined }>, bucketSec = 86_400): PnlPoint[] {
-  const byBucket = new Map<number, number>();
+/** Distinct accounts a community chart point must aggregate before it is shown (privacy floor). */
+export const MIN_ACCOUNTS_PER_POINT = 5;
+
+/**
+ * Closed trades -> cumulative realized P&L, one point per bucket (default one day, UTC).
+ * With `minAccounts`, a bucket is only emitted once it (plus any held-back earlier buckets) covers at least that many
+ * distinct accounts; quieter buckets roll forward into the next point, so one member's P&L is never a point of its own.
+ * Rows without an accountId count as unknown and never satisfy the floor on their own.
+ */
+export function cumulativePnlSeries(rows: Array<{ closedAt: Date | string | null | undefined; pnlUsd: number | null | undefined; accountId?: string | null }>, bucketSec = 86_400, minAccounts = 0): PnlPoint[] {
+  const byBucket = new Map<number, { sum: number; accounts: Set<string> }>();
   for (const r of rows) {
     if (!r.closedAt || r.pnlUsd == null || !Number.isFinite(r.pnlUsd)) continue;
     const t = Math.floor(new Date(r.closedAt).getTime() / 1000);
     if (!Number.isFinite(t)) continue;
     const b = Math.floor(t / bucketSec) * bucketSec;
-    byBucket.set(b, (byBucket.get(b) ?? 0) + r.pnlUsd);
+    const cur = byBucket.get(b) ?? { sum: 0, accounts: new Set<string>() };
+    cur.sum += r.pnlUsd;
+    if (r.accountId) cur.accounts.add(r.accountId);
+    byBucket.set(b, cur);
   }
   let run = 0;
-  return [...byBucket.entries()].sort((a, b) => a[0] - b[0]).map(([time, v]) => { run += v; return { time, value: Math.round(run * 100) / 100 }; });
+  let pendingSum = 0;
+  let pending = new Set<string>();
+  const out: PnlPoint[] = [];
+  for (const [time, v] of [...byBucket.entries()].sort((a, b) => a[0] - b[0])) {
+    pendingSum += v.sum;
+    for (const a of v.accounts) pending.add(a);
+    if (minAccounts > 0 && pending.size < minAccounts) continue;
+    run += pendingSum;
+    out.push({ time, value: Math.round(run * 100) / 100 });
+    pendingSum = 0; pending = new Set<string>();
+  }
+  return out;
 }
 
 /** Most-traded token by number of positions (ties: most recent symbol order kept stable by mint). */

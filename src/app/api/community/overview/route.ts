@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
 import { collectivePnl, tokensPerNetwork } from '@/lib/community-overview';
-import { cumulativePnlSeries, mostTradedToken } from '@/lib/live-chart';
+import { MIN_ACCOUNTS_PER_POINT, cumulativePnlSeries, mostTradedToken } from '@/lib/live-chart';
 export const dynamic = 'force-dynamic';
+
+function communityMostTraded(rows: Array<{ network: string | null; mint: string; symbol: string | null; accountId: string }>) {
+  const best = mostTradedToken(rows);
+  if (!best) return null;
+  const members = new Set(rows.filter((r) => r.mint === best.mint).map((r) => r.accountId)).size;
+  return members >= MIN_ACCOUNTS_PER_POINT ? best : null;
+}
 
 /** Aggregate community figures from recorded paper trades: participants, collective realized P&L, distinct tokens per network. */
 export async function GET() {
@@ -15,7 +22,7 @@ export async function GET() {
       prisma.position.findMany({ where: { ...paper, status: 'open' }, distinct: ['accountId'], select: { accountId: true } }),
       prisma.position.findMany({ where: { ...paper, status: 'closed' }, select: { pnlUsd: true, accountId: true, closedAt: true } }),
       prisma.position.findMany({ where: paper, distinct: ['network', 'mint'], select: { network: true, mint: true } }),
-      prisma.position.findMany({ where: paper, select: { network: true, mint: true, symbol: true }, orderBy: { openedAt: 'desc' }, take: 5000 }),
+      prisma.position.findMany({ where: paper, select: { network: true, mint: true, symbol: true, accountId: true }, orderBy: { openedAt: 'desc' }, take: 5000 }),
     ]);
     const contributors = new Set(closed.map((c) => c.accountId)).size;
     const pnl = collectivePnl(closed.map((c) => c.pnlUsd), contributors);
@@ -24,8 +31,10 @@ export async function GET() {
       participants: participants.length, activeNow: active.length,
       collectivePnl: pnl,
       // Same privacy floor as the total: no curve until enough members contribute.
-      pnlSeries: pnl.suppressed ? [] : cumulativePnlSeries(closed),
-      mostTraded: mostTradedToken(recent),
+      // Each daily point must cover >= MIN_ACCOUNTS_PER_POINT distinct members (quiet days roll forward).
+      pnlSeries: pnl.suppressed ? [] : cumulativePnlSeries(closed, 86_400, MIN_ACCOUNTS_PER_POINT),
+      // Hidden with the totals, and only shown when enough distinct members traded it.
+      mostTraded: pnl.suppressed ? null : communityMostTraded(recent),
       tokensPerNetwork: tokensPerNetwork(tokenRows),
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) { return errorResponse(e); }

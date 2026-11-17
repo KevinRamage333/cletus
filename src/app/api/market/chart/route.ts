@@ -36,6 +36,6 @@ export async function GET(req: Request) {
       sources: ['DexScreener', 'GeckoTerminal'],
     }, { headers: { 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30' } });
   } catch (e) {
-    return NextResponse.json({ error: 'market_data_unavailable', message: e instanceof Error ? e.message : 'unavailable' }, { status: 502 });
+    return NextResponse.json({ error: 'market_data_unavailable', message: 'Market data is temporarily unavailable. Try again shortly.' }, { status: 502 });
   }
 }

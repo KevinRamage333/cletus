@@ -1,5 +1,5 @@
 /** Server-side Token Boost helpers (display only — never imported by the engine). */
-import { gatherTokenFacts } from './token-security-server';
+import { cachedTokenFacts } from './listing-recheck';
 import { boostSafety } from './token-boost';
 import { networkMeta, normalizeAddress, type ListingNetwork } from './verified';
 
@@ -12,6 +12,6 @@ export function parseBoostTarget(body: Record<string, unknown>): { network: List
 }
 
 export async function boostSafetyFor(network: ListingNetwork, token: string) {
-  const facts = await gatherTokenFacts(network, token);
+  const facts = await cachedTokenFacts(network, token);
   return { ...boostSafety(facts), name: facts.name, symbol: facts.symbol, liquidityUsd: facts.liquidityUsd, errors: facts.errors, sources: facts.sources };
 }

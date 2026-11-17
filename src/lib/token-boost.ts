@@ -49,7 +49,7 @@ export function isBoostActive(b: Pick<BoostRecord, 'status' | 'startsAt' | 'expi
   return b.status === 'active' && new Date(b.startsAt).getTime() <= now && new Date(b.expiresAt).getTime() > now;
 }
 
-export interface BoostSummary { network: ListingNetwork; token: string; expiresAt: string; tier: BoostTierId }
+export interface BoostSummary { network: ListingNetwork; token: string; expiresAt: string; tier: BoostTierId; checkedAt?: string | null }
 /** One entry per boosted token (latest expiry wins), soonest-started first. Expired / future / cancelled are dropped. */
 export function activeBoostSummaries(all: BoostRecord[], now = Date.now()): BoostSummary[] {
   const by = new Map<string, BoostRecord[]>();
@@ -71,7 +71,7 @@ export function activeBoostSummaries(all: BoostRecord[], now = Date.now()): Boos
   return out.sort((a, b) => a.startedAt - b.startedAt).map(({ startedAt: _s, ...rest }) => rest);
 }
 
-export interface SafetyInput { mintAuthority?: string | null; freezeAuthority?: string | null; ownerCanMint?: boolean | null; liquidityUsd: number | null; honeypot: boolean | null; sellTaxPct: number | null; network: ListingNetwork }
+export interface SafetyInput { mintAuthority?: string | null; freezeAuthority?: string | null; ownerCanMint?: boolean | null; liquidityUsd: number | null; honeypot: boolean | null; sellTaxPct: number | null; buyTaxPct?: number | null; network: ListingNetwork }
 /** Basic safety gate for boosting. Unknown required facts fail closed. */
 export function boostSafety(f: SafetyInput): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
@@ -86,7 +86,11 @@ export function boostSafety(f: SafetyInput): { ok: boolean; reasons: string[] } 
   if (f.liquidityUsd == null) reasons.push('No DEX pool found.');
   else if (f.liquidityUsd < 10_000) reasons.push('Liquidity is under $10,000.');
   if (f.honeypot === true) reasons.push('Flagged as a honeypot.');
-  if ((f.sellTaxPct ?? 0) > 10) reasons.push('Sell tax is over 10%.');
+  else if (f.network !== 'solana' && f.honeypot == null) reasons.push('Honeypot check could not be read.');
+  if (f.sellTaxPct == null) { if (f.network !== 'solana') reasons.push('Sell tax could not be read.'); }
+  else if (f.sellTaxPct > 10) reasons.push('Sell tax is over 10%.');
+  if (f.buyTaxPct == null) { if (f.network !== 'solana') reasons.push('Buy tax could not be read.'); }
+  else if (f.buyTaxPct > 10) reasons.push('Buy tax is over 10%.');
   return { ok: reasons.length === 0, reasons };
 }
 

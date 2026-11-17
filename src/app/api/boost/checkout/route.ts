@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { boostSafetyFor, parseBoostTarget } from '@/lib/boost-server';
 import { listBoosts } from '@/lib/listing-store';
 import { boostPaymentsEnabled, boostWindow, tierById } from '@/lib/token-boost';
+import { takeToken, clientIp } from '@/lib/request-limit';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
@@ -11,6 +12,7 @@ export const maxDuration = 30;
  * and no boost is created here. Owner-granted boosts go through /api/owner/boost.
  */
 export async function POST(req: Request) {
+  if (!takeToken(`bco:ip:${clientIp(req)}`, 20, 10 * 60_000)) return NextResponse.json({ error: 'Too many requests. Try again in a few minutes.' }, { status: 429 });
   const body = await req.json().catch(() => ({}));
   const t = parseBoostTarget(body);
   if ('error' in t) return NextResponse.json({ error: t.error }, { status: 400 });

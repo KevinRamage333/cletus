@@ -56,7 +56,14 @@ describe('boost safety and placement', () => {
     expect(boostSafety({ ...ok, honeypot: true }).ok).toBe(false);
     expect(boostSafety({ ...ok, sellTaxPct: 25 }).ok).toBe(false);
     expect(boostSafety({ network: 'base', ownerCanMint: null, liquidityUsd: 1e6, honeypot: false, sellTaxPct: 0 }).ok).toBe(false);
-    expect(boostSafety({ network: 'base', ownerCanMint: false, liquidityUsd: 1e6, honeypot: false, sellTaxPct: 0 }).ok).toBe(true);
+    expect(boostSafety({ network: 'base', ownerCanMint: false, liquidityUsd: 1e6, honeypot: false, sellTaxPct: 0, buyTaxPct: 0 }).ok).toBe(true);
+  });
+  it('EVM fails closed on unknown honeypot, sell tax or buy tax, and on buy tax over 10% (Audit H2)', () => {
+    const evm = { network: 'base' as const, ownerCanMint: false, liquidityUsd: 1e6, honeypot: false, sellTaxPct: 0, buyTaxPct: 0 };
+    expect(boostSafety({ ...evm, honeypot: null }).ok).toBe(false);
+    expect(boostSafety({ ...evm, sellTaxPct: null }).ok).toBe(false);
+    expect(boostSafety({ ...evm, buyTaxPct: null }).ok).toBe(false);
+    expect(boostSafety({ ...evm, buyTaxPct: 12 }).reasons).toContain('Buy tax is over 10%.');
   });
   it('boosted cards move to their own row in boost order; the rest keep their order', () => {
     const cards = [{ mint: 'A' }, { mint: 'B' }, { mint: 'C' }];
@@ -74,8 +81,8 @@ describe('boost safety and placement', () => {
 /** Boosts must never influence buy decisions: nothing the engine or workers import may reach the boost/listing modules. */
 describe('boosts cannot affect the trading engine', () => {
   const root = path.resolve(__dirname, '..');
-  const FORBIDDEN = ['src/lib/token-boost.ts', 'src/lib/listing-store.ts', 'src/lib/boost-server.ts', 'src/components/listings/Listings.tsx', 'src/app/api/listings/route.ts'];
-  const ENTRY = ['src/lib/engine.ts', 'src/lib/executor.ts', 'src/lib/scorecard.ts', 'src/lib/risk.ts', 'src/lib/dexscreener.ts', 'src/lib/live-guard.ts', 'src/lib/live-sizing.ts', 'src/lib/trade-actions.ts', 'src/app/api/engine/scan/route.ts', 'scripts/live-worker.ts'];
+  const FORBIDDEN = ['src/lib/token-boost.ts', 'src/lib/listing-store.ts', 'src/lib/boost-server.ts', 'src/lib/verified.ts', 'src/lib/verified-server.ts', 'src/lib/token-security-server.ts', 'src/lib/listing-recheck.ts', 'src/components/listings/Listings.tsx', 'src/app/api/listings/route.ts'];
+  const ENTRY = ['src/lib/engine.ts', 'src/lib/executor.ts', 'src/lib/scorecard.ts', 'src/lib/risk.ts', 'src/lib/dexscreener.ts', 'src/lib/live-guard.ts', 'src/lib/live-sizing.ts', 'src/lib/trade-actions.ts', 'src/app/api/engine/scan/route.ts', 'scripts/live-worker.ts', 'scripts/sim-worker.ts', 'scripts/evm-paper-worker.ts', 'src/lib/sim-quote.ts', 'src/lib/exits.ts'];
   const resolve = (from: string, spec: string): string | null => {
     let base: string;
     if (spec.startsWith('@/')) base = path.join(root, 'src', spec.slice(2));

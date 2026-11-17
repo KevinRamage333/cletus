@@ -39,3 +39,14 @@ export async function consumeNonce(
   });
   return consumed.count === 1;
 }
+
+const memNonces = new Map<string, number>();
+/** Per-instance fallback when no database is configured (demo / file-backed listings). Same single-use semantics. */
+export function consumeNonceInMemory(purpose: string, nonce: string, exp: number, now = Date.now()): boolean {
+  if (!nonce) return false;
+  for (const [k, e] of memNonces) if (e < now) memNonces.delete(k);
+  const id = createHash('sha256').update(`${purpose}:${nonce}`).digest('hex');
+  if (memNonces.has(id)) return false;
+  memNonces.set(id, exp);
+  return true;
+}

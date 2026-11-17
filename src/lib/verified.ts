@@ -92,15 +92,17 @@ export function evaluateVerificationChecks(f: TokenSecurityFacts): VerifyCheck[]
   }
   if (f.liquidityUsd == null) c.push({ id: 'liquidity', label: 'Liquidity', state: 'unknown', detail: 'No DEX pool found.', required: true });
   else c.push({ id: 'liquidity', label: 'Liquidity', state: f.liquidityUsd < 10_000 ? 'fail' : f.liquidityUsd < 50_000 ? 'warn' : 'pass', detail: `$${Math.round(f.liquidityUsd).toLocaleString('en-US')} in the deepest pool.`, required: true });
-  // LP lock/burn and honeypot data come from third-party scanners and are not always available: optional, but a bad reading fails.
-  if (f.lpLockedOrBurnedPct == null) c.push({ id: 'lp', label: 'LP locked or burned', state: 'unknown', detail: 'LP lock data not available for this pool.', required: false });
-  else c.push({ id: 'lp', label: 'LP locked or burned', state: f.lpLockedOrBurnedPct >= 90 ? 'pass' : f.lpLockedOrBurnedPct >= 50 ? 'warn' : 'fail', detail: `${f.lpLockedOrBurnedPct.toFixed(0)}% of LP locked or burned.`, required: f.lpLockedOrBurnedPct < 50 });
-  if (f.honeypot == null && f.sellTaxPct == null) c.push({ id: 'honeypot', label: 'Honeypot / sell tax', state: 'unknown', detail: 'No honeypot simulation available.', required: false });
-  else {
-    const bad = f.honeypot === true || (f.sellTaxPct ?? 0) > 10 || (f.buyTaxPct ?? 0) > 10;
-    const taxes = `buy tax ${f.buyTaxPct == null ? '?' : f.buyTaxPct.toFixed(1)}%, sell tax ${f.sellTaxPct == null ? '?' : f.sellTaxPct.toFixed(1)}%`;
-    c.push({ id: 'honeypot', label: 'Honeypot / sell tax', state: bad ? 'fail' : 'pass', detail: f.honeypot ? `Flagged as a honeypot (${taxes}).` : taxes, required: bad });
-  }
+  // LP lock/burn and honeypot data come from third-party scanners. On EVM a missing reading fails closed (Audit H2);
+  // on Solana (no honeypot contracts, LP data often absent) unknown is shown but not required. A bad reading always fails.
+  const evm = f.network !== 'solana';
+  if (f.lpLockedOrBurnedPct == null) c.push({ id: 'lp', label: 'LP locked or burned', state: 'unknown', detail: 'LP lock data not available for this pool.', required: evm });
+  else c.push({ id: 'lp', label: 'LP locked or burned', state: f.lpLockedOrBurnedPct >= 90 ? 'pass' : f.lpLockedOrBurnedPct >= 50 ? 'warn' : 'fail', detail: `${f.lpLockedOrBurnedPct.toFixed(0)}% of LP locked or burned.`, required: evm || f.lpLockedOrBurnedPct < 50 });
+  const taxes = `buy tax ${f.buyTaxPct == null ? '?' : f.buyTaxPct.toFixed(1)}%, sell tax ${f.sellTaxPct == null ? '?' : f.sellTaxPct.toFixed(1)}%`;
+  const bad = f.honeypot === true || (f.sellTaxPct ?? 0) > 10 || (f.buyTaxPct ?? 0) > 10;
+  const unknown = f.honeypot == null || (evm && (f.sellTaxPct == null || f.buyTaxPct == null));
+  if (bad) c.push({ id: 'honeypot', label: 'Honeypot / tax', state: 'fail', detail: f.honeypot ? `Flagged as a honeypot (${taxes}).` : `Tax over 10% (${taxes}).`, required: true });
+  else if (unknown) c.push({ id: 'honeypot', label: 'Honeypot / tax', state: 'unknown', detail: `No complete honeypot simulation available (${taxes}).`, required: evm });
+  else c.push({ id: 'honeypot', label: 'Honeypot / tax', state: 'pass', detail: taxes, required: evm });
   return c;
 }
 
@@ -126,6 +128,37 @@ export function badgeExpiry(issuedAt: Date, ttlDays = VERIFIED_TTL_DAYS): Date {
 export function isBadgeActive(r: { status: string; expiresAt: string | Date | null }, now = Date.now()): boolean {
   if (r.status !== 'verified' || !r.expiresAt) return false;
   return new Date(r.expiresAt).getTime() > now;
+}
+
+/** Badges and boosts are re-checked against live facts at most this often (Audit H3). */
+export const RECHECK_TTL_MS = 60 * 60_000;
+
+/**
+ * Re-check of an issued badge (or boosted token) against fresh facts. The badge drops when liquidity falls under
+ * $10k, a honeypot/tax flag appears, or (Solana) a mint/freeze authority is re-enabled / (EVM) owner minting appears.
+ * Unreadable facts keep the previous state only until the recheck TTL; the caller decides that.
+ */
+export function recheckDrops(f: Pick<TokenSecurityFacts, 'network' | 'liquidityUsd' | 'honeypot' | 'sellTaxPct' | 'buyTaxPct' | 'mintAuthority' | 'freezeAuthority' | 'ownerCanMint'>): string[] {
+  const out: string[] = [];
+  if (f.liquidityUsd != null && f.liquidityUsd < 10_000) out.push('Liquidity fell under $10,000.');
+  if (f.honeypot === true) out.push('Now flagged as a honeypot.');
+  if ((f.sellTaxPct ?? 0) > 10 || (f.buyTaxPct ?? 0) > 10) out.push('Tax rose over 10%.');
+  if (f.network === 'solana') {
+    if (f.mintAuthority) out.push('Mint authority was re-enabled.');
+    if (f.freezeAuthority) out.push('Freeze authority was re-enabled.');
+  } else if (f.ownerCanMint) out.push('Owner can now mint or change balances.');
+  return out;
+}
+
+/** Latest record wins: a newer failed/revoked audit hides an older verified badge. */
+export function latestRecordByToken<T extends { network: string; token: string; createdAt: string | Date }>(rows: T[]): T[] {
+  const m = new Map<string, T>();
+  for (const r of rows) {
+    const k = `${r.network}:${r.network === 'solana' ? r.token : r.token.toLowerCase()}`;
+    const cur = m.get(k);
+    if (!cur || new Date(r.createdAt).getTime() > new Date(cur.createdAt).getTime()) m.set(k, r);
+  }
+  return [...m.values()];
 }
 
 /** The exact text the developer signs. Bound to network, token, wallet, nonce and expiry. Never a transaction. */

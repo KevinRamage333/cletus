@@ -1,7 +1,7 @@
 /** Server helpers for Cletus Verified challenges and signature checks. */
 import { verifyMessage } from 'viem';
 import { getSessionSecret } from './session';
-import { randomNonce, signChallenge, verifyChallengeToken, verifySiwsSignature } from './siws';
+import { allowedSiwsHost, randomNonce, signChallenge, verifyChallengeToken, verifySiwsSignature } from './siws';
 import { networkMeta, normalizeAddress, verificationMessage, type ListingNetwork } from './verified';
 
 export const CHALLENGE_TTL_SEC = 10 * 60;
@@ -26,11 +26,12 @@ export async function issueVerificationChallenge(t: { network: ListingNetwork; t
 }
 
 /** Validates the HMAC challenge, that the message is exactly the one issued, and the wallet signature over it. */
-export async function checkVerificationProof(body: Record<string, unknown>, now = Date.now()): Promise<{ network: ListingNetwork; token: string; wallet: string; signatureValid: boolean } | { error: string }> {
+export async function checkVerificationProof(body: Record<string, unknown>, now = Date.now()): Promise<{ network: ListingNetwork; token: string; wallet: string; signatureValid: boolean; nonce: string; expMs: number } | { error: string }> {
   const t = parseTarget(body);
   if ('error' in t) return t;
   const claims = await verifyChallengeToken(String(body.challenge ?? ''), getSessionSecret(), now);
   if (!claims || claims.uid !== uidFor(t.network, t.token) || claims.address !== t.wallet) return { error: 'Challenge expired or does not match. Start again.' };
+  if (claims.uri !== '/app/verified' || !allowedSiwsHost(claims.domain)) return { error: 'Challenge was not issued for Cletus Verified on this site. Start again.' };
   const expected = verificationMessage({ ...t, nonce: claims.nonce, domain: claims.domain, issuedAt: new Date(claims.iat * 1000).toISOString(), expiresAt: new Date(claims.exp * 1000).toISOString() });
   const message = String(body.message ?? '');
   if (message !== expected) return { error: 'Signed message was altered.' };
@@ -41,5 +42,5 @@ export async function checkVerificationProof(body: Record<string, unknown>, now 
   else if (/^0x[0-9a-fA-F]+$/.test(signature)) {
     try { signatureValid = await verifyMessage({ address: t.wallet as `0x${string}`, message, signature: signature as `0x${string}` }); } catch { signatureValid = false; }
   }
-  return { ...t, signatureValid };
+  return { ...t, signatureValid, nonce: claims.nonce, expMs: claims.exp * 1000 };
 }
