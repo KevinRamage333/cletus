@@ -42,7 +42,7 @@ export async function GET(req: Request) {
   try {
     const result = await prisma.$transaction(async (tx) => {
       const locks = await tx.$queryRaw<Array<{ locked: boolean }>>`
-        SELECT pg_try_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_ID}) AS locked
+        SELECT pg_try_advisory_xact_lock(${LOCK_NAMESPACE}::integer, ${LOCK_ID}::integer) AS locked
       `;
       if (!locks[0]?.locked) return { skipped: true as const };
 
