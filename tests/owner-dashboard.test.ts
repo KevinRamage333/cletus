@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import nacl from 'tweetnacl';
 import { Keypair } from '@solana/web3.js';
 import {
-  addressesEqual, canonicalAddress, DEFAULT_OWNER_WALLET, isOwnerWallet, signOwnerSession, verifyOwnerSession,
+  addressesEqual, canonicalAddress, isOwnerWallet, signOwnerSession, verifyOwnerSession,
 } from '@/lib/owner-auth';
 import { applyHaltCommand, EMPTY_HALT, mergeHalt, ownerHaltReason, shouldBlockNewEntries, shouldCloseOpenPositions } from '@/lib/owner-halt';
 import { liveWatchFromAccountStatus, stopTakeLevels, sumTodayPnl, winLoss, curveFromClosed } from '@/lib/live-watch';
@@ -14,9 +14,9 @@ const secret = 'test-owner-session-secret-which-is-at-least-32ch';
 
 describe('owner wallet gate', () => {
   it('resolves only the configured owner address and rejects others', () => {
-    const owner = DEFAULT_OWNER_WALLET;
+    const owner = Keypair.generate().publicKey.toBase58();
     expect(canonicalAddress(owner)).toBe(owner);
-    expect(isOwnerWallet(owner, {})).toBe(true);
+    expect(isOwnerWallet(owner, {})).toBe(false);
     expect(isOwnerWallet(owner, { OWNER_WALLET: owner, PAYOUT_WALLET: 'other' })).toBe(true);
     expect(isOwnerWallet('not-a-key', {})).toBe(false);
     expect(isOwnerWallet(Keypair.generate().publicKey.toBase58(), { OWNER_WALLET: owner })).toBe(false);
@@ -34,16 +34,16 @@ describe('owner wallet gate', () => {
 
 describe('owner session cookie', () => {
   it('round-trips, includes a nonce and expiry, and rejects a different address or tampering', async () => {
-    const addr = DEFAULT_OWNER_WALLET;
+    const addr = Keypair.generate().publicKey.toBase58();
     const token = await signOwnerSession(addr, secret, 60, 1_700_000_000, 'nonce-1');
-    const sess = await verifyOwnerSession(token, secret, 1_700_000_010);
+    const sess = await verifyOwnerSession(token, secret, 1_700_000_010, { OWNER_WALLET: addr });
     expect(sess?.typ).toBe('owner');
     expect(sess?.addr).toBe(addr);
     expect(sess?.nonce).toBe('nonce-1');
     expect(sess?.exp).toBe(1_700_000_060);
-    expect(await verifyOwnerSession(token, secret, 1_700_000_061)).toBeNull();
+    expect(await verifyOwnerSession(token, secret, 1_700_000_061, { OWNER_WALLET: addr })).toBeNull();
     const [body, sig] = token.split('.');
-    expect(await verifyOwnerSession(`${body}.${sig.slice(0, -2)}aa`, secret, 1_700_000_010)).toBeNull();
+    expect(await verifyOwnerSession(`${body}.${sig.slice(0, -2)}aa`, secret, 1_700_000_010, { OWNER_WALLET: addr })).toBeNull();
     expect(await verifyOwnerSession('nope', secret)).toBeNull();
   });
 });
