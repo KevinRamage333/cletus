@@ -40,14 +40,19 @@ export default function CletusAIPage() {
   const [loading, setLoading] = useState(false);
   const [signals, setSignals] = useState<TokenSignal[]>([]);
   const convRef = useRef<string | null>(null);
+  const requestInFlightRef = useRef(false);
+  const selectionVersionRef = useRef(0);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([]);
   const [historyReady, setHistoryReady] = useState(false);
 
   const selectConversation = useCallback(async (id: string) => {
+    if (requestInFlightRef.current) return;
+    const version = ++selectionVersionRef.current;
     const response = await fetch(`/api/brain?conversationId=${encodeURIComponent(id)}`, { cache: 'no-store' });
-    if (!response.ok) return;
+    if (!response.ok || version !== selectionVersionRef.current) return;
     const data = await response.json();
+    if (version !== selectionVersionRef.current) return;
     convRef.current = id;
     setConversationId(id);
     setMessages((data.messages ?? []).map((m: { role: string; content: string }) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: m.content })));
@@ -73,6 +78,8 @@ export default function CletusAIPage() {
   }, [refreshConversations, selectConversation]);
 
   const newConversation = () => {
+    if (requestInFlightRef.current) return;
+    ++selectionVersionRef.current;
     convRef.current = null;
     setConversationId(null);
     setMessages([]);
@@ -130,7 +137,8 @@ export default function CletusAIPage() {
 
   const sendChat = async () => {
     const text = input.trim();
-    if (!text || loading || !historyReady) return;
+    if (!text || requestInFlightRef.current || !historyReady) return;
+    requestInFlightRef.current = true;
     setInput('');
     const next = [...messages, { role: 'user' as const, content: text }];
     setMessages(next);
@@ -164,6 +172,7 @@ export default function CletusAIPage() {
         { role: 'assistant', content: 'Connection error. Please try again.' },
       ]);
     } finally {
+      requestInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -228,7 +237,8 @@ export default function CletusAIPage() {
         const piece = event.results[i][0].transcript;
         if (event.results[i].isFinal) finalText += piece;
       }
-      if (!finalText.trim() || voiceRequestInFlightRef.current || !liveOnRef.current || !historyReady) return;
+      if (!finalText.trim() || requestInFlightRef.current || voiceRequestInFlightRef.current || !liveOnRef.current || !historyReady) return;
+      requestInFlightRef.current = true;
       voiceRequestInFlightRef.current = true;
       try { recognition.stop(); } catch { /* already stopped */ }
 
@@ -261,6 +271,7 @@ export default function CletusAIPage() {
         speak(fail);
       } finally {
         voiceRequestInFlightRef.current = false;
+        requestInFlightRef.current = false;
       }
     };
 
