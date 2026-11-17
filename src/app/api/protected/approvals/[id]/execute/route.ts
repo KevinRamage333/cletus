@@ -10,11 +10,14 @@ export const dynamic = 'force-dynamic';
 /** Submit a wallet-signed Jupiter swap. Cletus never signs this transaction. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Send path: closed before auth/DB unless live mode AND USER_SWAP_EXECUTE_ENABLED=true.
+  let mode: string;
+  try { mode = getConfig().mode; } catch { return NextResponse.json({ error: 'swap execution is disabled' }, { status: 403 }); }
+  const gate = userSwapExecuteAllowed(mode);
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
   try {
     const { a, u } = await appContext();
     if (!u.walletPublicKey) return NextResponse.json({ error: 'connect your own wallet first' }, { status: 400 });
-    const gate = userSwapExecuteAllowed(getConfig().mode);
-    if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
     const body = await req.json().catch(() => ({}));
     const r = await executeApproval(a.id, id, String(body.signedTransaction ?? ''));
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });

@@ -9,6 +9,7 @@ import { useSolanaHoldings } from '@/components/wallet/useSolanaHoldings';
 import { ChainBalance } from '@/components/wallet/EvmWalletCard';
 import { EVM_CHAINS } from '@/lib/evm-wallet';
 import { valueAccount } from '@/lib/local-paper';
+import CletusPaperBook from '@/components/paper/CletusPaperBook';
 import { formatPct } from '@/lib/movers';
 
 const WSOL = 'So11111111111111111111111111111111111111112';
@@ -33,7 +34,9 @@ export default function PortfolioPage() {
         Your practice account and any connected wallets. Values without a live price show “—”, never $0.
       </PageHeader>
 
-      <h3 className="mb-3 text-sm font-bold uppercase tracking-[.16em] text-[#e3c06a]">Paper portfolio <span className="ml-2 border border-[#e3c06a]/40 px-1.5 py-0.5 text-[9px]">simulated</span></h3>
+      <div id="cletus-paper" className="mb-8"><CletusPaperBook variant="full" /></div>
+
+      <h3 className="mb-3 text-sm font-bold uppercase tracking-[.16em] text-[#e3c06a]">Your practice portfolio <span className="ml-2 border border-[#e3c06a]/40 px-1.5 py-0.5 text-[9px]">simulated</span></h3>
       {!account ? <div className="skeleton h-24" /> : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="portfolio-paper">

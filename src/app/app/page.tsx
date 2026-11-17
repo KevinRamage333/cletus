@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { PageHeader, Refreshed, StateBox, Stat, TokenAvatar } from '@/components/app/ui';
 import { useMovers } from '@/components/market/useMovers';
 import { useLocalPaper, useQuotes } from '@/components/app/usePaper';
+import CletusPaperBook from '@/components/paper/CletusPaperBook';
 import EngineAccountPanel from '@/components/app/EngineAccountPanel';
 import { valueAccount } from '@/lib/local-paper';
 import { formatPct, formatUsdCompact, freshness, sortMovers } from '@/lib/movers';
@@ -34,8 +35,10 @@ export default function DashboardPage() {
         <Stat label="Tokens on the board" value={state === 'loading' ? '…' : data ? data.tokens.length : '—'} sub={state === 'error' ? 'Market data unavailable' : <Refreshed at={data?.fetchedAt} stale={stale} />} />
         <Stat label="Up in the last hour" value={gainers == null ? '—' : `${gainers} / ${data!.tokens.length}`} sub="Share of board tokens" />
         <Stat label="Board volume (1h)" value={totalVol == null ? '—' : formatUsdCompact(totalVol)} sub="Sum across listed pools" />
-        <Stat label="Paper equity" value={usd(val?.equityUsd)} sub={account?.positions.length ? <Refreshed at={fetchedAt} label="Marked" /> : 'No open positions'} />
+        <Stat label="Your practice equity" value={usd(val?.equityUsd)} sub={account?.positions.length ? <Refreshed at={fetchedAt} label="Marked" /> : 'No open positions'} />
       </div>
+
+      <CletusPaperBook variant="compact" />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_.6fr]">
         <section>
