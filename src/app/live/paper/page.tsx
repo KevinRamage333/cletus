@@ -14,13 +14,28 @@ async function loadReport() {
   if (isDemo() || !process.env.DATABASE_URL) return null;
   try {
     const { prisma } = await import('@/lib/db');
-    const closes = await prisma.position.findMany({
-      where: { account: { isOperator: true }, status: 'closed', simulated: true, closedAt: { not: null } },
+    const now = new Date();
+    const since = new Date(now.getTime() - 2 * 60 * 60_000);
+    const operatorPaper = { account: { isOperator: true }, simulated: true };
+    const [closes, state, entries, closedInWindow] = await Promise.all([
+      prisma.position.findMany({
+      where: { ...operatorPaper, status: 'closed', closedAt: { not: null } },
       orderBy: [{ closedAt: 'desc' }, { id: 'desc' }],
       take: PUBLIC_PAPER_LIMIT + 1,
       select: { closedAt: true, network: true, symbol: true, pnlUsd: true, feesUsd: true },
-    });
-    return summarizePaperCloses(closes);
+      }),
+      prisma.engineState.findUnique({ where: { id: 'global' }, select: { lastScanAt: true, killSwitch: true, pausedUntil: true } }),
+      prisma.position.count({ where: { ...operatorPaper, openedAt: { gte: since, lte: now } } }),
+      prisma.position.count({ where: { ...operatorPaper, status: 'closed', closedAt: { gte: since, lte: now } } }),
+    ]);
+    const lastScanAt = state?.lastScanAt ?? null;
+    const scanAgeMs = lastScanAt ? now.getTime() - lastScanAt.getTime() : null;
+    return {
+      ...summarizePaperCloses(closes),
+      lastScanAt, entries, closedInWindow,
+      scanningRecently: !!state && !state.killSwitch && (!state.pausedUntil || state.pausedUntil <= now)
+        && scanAgeMs !== null && scanAgeMs >= 0 && scanAgeMs <= 180_000,
+    };
   } catch {
     console.error('[public-paper] Recorded paper closes unavailable');
     return null;
@@ -40,6 +55,14 @@ export default async function PaperPerformancePage() {
         <p className="text-sm text-zinc-300">Recorded simulated closes from Cletus’s operator account. The report covers up to {PUBLIC_PAPER_LIMIT} recent closed positions.</p>
       </header>
       {!report && <p role="status">Recorded paper results are currently unavailable.</p>}
+      {report && (
+        <section className="space-y-2 rounded-xl border border-white/10 p-4">
+          <h2 className="font-semibold">Activity in the last two hours</h2>
+          <p className="text-sm text-zinc-300">{report.entries} paper entries · {report.closedInWindow} paper closes</p>
+          <p className="text-sm text-zinc-400">{report.scanningRecently ? 'Scanner recently active' : 'Scanner inactive, paused, or stale'} · Last recorded scan {report.lastScanAt ? date.format(report.lastScanAt) + ' UTC' : 'unavailable'}</p>
+          {report.closedInWindow === 0 && <p className="text-sm text-amber-300">No new paper closes in this window. The results below are historical.</p>}
+        </section>
+      )}
       {report && !first && <p role="status">No eligible paper closes are available in this sample.</p>}
       {report && report.omitted > 0 && <p className="text-sm text-zinc-400">{report.omitted} sampled closes lacked usable P&amp;L or fee values and were excluded.</p>}
       {report && first && last && (
