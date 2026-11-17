@@ -47,7 +47,7 @@ export default function FeedChart() {
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="listbox" aria-label="Token to chart" data-testid="feed-chart-picks">
         {shown.map((p) => (
-          <button key={p.key} type="button" role="option" aria-selected={sel?.key === p.key} onClick={() => setSel(p)} data-testid="feed-chart-pick"
+          <button key={p.key} type="button" role="option" aria-selected={sel?.key === p.key} onClick={() => setSel(p)} data-testid="feed-chart-pick" data-symbol={p.label}
             className={`num shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${sel?.key === p.key ? 'border-[#d4af37] bg-[#d4af37]/12 text-[#f3dc95]' : 'border-[rgba(212,175,55,.2)] text-[#a39c8f] hover:text-[#f2ede2]'}`}>
             {p.source === 'feed' ? '◆ ' : ''}{p.label}
             {p.change != null && <span className={`ml-1.5 ${p.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatPct(p.change)}</span>}

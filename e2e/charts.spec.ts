@@ -30,7 +30,7 @@ test.describe('live charts (public preview)', () => {
       await picks.nth(1).click();
       const chosen = page.locator('[data-testid=feed-chart-pick][aria-selected=true]');
       await expect(chosen).toHaveCount(1);
-      const label = (await chosen.innerText()).replace(/^◆\s*/, '').split(/\s/)[0];
+      const label = (await chosen.getAttribute('data-symbol')) ?? '';
       const after = await expectChart(page.getByTestId('live-chart'));
       if (after === 'live') await expect(page.getByTestId('live-chart-symbol')).toContainText(label, { timeout: 30_000 });
       await page.getByRole('tab', { name: '4H' }).click();
