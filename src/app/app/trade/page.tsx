@@ -211,12 +211,17 @@ export default function ActiveTradingPage() {
               <div className="text-xs text-white/50 mt-0.5">Live trade</div>
             </div>
           </Link>
-          <Link
-            href="/app/config"
-            className="text-xs px-3 py-1.5 rounded-full border border-white/15 text-white/70 hover:text-white"
-          >
-            Configuration
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/app/performance" className="text-xs px-3 py-1.5 rounded-full border border-amber-400/30 text-amber-300 hover:text-amber-200">
+              Performance
+            </Link>
+            <Link
+              href="/app/config"
+              className="text-xs px-3 py-1.5 rounded-full border border-white/15 text-white/70 hover:text-white"
+            >
+              Configuration
+            </Link>
+          </div>
         </div>
       </header>
 
