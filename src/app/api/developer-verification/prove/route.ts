@@ -15,7 +15,7 @@ export async function POST(req:Request){try{
  const hash=createHash('sha256').update(message).digest();
  const expected=Buffer.from(application.challengeHash,'hex');
  if(hash.length!==expected.length||!timingSafeEqual(hash,expected))throw new HttpError(400,'Challenge mismatch');
- if(!message.includes('Application: '+application.id+'\\n')||!message.includes('Wallet: '+application.wallet+'\\n')||!message.includes('Mint: '+application.mint+'\\n'))throw new HttpError(400,'Challenge scope mismatch');
+ if(!message.includes('Application: '+application.id+'\n')||!message.includes('Wallet: '+application.wallet+'\n')||!message.includes('Mint: '+application.mint+'\n'))throw new HttpError(400,'Challenge scope mismatch');
  let valid=false;try{const sig=bs58.decode(signature),key=bs58.decode(application.wallet);valid=sig.length===64&&key.length===32&&nacl.sign.detached.verify(new TextEncoder().encode(message),sig,key)}catch{}
  if(!valid)throw new HttpError(400,'Invalid wallet signature');
  const changed=await prisma.developerVerification.updateMany({where:{id:application.id,userId:u.id,challengeHash:application.challengeHash,walletProofAt:null,challengeExpiresAt:{gt:new Date()}},data:{walletProofAt:new Date(),challengeHash:null,challengeExpiresAt:null}});
