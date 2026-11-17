@@ -465,8 +465,16 @@ async function scanTickInner(gen: number): Promise<string> {
     const marketRegime = assessMarketRegime(eligible.map((r) => ({ h1: r.priceChangeH1, h24: r.priceChangeH24 })));
     const marketRegimeMode = ['off', 'shadow', 'on'].includes(process.env.MARKET_REGIME_GATE ?? '') ? process.env.MARKET_REGIME_GATE! : 'shadow';
     mem.candidates = ranked.slice(0, c.scanTopN);
-    mem.candidateSnapshotAt = Date.now();
-    await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
+    const candidateScanAt = new Date();
+    mem.candidateSnapshotAt = candidateScanAt.getTime();
+    await prisma.engineState.update({
+      where: { id: 'global' },
+      data: {
+        lastScanAt: candidateScanAt,
+        scanCount: { increment: 1 },
+        candidateSnapshot: JSON.stringify({ at: candidateScanAt.toISOString(), candidates: mem.candidates.slice(0, 100) }),
+      },
+    });
 
     const accounts = await prisma.account.findMany({ where: { labPreset: null, OR: [{ isOperator: true }, { user: { is: { walletSetupAt: { not: null } } } }] } });
     // Each account may pick its own aggression (Config page): audit anything that clears the loosest account threshold.
