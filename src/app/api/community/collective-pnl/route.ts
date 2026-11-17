@@ -12,7 +12,7 @@ export async function GET() {
       simulated: true,
     };
     const closedPaperTrade = { ...paperUserAccount, status: 'closed' };
-    const [g, l, active, contributors] = await Promise.all([
+    const [g, l, contributors, active] = await Promise.all([
       prisma.position.aggregate({
         where: { ...closedPaperTrade, pnlUsd: { gt: 0 } },
         _sum: { pnlUsd: true },
