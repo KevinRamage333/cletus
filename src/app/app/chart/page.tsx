@@ -58,7 +58,7 @@ function ChartInner() {
       </header>
       <main className="flex-1 px-4 sm:px-6 py-5">
         <div className="max-w-5xl mx-auto space-y-4">
-          <div className="flex gap-2 flex-wrap"><label className="text-xs text-[#E5C76B] self-center" htmlFor="chart-network">Network</label><select id="chart-network" value={network} onChange={e=>{setNetwork(e.target.value);setSel(null);setResults([]);setErr(null);setQ('')}} className="rounded-xl border border-[#D4AF37]/40 bg-[#121212] px-3 py-2 text-sm text-white">{[['solana','Solana'],['ethereum','Ethereum'],['base','Base'],['bsc','BNB Chain'],['arbitrum','Arbitrum'],['polygon','Polygon'],['avalanche','Avalanche']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
+          <div className="flex gap-2 flex-wrap"><label className="text-xs text-[#E5C76B] self-center" htmlFor="chart-network">Network</label><select id="chart-network" value={network} onChange={e=>{setNetwork(e.target.value);setSel(null);setResults([]);setErr(null);setQ('')}} className="rounded-xl border border-[#D4AF37]/40 bg-[#121212] px-3 py-2 text-sm text-white">{[['solana','Solana'],['ethereum','Ethereum'],['base','Base'],['bsc','BNB Chain'],['arbitrum','Arbitrum'],['polygon','Polygon'],['avalanche','Avalanche'],['optimism','Optimism']].map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
             <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && search()} placeholder={network==='solana'?'Token/pool address or symbol (e.g. BONK)':'Paste a 0x token or pool address'} className="flex-1 text-sm px-3 py-2.5 rounded-xl bg-[#121212] border border-white/10 focus:outline-none focus:border-emerald-500/50" />
             <button onClick={search} disabled={searching} className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 text-black disabled:opacity-50">{searching ? '…' : 'Chart'}</button>
           </div>
@@ -82,7 +82,7 @@ function ChartInner() {
               <span className="text-[10px] text-white/30 self-center">● = your open position · others from the live scanner</span>
             </div>
           )}
-          {sel && <TokenChart key={`${network}:${sel.address}:${sel.pool ?? ''}`} address={sel.address} pool={network==='solana'?sel.pool:null} apiBase={network==='solana'?'/api/tokens/chart':`/api/tokens/chart-evm?network=${network}&unused=1`} />}
+          {sel && <TokenChart key={`${network}:${sel.address}:${sel.pool ?? ''}`} address={sel.address} pool={network==='solana'?sel.pool:null} apiBase={network==='solana'?'/api/tokens/chart':`/api/tokens/chart-evm?network=${network}`} />}
           {network!=='solana'&&<p className="text-xs text-amber-300">EVM charts are read-only. Enter a token or pool contract; no EVM trade markers or live execution are implied.</p>}
           <p className="text-[11px] text-white/25 text-center">Market data: GeckoTerminal and DexScreener. Not financial advice.</p>
         </div>

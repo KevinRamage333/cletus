@@ -71,12 +71,18 @@ export async function GET(req: Request) {
       auditError = 'Market price unavailable; pre-trade audit could not be sized.';
     }
 
+    const token = inspection.token;
+    // Market momentum and security findings are different dimensions. Never turn
+    // incomplete audit evidence into an invented numerical safety score.
+    const securityAssessment = !audit ? 'unavailable' : audit.passed ? 'checks_passed' : 'flagged';
     const activeBadge = await prisma.developerVerification.findFirst({
       where: { mint, status: 'approved', walletProofAt: { not: null }, badgeIssuedAt: { not: null }, badgeExpiresAt: { gt: new Date() }, badgeRevokedAt: null },
       orderBy: { badgeIssuedAt: 'desc' },
-      select: { wallet: true, projectName: true, badgeIssuedAt: true, badgeExpiresAt: true },
+      select: { badgeIssuedAt: true, badgeExpiresAt: true },
     });
-    const token = inspection.token;
+    const verification = activeBadge
+      ? { status: 'verified' as const, badge: true, scope: 'wallet_ownership_and_project_review', reviewedAt: activeBadge.badgeIssuedAt, expiresAt: activeBadge.badgeExpiresAt }
+      : { status: 'unverified' as const, badge: false, scope: null, reviewedAt: null, expiresAt: null };
     return NextResponse.json({
       mint,
       fetchedAt: new Date().toISOString(),
@@ -103,6 +109,11 @@ export async function GET(req: Request) {
       signals: signals ? Object.fromEntries(Object.entries(signals).map(([k, v]) => [k, Math.round(v * 100)])) : null,
       compositeScore: score === null ? null : Math.round(score * 100),
       scoreMode: c.signalWeightSet,
+      grading: {
+        market: { score: score === null ? null : Math.round(score * 100), basis: 'Market signal heuristic' },
+        security: { assessment: securityAssessment, score: null, basis: 'Observed audit checks; no calibrated numerical security score' },
+        verification,
+      },
       security: {
         audit,
         auditError,

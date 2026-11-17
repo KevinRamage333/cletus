@@ -56,12 +56,17 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
   const refused = isActionRequest(opts.message) ? 'execute' : undefined;
   // Single switch: BRAIN_PROVIDER=gemini (default) | xai | mock. Fallback chain: preferred -> other -> mock.
   const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xaiKey), enableAiBrain: getConfig().enableAiBrain });
+  // Never present canned mock responses as live Cletus/Charlotte intelligence in production.
+  // Keep mock mode explicitly available only for demo/test configurations.
+  const allowMock = process.env.CLETUS_DEMO === '1' || process.env.CLETUS_DEMO === 'true' || process.env.NODE_ENV === 'test';
+  const enabledProviders = allowMock ? order : order.filter((provider) => provider !== 'mock');
+  if (enabledProviders.length === 0) throw new Error('Cletus AI is unavailable: no configured live provider');
   let system: string | null = null;
   const getSystem = async () => (system ??= buildSystemInstruction({
     snapshot: await selfSnapshot(ctx), briefing: await latestBriefingText(), journal: await latestJournalText(opts.accountId),
     query: opts.message, recentQueries: history.filter((m) => m.role === 'user').slice(-3).map((m) => m.content), character: opts.character,
   }));
-  const { provider, result, errors } = await withFallback(order, async (p): Promise<Omit<BrainReply, 'conversationId'>> => {
+  const { provider, result, errors } = await withFallback(enabledProviders, async (p): Promise<Omit<BrainReply, 'conversationId'>> => {
     if (p === 'gemini' && key) {
       const sources: BrainReply['sources'] = [];
       const r = await chatWithTools({

@@ -1,9 +1,9 @@
 import type { Position, Prisma } from '@prisma/client';
 import { prisma } from './db';
 
-/** Apply a paper exit only if the position still matches the fill's snapshot. */
-export function settlePaperExit(
-  position: Pick<Position, 'id' | 'accountId' | 'partialsTaken'>,
+/** Settle a position and its account together if the fill still matches the open snapshot. */
+export function settlePositionExit(
+  position: Pick<Position, 'id' | 'accountId' | 'partialsTaken' | 'simulated'>,
   fill: Prisma.PositionUpdateManyMutationInput,
   balance: Prisma.AccountUpdateInput,
 ) {
@@ -12,7 +12,7 @@ export function settlePaperExit(
       where: {
         id: position.id,
         accountId: position.accountId,
-        simulated: true,
+        simulated: position.simulated,
         status: 'open',
         partialsTaken: position.partialsTaken,
       },
@@ -21,4 +21,13 @@ export function settlePaperExit(
     if (claim.count === 0) return null;
     return tx.account.update({ where: { id: position.accountId }, data: balance });
   });
+}
+
+/** Keep the paper-only entry point for callers that never settle live positions. */
+export function settlePaperExit(
+  position: Pick<Position, 'id' | 'accountId' | 'partialsTaken'>,
+  fill: Prisma.PositionUpdateManyMutationInput,
+  balance: Prisma.AccountUpdateInput,
+) {
+  return settlePositionExit({ ...position, simulated: true }, fill, balance);
 }

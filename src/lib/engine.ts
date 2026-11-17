@@ -1,5 +1,5 @@
 import { totalTradeFees } from './trade-accounting';
-import { settlePaperExit } from './paper-settlement';
+import { settlePositionExit } from './paper-settlement';
 /**
  * The Cletus engine: scan -> score -> audit -> size -> compliance gate -> enter;
  * monitor -> exit -> learn. Runs in-process on the Next.js Node server.
@@ -1074,6 +1074,7 @@ async function evaluatePosition(p: Position, price: number, killSwitch: boolean,
   return inPositionWallet(p.id, p.mint, () => evaluatePositionInner(p, price, killSwitch, serverCfg));
 }
 async function evaluatePositionInner(p: Position, price: number, killSwitch: boolean, serverCfg: Config): Promise<boolean> {
+  if (!p.simulated && serverCfg.mode !== 'live') return false;
   const acct = await prisma.account.findUnique({ where: { id: p.accountId }, select: { isOperator: true } });
   let c = applyOwnerPlan(effectiveConfig(serverCfg, await accountSettings(p.accountId, serverCfg)), !!acct?.isOperator);
   if (!p.simulated && adaptiveExitsOn(c, !!acct?.isOperator)) {
@@ -1198,7 +1199,8 @@ async function monitorTickInner(gen: number): Promise<boolean> {
     stage('engine state');
     const st = await getEngineState();
     stage('open positions');
-    const open = await loadOpenPositions();
+    const positions = await loadOpenPositions();
+    const open = c.mode === 'simulation' ? positions.filter((p) => p.simulated) : positions;
     // Keep Helius WebSocket pool subscriptions in sync with open positions (fast exits).
     const { syncPoolSubscriptions } = await import('./helius');
     syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m, sig) => onPoolChange(m, sig));
@@ -1319,10 +1321,18 @@ async function partialCloseLocked(positionId: string, price: number, fraction: n
   try { await partialCloseInner(positionId, price, fraction, rung, gainPct); } finally { mem.selling.release(positionId); }
 }
 
+function positionSellAmount(tokenAmount: number, decimals: number, available: bigint): bigint {
+  const units = Math.floor(tokenAmount * 10 ** decimals);
+  if (!Number.isSafeInteger(units) || units <= 0) throw new Error('Position quantity cannot be safely converted');
+  const raw = BigInt(units);
+  if (raw > available) throw new Error('Wallet balance is below recorded position quantity; reconciliation required');
+  return raw;
+}
+
 async function partialCloseInner(positionId: string, price: number, fraction: number, rung: number, gainPct: number) {
   const c = getConfig();
   const p = await prisma.position.findUnique({ where: { id: positionId } });
-  if (!p || p.status !== 'open' || p.partialsTaken >= rung) return;
+  if (!p || p.status !== 'open' || p.partialsTaken >= rung || (!p.simulated && c.mode !== 'live')) return;
   const st = await getEngineState();
   const sellTokens = p.tokenAmount * fraction;
   const costPortion = p.sizeUsd * fraction;
@@ -1331,8 +1341,7 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
     try {
       const { executeSwap, tokenBalanceRaw, SOL_MINT } = await import('./executor');
       const bal = await tokenBalanceRaw(c, p.mint);
-      const raw = (bal.raw * BigInt(Math.round(fraction * 10_000))) / 10_000n;
-      if (raw === 0n) throw new Error('nothing to sell');
+      const raw = positionSellAmount(sellTokens, bal.decimals, bal.raw);
       const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: raw, slippageBps: st.slippageBps, priorityFeeLamports: st.priorityFeeLamports });
       proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice; fee = (st.priorityFeeLamports / 1e9) * mem.solPrice; tx = r.signature;
       await heal('ok');
@@ -1359,14 +1368,7 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
     lastPrice: price,
   };
   const balance = { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } };
-  if (p.simulated) {
-    if (!(await settlePaperExit(p, fill, balance))) return;
-  } else {
-    await prisma.$transaction([
-      prisma.position.update({ where: { id: p.id }, data: fill }),
-      prisma.account.update({ where: { id: p.accountId }, data: balance }),
-    ]);
-  }
+  if (!(await settlePositionExit(p, fill, balance))) return;
   await log('trade', `${p.simulated ? 'PAPER' : 'LIVE'} PARTIAL TP${rung} ${p.symbol}: sold ${(fraction * 100).toFixed(0)}% at +${gainPct}% rung, PnL ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}${tx ? ` tx ${tx}` : ''}`, p.accountId);
   if (!p.simulated) {
     try {
@@ -1404,7 +1406,7 @@ async function closePositionLocked(positionId: string, price: number, reason: st
 async function closePositionInner(positionId: string, price: number, reason: string) {
   const c = getConfig();
   const p = await prisma.position.findUnique({ where: { id: positionId } });
-  if (!p || p.status !== 'open') return;
+  if (!p || p.status !== 'open' || (!p.simulated && c.mode !== 'live')) return;
   const a = await prisma.account.findUniqueOrThrow({ where: { id: p.accountId } });
   const st = await getEngineState();
   const live = !p.simulated;
@@ -1418,20 +1420,13 @@ async function closePositionInner(positionId: string, price: number, reason: str
       const { executeSwap, tokenBalanceRaw, SOL_MINT } = await import('./executor');
       let bal = await tokenBalanceRaw(c, p.mint);
       if (bal.raw === 0n) { await sleep(envNum('LIVE_ZERO_RECHECK_MS', 2000)); bal = await tokenBalanceRaw(c, p.mint); }
-      if (bal.raw === 0n) {
-        // Tokens are gone from the wallet (sold elsewhere, rugged/burned): close the book entry at zero.
-        await log('warn', `LIVE ${p.symbol}: wallet holds 0 tokens (confirmed twice) — closing as external_zero (was ${reason})`, a.id);
-        reason = 'external_zero';
-        proceeds = 0; exitPrice = 0; exitFees = 0;
-      } else {
-        const slippageBps = exitSlippageBps(reason, attempt, st.slippageBps, parseLadder(process.env.EXIT_SLIPPAGE_LADDER_BPS));
-        const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: bal.raw, slippageBps, priorityFeeLamports: st.priorityFeeLamports });
-        proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice;
-        exitPrice = safeExitPrice(proceeds, Number(bal.raw) / 10 ** bal.decimals, price);
-        exitFees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
-        exitTx = r.signature;
-        await heal('ok', undefined, 'swap');
-      }
+      const raw = positionSellAmount(p.tokenAmount, bal.decimals, bal.raw);
+      const slippageBps = exitSlippageBps(reason, attempt, st.slippageBps, parseLadder(process.env.EXIT_SLIPPAGE_LADDER_BPS));
+      const r = await executeSwap(c, { inputMint: p.mint, outputMint: SOL_MINT, amountRaw: raw, slippageBps, priorityFeeLamports: st.priorityFeeLamports });
+      proceeds = (Number(r.outAmount) / 1e9) * mem.solPrice;
+      exitPrice = safeExitPrice(proceeds, Number(raw) / 10 ** bal.decimals, price);
+      exitFees = (st.priorityFeeLamports / 1e9) * mem.solPrice;
+      exitTx = r.signature;
       mem.sellFailures.delete(p.id);
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
@@ -1443,11 +1438,8 @@ async function closePositionInner(positionId: string, price: number, reason: str
         await log('warn', `LIVE sell failed ${p.symbol} (${reason}) attempt ${next.failures}/${maxFail}: ${msg} — retry in ${Math.round((next.nextAttemptAt - Date.now()) / 1000)}s at wider slippage`, a.id);
         return;
       }
-      // Stuck: free the single position slot so the bot can keep trading. Any tokens stay in the wallet.
-      await log('warn', `LIVE sell STUCK ${p.symbol}: ${next.failures} failed attempts (${next.noRouteFailures} no-route), last: ${msg} — writing off in the book to free the slot; tokens (if any) remain in the wallet`, a.id);
-      mem.sellFailures.delete(p.id);
-      reason = 'stuck_written_off';
-      proceeds = 0; exitPrice = 0; exitFees = 0;
+      await log('warn', `LIVE close unresolved for ${p.symbol}; position remains open for reconciliation`, a.id);
+      return;
     }
   } else {
     // Realistic: fill at the observed (possibly gapped) price, minus pool price impact for our size.
@@ -1473,17 +1465,10 @@ async function closePositionInner(positionId: string, price: number, reason: str
     consecutiveWins: won ? { increment: 1 } : 0,
     consecutiveLosses: won ? 0 : { increment: 1 },
   };
-  let updated: Account;
-  if (live) {
-    await prisma.position.update({ where: { id: p.id }, data: fill });
-    if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
-    updated = await prisma.account.update({ where: { id: a.id }, data: balance });
-  } else {
-    const settled = await settlePaperExit(p, fill, balance);
-    if (!settled) return;
-    updated = settled;
-    if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
-  }
+  const updated = await settlePositionExit(p, fill, balance);
+  if (!updated) return;
+  if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
+  if (live) await heal('ok', undefined, 'swap');
 
   // Account bookkeeping, drawdown & recovery mode.
   // A live operator's drawdown/recovery is judged on the on-chain wallet by sampleLiveEquity (live-drawdown.ts),
@@ -1501,10 +1486,10 @@ async function closePositionInner(positionId: string, price: number, reason: str
   if (dd >= c.maxDrawdownPct) { data.paused = true; data.pauseReason = `max drawdown ${dd.toFixed(1)}% >= ${c.maxDrawdownPct}%`; await log('warn', `account PAUSED: ${data.pauseReason}`, a.id); }
   await prisma.account.update({ where: { id: a.id }, data });
 
-  // Self-learning weight update (global, from every closed trade).
+  // Optional learning from signed live closes. Paper results do not change trading weights.
   const before = await getWeights();
   let after = before;
-  if (c.enableDynamicWeights) {
+  if (c.enableDynamicWeights && live && exitTx) {
     const sig = JSON.parse(p.signals) as SignalBreakdown;
     const w = updateWeights(before, sig, won, { winAmplify: c.winAmplify, lossDampen: c.lossDampen, minWeight: c.minSignalWeight });
     after = w;
@@ -1513,7 +1498,7 @@ async function closePositionInner(positionId: string, price: number, reason: str
       await prisma.signalWeight.update({ where: { name: k }, data: { weight: w[k], trials: active ? { increment: 1 } : undefined, wins: active && won ? { increment: 1 } : undefined } });
     }
   }
-  void import('./journal').then((j) => j.writeTradeReflection(p.id, before, after));
+  void import('./journal').then((j) => j.writeTradeReflection(p.id, before, after)).catch(() => undefined);
   await log('trade', `${live ? 'LIVE' : 'PAPER'} SELL ${p.symbol} (${reason}) @ ${exitPrice.toPrecision(6)} PnL ${pnlUsd >= 0 ? '+' : ''}$${pnlUsd.toFixed(2)} (${pnlPct.toFixed(2)}%)`, a.id);
   if (live) {
     try {
@@ -1537,7 +1522,7 @@ async function closePositionInner(positionId: string, price: number, reason: str
     } catch { /* trade log must never block a fill */ }
   }
   // Reclaim the token account's rent once the wallet holds none of this coin (best-effort, never blocks the close).
-  if (live && (exitTx || reason === 'external_zero') && process.env.RECLAIM_TOKEN_RENT !== 'off') {
+  if (live && (exitTx) && process.env.RECLAIM_TOKEN_RENT !== 'off') {
     setTimeout(() => void reclaimRent(p.mint, p.symbol, a.id), envNum('RECLAIM_RENT_DELAY_MS', 15_000));
   }
   if (a.isOperator) void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);

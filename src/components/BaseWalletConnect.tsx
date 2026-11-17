@@ -5,6 +5,7 @@
  * Base ETH balance from the public RPC. Nothing is ever signed or sent.
  */
 import { useCallback, useEffect, useState } from 'react';
+import OkxWalletConnect from './OkxWalletConnect';
 
 export const BASE_REFERRAL = '4T65YD5F';
 const KEY = 'cletus_base_addr';
@@ -55,6 +56,7 @@ export default function BaseWalletConnect({ compact = false }: { compact?: boole
   };
 
   return (
+    <div className="space-y-3">
     <div className={compact ? '' : 'card p-4 space-y-2'}>
       <div className="flex items-center gap-2">
         <span className="inline-block w-5 h-5 rounded-full bg-[#0052FF]" aria-hidden />
@@ -68,6 +70,8 @@ export default function BaseWalletConnect({ compact = false }: { compact?: boole
       </div>
       {err && <div className="text-xs text-red-400">{err}</div>}
       <div className="text-[11px] text-white/45">Read-only connection: Cletus sees your address only and never asks to sign or move funds. New to the Base app? Referral code <span className="font-mono text-white/70">{BASE_REFERRAL}</span>.</div>
+    </div>
+    <OkxWalletConnect />
     </div>
   );
 }

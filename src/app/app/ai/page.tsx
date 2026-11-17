@@ -40,11 +40,57 @@ export default function CletusAIPage() {
   const [loading, setLoading] = useState(false);
   const [signals, setSignals] = useState<TokenSignal[]>([]);
   const convRef = useRef<string | null>(null);
+  const requestInFlightRef = useRef(false);
+  const selectionVersionRef = useRef(0);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([]);
+  const [historyReady, setHistoryReady] = useState(false);
+
+  const selectConversation = useCallback(async (id: string) => {
+    if (requestInFlightRef.current) return;
+    const version = ++selectionVersionRef.current;
+    const response = await fetch(`/api/brain?conversationId=${encodeURIComponent(id)}`, { cache: 'no-store' });
+    if (!response.ok || version !== selectionVersionRef.current) return;
+    const data = await response.json();
+    if (version !== selectionVersionRef.current) return;
+    convRef.current = id;
+    setConversationId(id);
+    setMessages((data.messages ?? []).map((m: { role: string; content: string }) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: m.content })));
+  }, []);
+
+  const refreshConversations = useCallback(async () => {
+    const response = await fetch('/api/brain', { cache: 'no-store' });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const list = (data.conversations ?? []) as Array<{ id: string; title: string }>;
+    setConversations(list);
+    return list;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    refreshConversations().then(async (list) => {
+      if (!active) return;
+      // Server-side ownership checks apply when opening a conversation.
+      if (list.length) await selectConversation(list[0].id);
+    }).catch(() => {}).finally(() => { if (active) setHistoryReady(true); });
+    return () => { active = false; };
+  }, [refreshConversations, selectConversation]);
+
+  const newConversation = () => {
+    if (requestInFlightRef.current) return;
+    ++selectionVersionRef.current;
+    convRef.current = null;
+    setConversationId(null);
+    setMessages([]);
+  };
   const [liveOn, setLiveOn] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'listening' | 'speaking' | 'error'>('idle');
   const [liveTranscript, setLiveTranscript] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const liveOnRef = useRef(false);
+  const voiceRequestInFlightRef = useRef(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -91,7 +137,8 @@ export default function CletusAIPage() {
 
   const sendChat = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || requestInFlightRef.current || !historyReady) return;
+    requestInFlightRef.current = true;
     setInput('');
     const next = [...messages, { role: 'user' as const, content: text }];
     setMessages(next);
@@ -106,7 +153,12 @@ export default function CletusAIPage() {
         }),
       });
       const data = await res.json();
-      if (data.conversationId) convRef.current = data.conversationId;
+      if (!res.ok) throw new Error(data.error || "Cletus is unavailable");
+      if (data.conversationId) {
+        convRef.current = data.conversationId;
+        setConversationId(data.conversationId);
+        void refreshConversations();
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -120,6 +172,7 @@ export default function CletusAIPage() {
         { role: 'assistant', content: 'Connection error. Please try again.' },
       ]);
     } finally {
+      requestInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -130,11 +183,17 @@ export default function CletusAIPage() {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1;
     u.onstart = () => setLiveStatus('speaking');
-    u.onend = () => setLiveStatus(liveOn ? 'listening' : 'idle');
+    u.onend = () => {
+      setLiveStatus(liveOnRef.current ? 'listening' : 'idle');
+      if (liveOnRef.current && recognitionRef.current && !voiceRequestInFlightRef.current) {
+        try { recognitionRef.current.start(); } catch { /* already listening */ }
+      }
+    };
     window.speechSynthesis.speak(u);
   };
 
   const stopLive = useCallback(() => {
+    liveOnRef.current = false;
     setLiveOn(false);
     setLiveStatus('idle');
     setLiveTranscript('');
@@ -162,6 +221,7 @@ export default function CletusAIPage() {
       return;
     }
 
+    liveOnRef.current = true;
     setLiveOn(true);
     setLiveStatus('listening');
     setLiveTranscript('Listening… speak to Cletus');
@@ -177,7 +237,10 @@ export default function CletusAIPage() {
         const piece = event.results[i][0].transcript;
         if (event.results[i].isFinal) finalText += piece;
       }
-      if (!finalText.trim()) return;
+      if (!finalText.trim() || requestInFlightRef.current || voiceRequestInFlightRef.current || !liveOnRef.current || !historyReady) return;
+      requestInFlightRef.current = true;
+      voiceRequestInFlightRef.current = true;
+      try { recognition.stop(); } catch { /* already stopped */ }
 
       setLiveTranscript(finalText.trim());
       setLiveStatus('speaking');
@@ -192,6 +255,12 @@ export default function CletusAIPage() {
           body: JSON.stringify({ message: userLine, voice: true, conversationId: convRef.current }),
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Voice AI unavailable');
+        if (data.conversationId) {
+          convRef.current = data.conversationId;
+          setConversationId(data.conversationId);
+          void refreshConversations();
+        }
         const answer =
           data.answer ?? data.message ?? "I didn't catch that. Try again.";
         setMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
@@ -200,16 +269,21 @@ export default function CletusAIPage() {
         const fail = 'Connection error on voice. Try text chat.';
         setMessages((prev) => [...prev, { role: 'assistant', content: fail }]);
         speak(fail);
+      } finally {
+        voiceRequestInFlightRef.current = false;
+        requestInFlightRef.current = false;
       }
     };
 
     recognition.onerror = () => {
+      liveOnRef.current = false;
+      setLiveOn(false);
       setLiveStatus('error');
       setLiveTranscript('Mic error — check permissions or use text chat.');
     };
 
     recognition.onend = () => {
-      if (recognitionRef.current && liveOn) {
+      if (recognitionRef.current === recognition && liveOnRef.current && !voiceRequestInFlightRef.current) {
         try {
           recognition.start();
         } catch {
@@ -222,9 +296,11 @@ export default function CletusAIPage() {
     try {
       recognition.start();
     } catch {
+      liveOnRef.current = false;
+      setLiveOn(false);
       setLiveStatus('error');
     }
-  }, [liveOn]);
+  }, [historyReady, refreshConversations]);
 
   useEffect(() => {
     return () => stopLive();
@@ -273,13 +349,18 @@ export default function CletusAIPage() {
             </p>
           </div>
 
+          <section aria-label="Chat conversations" className="rounded-xl border border-white/10 p-3 flex flex-wrap gap-2 items-center">
+            <button type="button" onClick={newConversation} className="rounded border border-white/20 px-3 py-2 text-xs">+ New chat</button>
+            {conversations.slice(0, 12).map((c) => <button type="button" key={c.id} onClick={() => void selectConversation(c.id)} aria-current={conversationId === c.id ? 'true' : undefined} className={`rounded border px-3 py-2 text-xs ${conversationId === c.id ? 'border-amber-400' : 'border-white/20'}`}>{c.title}</button>)}
+          </section>
+
           {/* 8 token signals from Cletus */}
           <section className="rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">
                 Cletus live scanner · top {signals.length}
               </h2>
-              <span className="text-xs font-mono text-emerald-400/80">LIVE</span>
+              <span className="text-xs font-mono text-[#d7b46d]">LATEST RECEIVED · NOT A LIVE-ENGINE GUARANTEE</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
               {signals.slice(0, 8).map((s) => (

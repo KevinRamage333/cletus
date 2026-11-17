@@ -18,6 +18,8 @@ export interface SessionClaims {
   exp: number;
 }
 
+// A separate signing context invalidates sessions issued before unverified sign-in was disabled.
+const SESSION_CONTEXT = 'cletus-session-v2:';
 const enc = new TextEncoder();
 
 function b64url(bytes: Uint8Array): string {
@@ -48,14 +50,14 @@ async function hmac(data: string, secret: string): Promise<Uint8Array> {
 export async function signSession(claims: Omit<SessionClaims, 'iat' | 'exp'>, secret = getSessionSecret(), ttlSec = 60 * 60 * 24 * 14): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const body = b64url(enc.encode(JSON.stringify({ ...claims, iat: now, exp: now + ttlSec })));
-  const sig = b64url(await hmac(body, secret));
+  const sig = b64url(await hmac(SESSION_CONTEXT + body, secret));
   return `${body}.${sig}`;
 }
 
 export async function verifySession(token: string | undefined | null, secret = getSessionSecret()): Promise<SessionClaims | null> {
   if (!token || !token.includes('.')) return null;
   const [body, sig] = token.split('.');
-  const expected = b64url(await hmac(body, secret));
+  const expected = b64url(await hmac(SESSION_CONTEXT + body, secret));
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);

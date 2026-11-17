@@ -1,8 +1,39 @@
+import { isDemo } from '@/lib/demo';
 import TradingNetworks from '@/components/TradingNetworks';
 import Link from 'next/link';
 import PublicLiveFeed from '@/components/PublicLiveFeed';
 export const metadata = { title: 'Cletus, the golden goose (demo)' };
+function GuestOverview() {
+  return (
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h1 className="text-4xl font-extrabold gold-text">Explore Cletus</h1>
+        <p className="max-w-2xl text-zinc-300">Cletus is a Solana market-intelligence and paper-trading platform. You can review recorded results and the project whitepaper without an account.</p>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/live" className="font-semibold text-amber-300">Recorded performance</Link>
+          <Link href="/live/paper" className="font-semibold text-amber-300">Paper trading report</Link>
+          <Link href="/whitepaper" className="font-semibold text-amber-300">Whitepaper</Link>
+          <Link href="/signup" className="font-semibold text-amber-300">Open an account</Link>
+        </div>
+      </section>
+      <section className="space-y-3">
+        <h2 className="text-xl font-bold">What Cletus supports</h2>
+        <ul className="list-disc space-y-2 pl-5 text-zinc-300">
+          <li>Solana token discovery, charts, and token risk checks.</li>
+          <li>Paper trading with simulated entries and exits. Results depend on the data, fees, and execution assumptions.</li>
+          <li>Read-only EVM charts and native-coin balances on supported networks. Multi-network trade execution is planned.</li>
+        </ul>
+      </section>
+      <section className="space-y-3">
+        <h2 className="text-xl font-bold">Historical strategy replay</h2>
+        <p className="max-w-2xl text-zinc-300">A November 2026 walk-forward replay covered 60 Solana pools over 3.6 days. The tuned configuration had 34 out-of-sample trades, a 38.2% win rate, and −1.60% average P&amp;L per trade. The baseline averaged −1.29% over 20 trades. These are simulated results from a small sample. The replay used an OHLCV proxy for buy pressure.</p>
+      </section>
+    </div>
+  );
+}
+
 export default function DemoHome({ searchParams }: { searchParams: { soon?: string } }) {
+  if (!isDemo()) return <GuestOverview />;
   const soon = searchParams?.soon;
   return (
     <div className="space-y-8">
