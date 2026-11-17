@@ -14,39 +14,34 @@ import Link from 'next/link';
 import WithdrawPanel from '@/components/WithdrawPanel';
 import ConnectWallet from '@/components/ConnectWallet';
 import SimWithdrawPanel from '@/components/SimWithdrawPanel';
+import { formatFixed, trialDaysRemaining } from '@/lib/display-number';
 
 type WalletState = {
   address: string | null;
   mode: 'managed' | 'external' | null;
-  solBalance: number;
-  usdcBalance: number;
+  solBalance: number | null;
+  usdcBalance: number | null;
   trialStartedAt: string | null;
-  trialDays: number;
-  trialActive: boolean;
-  daysRemaining: number;
+  trialDays: number | null;
+  trialActive: boolean | null;
+  daysRemaining: number | null;
 };
 
 const TRIAL_DAYS_DEFAULT = 30;
 
-function daysLeft(trialStartedAt: string | null, trialDays: number): number {
-  if (!trialStartedAt) return trialDays;
-  const start = new Date(trialStartedAt).getTime();
-  const end = start + trialDays * 24 * 60 * 60 * 1000;
-  const left = Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000));
-  return Math.max(0, left);
-}
+const EMPTY_WALLET: WalletState = {
+  address: null,
+  mode: null,
+  solBalance: null,
+  usdcBalance: null,
+  trialStartedAt: null,
+  trialDays: null,
+  trialActive: null,
+  daysRemaining: null,
+};
 
 export default function CletusWalletPage() {
-  const [wallet, setWallet] = useState<WalletState>({
-    address: null,
-    mode: 'external',
-    solBalance: 0,
-    usdcBalance: 0,
-    trialStartedAt: new Date().toISOString(),
-    trialDays: TRIAL_DAYS_DEFAULT,
-    trialActive: true,
-    daysRemaining: TRIAL_DAYS_DEFAULT,
-  });
+  const [wallet, setWallet] = useState<WalletState>(EMPTY_WALLET);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -59,33 +54,24 @@ export default function CletusWalletPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          const trialStartedAt = data.trialStartedAt ?? new Date().toISOString();
-          const trialDays = data.trialDays ?? TRIAL_DAYS_DEFAULT;
-          const remaining = daysLeft(trialStartedAt, trialDays);
+          const trialStartedAt = typeof data.trialStartedAt === 'string' && data.trialStartedAt ? data.trialStartedAt : null;
+          const trialDays = typeof data.trialDays === 'number' && data.trialDays > 0 ? data.trialDays : trialStartedAt ? TRIAL_DAYS_DEFAULT : null;
+          const remaining = trialDaysRemaining(trialStartedAt, trialDays);
           setWallet({
             address: data.managedWalletId ?? data.address ?? null,
-            mode: data.mode ?? 'external',
-            solBalance: data.solBalance ?? 0,
-            usdcBalance: data.usdcBalance ?? 0,
+            mode: data.mode === 'managed' || data.mode === 'external' ? data.mode : null,
+            solBalance: typeof data.solBalance === 'number' && Number.isFinite(data.solBalance) ? data.solBalance : null,
+            usdcBalance: typeof data.usdcBalance === 'number' && Number.isFinite(data.usdcBalance) ? data.usdcBalance : null,
             trialStartedAt,
             trialDays,
-            trialActive: remaining > 0,
+            trialActive: remaining === null ? null : remaining > 0,
             daysRemaining: remaining,
           });
         } else {
-          // Demo placeholder until backend is live
-          setWallet((prev) => ({
-            ...prev,
-            address: prev.address,
-            daysRemaining: daysLeft(prev.trialStartedAt, prev.trialDays),
-          }));
+          setWallet(EMPTY_WALLET);
         }
       } catch {
-        setWallet((prev) => ({
-          ...prev,
-          address: prev.address,
-          daysRemaining: daysLeft(prev.trialStartedAt, prev.trialDays),
-        }));
+        setWallet(EMPTY_WALLET);
       } finally {
         setLoading(false);
       }
@@ -149,7 +135,8 @@ export default function CletusWalletPage() {
             </p>
           </div>
 
-          {/* Trial status */}
+          {/* Trial status — only shown when the server provided a start date. */}
+          {wallet.trialStartedAt && wallet.daysRemaining !== null && (
           <div
             className={`rounded-xl border p-5 ${
               wallet.trialActive
@@ -193,6 +180,7 @@ export default function CletusWalletPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Wallet card */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-5">
@@ -229,13 +217,13 @@ export default function CletusWalletPage() {
               <div className="rounded-lg border border-white/10 bg-black/40 p-4">
                 <div className="text-xs text-white/40 uppercase tracking-wider">SOL</div>
                 <div className="text-xl font-bold font-mono mt-1">
-                  {wallet.solBalance.toFixed(4)}
+                  {formatFixed(wallet.solBalance, 4)}
                 </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-black/40 p-4">
                 <div className="text-xs text-white/40 uppercase tracking-wider">USDC</div>
                 <div className="text-xl font-bold font-mono mt-1">
-                  {wallet.usdcBalance.toFixed(2)}
+                  {formatFixed(wallet.usdcBalance, 2)}
                 </div>
               </div>
             </div>

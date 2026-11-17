@@ -101,7 +101,7 @@ export default function FinancialConsentPage() {
           </>
         )}
         <p className="muted" style={{ fontSize: 12, marginTop: 18 }}>Version {FINANCIAL_CONSENT_VERSION}. You may stop here and sign out at any time.</p>
-        <a href="/api/auth/logout" className="muted" style={{ display: 'inline-block', marginTop: 8 }}>Leave onboarding</a>
+        <form action="/api/auth/logout" method="post" style={{ display: 'inline-block', marginTop: 8 }}><button type="submit" className="muted" style={{ background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}>Leave onboarding</button></form>
       </div>
     </div>
   );

@@ -32,7 +32,7 @@ export default function SolanaWalletCard() {
     try {
       const msg = new TextEncoder().encode(ownershipMessage(publicKey.toBase58(), 'Solana', crypto.randomUUID(), new Date().toISOString()));
       const sig = await signMessage(msg);
-      setProof(nacl.sign.detached.verify(msg, sig, publicKey.toBytes()) ? 'Signature verified in your browser. Nothing was sent to a server.' : 'Signature did not verify.');
+      setProof(nacl.sign.detached.verify(msg, sig, publicKey.toBytes()) ? 'Browser-only check passed. This is not a server-verified proof and grants no access.' : 'Browser-only check failed.');
     } catch (e) { setErr((e as Error)?.message || 'Signing was cancelled.'); }
   };
   const extras = extraDetectedWallets(wallets, WalletReadyState.Unsupported);
@@ -47,11 +47,11 @@ export default function SolanaWalletCard() {
           {balErr && <StateBox kind="stale" title="Balance could not refresh">{balErr}</StateBox>}
           <div className="flex flex-wrap gap-2">
             <button className="btn-line !py-2" onClick={() => void refresh()}>Refresh</button>
-            <button className="btn-line !py-2" onClick={prove} data-testid="sol-prove">Prove ownership</button>
+            <button className="btn-line !py-2" onClick={prove} data-testid="sol-prove">Browser signature check</button>
             <a className="btn-line !py-2" href={`https://solscan.io/account/${publicKey.toBase58()}`} target="_blank" rel="noreferrer">Solscan ↗</a>
             <button className="btn-line !py-2" onClick={() => disconnect().catch(() => undefined)} data-testid="sol-disconnect">Disconnect</button>
           </div>
-          {proof && <p className="text-xs text-green-300" role="status">{proof}</p>}
+          {proof && <p className={`text-xs ${proof.startsWith('Browser-only check passed') ? 'text-[#d8d2c5]' : 'text-red-300'}`} role="status">{proof}</p>}
         </div>
       ) : (
         <div className="mt-4 space-y-2">

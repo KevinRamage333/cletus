@@ -6,4 +6,3 @@ export async function POST(req: Request) {
   res.cookies.delete(SESSION_COOKIE);
   return res;
 }
-export const GET = POST;

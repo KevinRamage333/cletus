@@ -47,3 +47,20 @@ export const EVM_INSTALL_LINKS: Record<string, string> = {
   metaMask: 'https://metamask.io/download/',
   coinbaseWallet: 'https://www.coinbase.com/wallet/downloads',
 };
+
+/** Prefer EIP-6963 rdns (e.g. io.metamask) over display name, so a spoofed "MetaMask" label cannot hide the real one. */
+export function evmConnectorDedupeKey(c: { id: string; name?: string; rdns?: string | readonly string[] | null }): string {
+  const rdns = c.rdns;
+  if (typeof rdns === 'string' && rdns.trim()) return rdns.trim().toLowerCase();
+  if (Array.isArray(rdns)) {
+    const first = rdns.map((x) => String(x).trim()).find(Boolean);
+    if (first) return first.toLowerCase();
+  }
+  return c.id;
+}
+
+export function dedupeEvmConnectors<T extends { id: string; type?: string; name?: string; rdns?: string | readonly string[] | null }>(connectors: readonly T[]): T[] {
+  const named = connectors.filter((c) => c.type !== 'injected' || c.id !== 'injected');
+  const list = named.length ? named : connectors;
+  return list.filter((c, i, a) => a.findIndex((x) => evmConnectorDedupeKey(x) === evmConnectorDedupeKey(c)) === i);
+}

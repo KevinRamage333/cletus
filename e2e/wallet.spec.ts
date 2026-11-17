@@ -75,7 +75,7 @@ test.describe('wallet connectors', () => {
     await expect(page.getByText('Live trading is disabled')).toBeVisible();
   });
 
-  test('Solana: connect Phantom, show address and balance, prove ownership, disconnect', async ({ page }, info) => {
+  test('Solana: connect Phantom, show address and balance, browser signature check, disconnect', async ({ page }, info) => {
     const address = await installMockPhantom(page);
     await attestAge(page);
     await page.goto('/app/wallet');
@@ -83,7 +83,7 @@ test.describe('wallet connectors', () => {
     await expect(page.getByTestId('sol-address')).toHaveText(address);
     await expect(page.getByTestId('sol-balance')).toHaveText(/SOL|—/, { timeout: 20_000 });
     await page.getByTestId('sol-prove').click();
-    await expect(page.getByTestId('solana-card')).toContainText('Signature verified in your browser');
+    await expect(page.getByTestId('solana-card')).toContainText('Browser-only check passed');
     await shot(page, info, 'app-wallet-solana');
     // Client-side navigation keeps the session; the portfolio reads the same connected wallet.
     await page.evaluate(() => { const a = document.querySelector('a[href="/app/portfolio"]') as HTMLAnchorElement | null; a?.click(); });
@@ -93,7 +93,7 @@ test.describe('wallet connectors', () => {
     await expect(page.getByTestId('connect-phantom')).toBeVisible();
   });
 
-  test('EVM: connect MetaMask, balances on five networks, switch network, prove ownership, disconnect', async ({ page }, info) => {
+  test('EVM: connect MetaMask, balances on five networks, switch network, browser signature check, disconnect', async ({ page }, info) => {
     const address = await installMockEvm(page);
     await attestAge(page);
     await page.goto('/app/wallet');
@@ -109,7 +109,7 @@ test.describe('wallet connectors', () => {
     await page.getByTestId('evm-switch').getByRole('button', { name: 'Cronos' }).click();
     await expect(page.getByTestId('evm-balance-cronos')).toContainText('active');
     await page.getByTestId('evm-prove').click();
-    await expect(page.getByTestId('evm-proof')).toContainText('Signature verified in your browser');
+    await expect(page.getByTestId('evm-proof')).toContainText('Browser-only check passed');
     await shot(page, info, 'app-wallet-evm');
     await page.getByTestId('evm-disconnect').click();
     await expect(page.getByTestId('evm-address')).toHaveCount(0);

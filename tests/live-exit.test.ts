@@ -82,10 +82,12 @@ beforeEach(() => {
 
 describe('live-exit helpers', () => {
   it('protective exits climb the slippage ladder; take-profit starts at base', () => {
-    expect([0, 1, 2, 3, 9].map((n) => exitSlippageBps('stop_loss', n, 100))).toEqual([300, 800, 1500, 3000, 3000]);
+    expect([0, 1, 2, 3, 9].map((n) => exitSlippageBps('stop_loss', n, 100))).toEqual([300, 800, 1500, 1500, 1500]);
     expect(exitSlippageBps('kill_switch', 0, 500)).toBe(500);
     expect(exitSlippageBps('take_profit', 0, 500)).toBe(500);
     expect(exitSlippageBps('take_profit', 2, 500)).toBe(1500);
+    expect(exitSlippageBps('stop_loss', 9, 100, [300, 800, 1500, 3000])).toBe(1500);
+    expect(exitSlippageBps('stop_loss', 0, 5000)).toBe(1500);
   });
   it('failure counter backs off and writes off after N (sooner for no-route)', () => {
     let s = recordSellFailure(undefined, 'jupiter /order: No route found', 0);
@@ -146,7 +148,7 @@ describe('live exit reconciliation', () => {
       if (s) mem.sellFailures.set('p1', { ...s, nextAttemptAt: 0 }); // skip the backoff wait
       await closePosition('p1', 0.0009, 'stop_loss');
     }
-    expect(slips).toEqual([500, 800, 1500, 3000]);
+    expect(slips).toEqual([500, 800, 1500, 1500]);
     expect(h.positions.get('p1')).toMatchObject({ status: 'open' });
     expect(h.logs.some((l) => l.level === 'warn' && l.msg.includes('remains open for reconciliation'))).toBe(true);
     expect(mem.sellFailures.has('p1')).toBe(true);

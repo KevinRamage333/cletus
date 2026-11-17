@@ -415,3 +415,13 @@ model DeveloperVerificationEvent {
   @@index([applicationId, createdAt])
   @@schema("app")
 }
+
+model WithdrawConfirmNonce {
+  id        String   @id // sha256 of the confirmation nonce
+  uid       String
+  expiresAt DateTime
+  usedAt    DateTime @default(now())
+
+  @@index([expiresAt])
+  @@schema("app")
+}

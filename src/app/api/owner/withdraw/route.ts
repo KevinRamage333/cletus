@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { OWNER_COOKIE, verifyOwnerSession } from '@/lib/owner-auth';
 import { getSessionSecret } from '@/lib/session';
 import { loadOwnerState, pushOwnerState, saveOwnerState } from '@/lib/owner-store';
-import { CONFIRM_WORD, issueToken, verifyToken } from '@/lib/withdraw';
+import { CONFIRM_WORD, issueToken, verifyAndConsumeToken } from '@/lib/withdraw';
+import { consumeWithdrawConfirmNonce } from '@/lib/withdraw-nonce';
 import { KOL_TRADING_WALLET, LAMPORTS, mergeRequests, newRequest, type WithdrawWallet } from '@/lib/owner-withdraw-queue';
 import { OWNER_TRADING_WALLET } from '@/lib/owner-plan';
 
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   }
   if (body.step === 'confirm') {
     if (String(body.confirmWord ?? '').trim().toUpperCase() !== CONFIRM_WORD) return NextResponse.json({ error: `type ${CONFIRM_WORD} to confirm` }, { status: 400 });
-    const v = verifyToken(body.token, secret, uid);
+    const v = await verifyAndConsumeToken(body.token, secret, uid, (nonce, exp) => consumeWithdrawConfirmNonce(nonce, uid, exp));
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
     const [wallet, to] = v.plan.to.split(':') as [WithdrawWallet, string];
     const made = newRequest({ wallet, to, amountSol: v.plan.lamports / LAMPORTS, by: sess.addr });

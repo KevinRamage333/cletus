@@ -33,7 +33,7 @@ export default function EngineAccountPanel() {
         <div className="tw space-y-4">
           <ApprovalQueue approvals={stats.approvals ?? []} onChange={load} />
           {isNum(stats.equity) && isNum(stats.startingBalance)
-            ? <LivePortfolio equity={stats.equity} cash={stats.cash} startingBalance={stats.startingBalance} realizedPnl={stats.realizedPnl ?? 0} unrealizedPnl={stats.unrealized ?? 0} totalPnl={stats.totalPnl ?? 0} winRate={stats.winRateKnown ? stats.winRate / 100 : null} closedTrades={stats.totalTrades} open={stats.open ?? []} closed={stats.closed ?? []} operatorFeeBps={stats.operatorFeeBps} />
+            ? <LivePortfolio equity={stats.equity} cash={stats.cash} startingBalance={stats.startingBalance} realizedPnl={isNum(stats.realizedPnl) ? stats.realizedPnl : null} unrealizedPnl={isNum(stats.unrealized) ? stats.unrealized : null} totalPnl={isNum(stats.totalPnl) ? stats.totalPnl : null} winRate={stats.winRateKnown ? stats.winRate / 100 : null} closedTrades={stats.totalTrades} open={stats.open ?? []} closed={stats.closed ?? []} operatorFeeBps={stats.operatorFeeBps} />
             : <StateBox kind="empty" title="No engine account values yet">Start the engine simulator to create one.</StateBox>}
         </div>
       )}

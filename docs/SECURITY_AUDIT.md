@@ -35,3 +35,15 @@ which change the wallet connector API; do that as its own stage with the wallet 
   keywords, not user input. False positive.
 - `github-actions-mutable-action-tag` (ci.yml): actions pinned by tag, not SHA. Low risk, hygiene item.
 - 9 Semgrep parse warnings on JSX text containing `&` (parser limitation, not code issues).
+
+## Dependencies (npm audit, full including dev)
+`npm audit --omit=dev` is the production picture above. A full `npm audit` (devDependencies included)
+adds 2 **Critical** findings that exist only in the test toolchain, plus Vite/esbuild dev-server advisories:
+
+- `vitest` 2.1.9 and its `tinypool` dependency: prototype pollution that can lead to RCE in the
+  worker-pool path if an attacker can control certain worker messages.
+- `vite` / `esbuild` development-server advisories (not shipped in the production Next.js build).
+
+Mitigation: never expose Vitest UI, Vite, or a public esbuild/Next dev server. These packages are
+dev-only and are not in the Vercel production bundle. A Vitest 3/5 upgrade is planned as its own
+change after this PR (it can churn the test runner) and was not bundled with these audit fixes.

@@ -22,15 +22,14 @@ type Props = {
   equity: number;
   cash?: number;
   startingBalance: number;
-  realizedPnl: number;
-  unrealizedPnl: number;
-  totalPnl: number;
+  realizedPnl: number | null;
+  unrealizedPnl: number | null;
+  totalPnl: number | null;
   winRate: number | null;
   closedTrades: number;
   open: PortfolioPosition[];
   closed: PortfolioTrade[];
   operatorFeeBps?: number;
-  demo?: boolean;
 };
 
 function SolscanLink({ href, label }: { href?: string | null; label: string }) {
@@ -73,7 +72,7 @@ export default function LivePortfolio(p: Props) {
                   <td className="text-right font-mono">{r.entryPrice.toPrecision(4)}</td>
                   <td className="text-right font-mono">{r.lastPrice.toPrecision(4)}</td>
                   <td className={`text-right font-mono ${cls(r.pnlUsd)}`}>{usd(r.pnlUsd)} <span className="text-xs">{pct(r.pnlPct)}</span></td>
-                  <td className="text-right font-mono text-amber-300">{usd(r.operatorFeeUsd ?? 0)}</td>
+                  <td className="text-right font-mono text-amber-300">{usd(r.operatorFeeUsd)}</td>
                   <td className="text-right text-xs"><SolscanLink href={r.solscanEntry ?? solscanTxUrl(r.entryTx)} label="entry" /> · <SolscanLink href={r.solscanMint ?? solscanAccountUrl(r.mint)} label="token" /></td>
                 </tr>
               ))}
@@ -95,8 +94,8 @@ export default function LivePortfolio(p: Props) {
                   <td className="py-2 font-semibold">{r.symbol}{r.simulated ? <span className="ml-1 text-[10px] text-white/35">paper</span> : null}</td>
                   <td className="text-right font-mono">{usd(r.sizeUsd)}</td>
                   <td className={`text-right font-mono ${cls(r.pnlUsd)}`}>{usd(r.pnlUsd)} <span className="text-xs">{pct(r.pnlPct)}</span></td>
-                  <td className="text-right font-mono text-amber-300">{usd(r.operatorFeeUsd ?? 0)}</td>
-                  <td className="text-right font-mono text-white/60">{usd(r.feesUsd ?? 0)}</td>
+                  <td className="text-right font-mono text-amber-300">{usd(r.operatorFeeUsd)}</td>
+                  <td className="text-right font-mono text-white/60">{usd(r.feesUsd)}</td>
                   <td className="text-white/60 text-xs">{r.exitReason ?? '—'}</td>
                   <td className="text-right text-xs">
                     <SolscanLink href={r.solscanEntry ?? solscanTxUrl(r.entryTx)} label="entry" /> · <SolscanLink href={r.solscanExit ?? solscanTxUrl(r.exitTx)} label="exit" />
@@ -106,7 +105,6 @@ export default function LivePortfolio(p: Props) {
             </tbody>
           </table>
         )}
-        {p.demo && <p className="text-[11px] text-white/35 mt-3">Sample paper trades for the public demo. Live fills will link to Solscan when a signature exists.</p>}
       </section>
       <p className="text-[11px] text-white/30 text-center">Past results do not guarantee future outcomes. Not financial advice. Trading involves risk of loss. <Link href="/legal/risk" className="text-amber-300">Terms &amp; risk</Link></p>
     </div>

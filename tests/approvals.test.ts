@@ -6,9 +6,9 @@ import {
   formatTimer, operatorFeeUsd, remainingMs, solscanAccountUrl, solscanTxUrl, tradeFeeView,
 } from '@/lib/approvals';
 import { SUPPORTED_WALLETS, isMobileUserAgent, inWalletBrowser, WALLET_CONNECT_COPY, findSupportedAdapter, extraDetectedWallets, JUPITER_MOBILE_STEPS } from '@/lib/connect-wallets';
-import { demoPortfolio } from '@/lib/demo-dashboard';
 import { TERMS_VERSION, TERMS_SECTIONS, RISK_POINTS } from '@/lib/legal';
 import { validateWalletSetup } from '@/lib/onboarding';
+import { userSwapExecuteAllowed } from '@/lib/user-swaps';
 
 describe('approval queue state machine', () => {
   const pending = {
@@ -110,15 +110,7 @@ describe('wallet standard matching', () => {
   });
 });
 
-describe('demo portfolio and terms', () => {
-  it('builds a dashboard preview with positions, history, fees and a pending approval', () => {
-    const d = demoPortfolio();
-    expect(d.open.length).toBeGreaterThan(0);
-    expect(d.closed.length).toBeGreaterThan(0);
-    expect(d.closed.every((t) => t.operatorFeeBps === 50 && t.operatorFeeUsd > 0)).toBe(true);
-    expect(d.approvals[0].status).toBe('pending');
-    expect(d.totalPnl).toBeCloseTo(d.realizedPnl + d.unrealizedPnl, 8);
-  });
+describe('terms and wallet setup', () => {
   it('Terms v2026-11-16.2 describe non-custodial connect, SIWS auth-only, per-trade approval and disconnect', () => {
     expect(TERMS_VERSION).toBe('2026-11-16.2');
     const wallet = TERMS_SECTIONS.find((s) => s.title.startsWith('6.'));
@@ -133,5 +125,15 @@ describe('demo portfolio and terms', () => {
   });
   it('paper mode does not require a public key', () => {
     expect(validateWalletSetup({ source: 'paper' }, true, true, true, true)).toMatchObject({ ok: true, source: 'paper' });
+  });
+});
+
+
+describe('user swap execute mode gate', () => {
+  it('forbids simulation and live-without-flag, allows live with the explicit flag', () => {
+    expect(userSwapExecuteAllowed('simulation', {})).toMatchObject({ ok: false, status: 403 });
+    expect(userSwapExecuteAllowed('live', {})).toMatchObject({ ok: false, status: 403 });
+    expect(userSwapExecuteAllowed('live', { USER_SWAP_EXECUTE_ENABLED: 'false' }).ok).toBe(false);
+    expect(userSwapExecuteAllowed('live', { USER_SWAP_EXECUTE_ENABLED: 'true' })).toEqual({ ok: true });
   });
 });

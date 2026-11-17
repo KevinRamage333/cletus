@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import TokenChart from '@/components/TokenChart';
+import { toNumOrNull, formatUsd, formatCount, pnlClass, sumKnownOrNull } from '@/lib/display-number';
 
 type Position = {
   id: string;
@@ -32,20 +33,20 @@ type TradeSession = {
   paused: boolean;
   pauseReason?: string;
   mode: 'paper' | 'live';
-  capital: number;
-  available: number;
-  dailyRealizedPnl: number;
-  dailyProfitTarget: number;
-  dailyMaxLoss: number;
+  capital: number | null;
+  available: number | null;
+  dailyRealizedPnl: number | null;
+  dailyProfitTarget: number | null;
+  dailyMaxLoss: number | null;
   openPositions: Position[];
   aggression: string;
-  positionSizePercent: number;
-  stopLossPercent: number;
-  takeProfitPercent: number;
-  maxPositions: number;
+  positionSizePercent: number | null;
+  stopLossPercent: number | null;
+  takeProfitPercent: number | null;
+  maxPositions: number | null;
   withinHours: boolean;
   engineLastScanAt: string | null;
-  engineScanCount: number;
+  engineScanCount: number | null;
   engineLastError: string | null;
   paperWorkerLastAt: string | null;
   paperWorkerMonitorAt: string | null;
@@ -56,42 +57,33 @@ const EMPTY: TradeSession = {
   running: false,
   paused: false,
   mode: 'paper',
-  capital: 0,
-  available: 0,
-  dailyRealizedPnl: 0,
-  dailyProfitTarget: 0,
-  dailyMaxLoss: 0,
+  capital: null,
+  available: null,
+  dailyRealizedPnl: null,
+  dailyProfitTarget: null,
+  dailyMaxLoss: null,
   openPositions: [],
   aggression: '—',
-  positionSizePercent: 0,
-  stopLossPercent: 0,
-  takeProfitPercent: 0,
-  maxPositions: 0,
+  positionSizePercent: null,
+  stopLossPercent: null,
+  takeProfitPercent: null,
+  maxPositions: null,
   withinHours: true,
   engineLastScanAt: null,
-  engineScanCount: 0,
+  engineScanCount: null,
   engineLastError: null,
   paperWorkerLastAt: null,
   paperWorkerMonitorAt: null,
   paperWorkerMessage: null,
 };
 
-function formatUsd(n: number, showSign = false) {
-  const abs = Math.abs(n);
-  const s = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(abs);
-  if (!showSign) return n < 0 ? `-${s}` : s;
-  return `${n >= 0 ? '+' : '-'}${s}`;
-}
-
-function formatPrice(p: number) {
-  if (p < 0.0001) return p.toExponential(2);
-  if (p < 0.01) return p.toFixed(6);
-  if (p < 1) return p.toFixed(4);
-  return p.toFixed(2);
+function formatPrice(p: number | null | undefined) {
+  const n = toNumOrNull(p);
+  if (n === null) return '—';
+  if (n < 0.0001) return n.toExponential(2);
+  if (n < 0.01) return n.toFixed(6);
+  if (n < 1) return n.toFixed(4);
+  return n.toFixed(2);
 }
 
 export default function ActiveTradingPage() {
@@ -112,20 +104,20 @@ export default function ActiveTradingPage() {
           paused: !!data.paused,
           pauseReason: data.pauseReason,
           mode: data.mode === 'live' ? 'live' : 'paper',
-          capital: Number(data.capital) || 0,
-          available: Number(data.available) || 0,
-          dailyRealizedPnl: Number(data.dailyRealizedPnl) || 0,
-          dailyProfitTarget: Number(data.dailyProfitTarget) || 0,
-          dailyMaxLoss: Number(data.dailyMaxLoss) || 0,
+          capital: toNumOrNull(data.capital),
+          available: toNumOrNull(data.available),
+          dailyRealizedPnl: toNumOrNull(data.dailyRealizedPnl),
+          dailyProfitTarget: toNumOrNull(data.dailyProfitTarget),
+          dailyMaxLoss: toNumOrNull(data.dailyMaxLoss),
           openPositions: Array.isArray(data.openPositions) ? data.openPositions : [],
           aggression: data.aggression ?? '—',
-          positionSizePercent: Number(data.positionSizePercent) || 0,
-          stopLossPercent: Number(data.stopLossPercent) || 0,
-          takeProfitPercent: Number(data.takeProfitPercent) || 0,
-          maxPositions: Number(data.maxPositions) || 0,
+          positionSizePercent: toNumOrNull(data.positionSizePercent),
+          stopLossPercent: toNumOrNull(data.stopLossPercent),
+          takeProfitPercent: toNumOrNull(data.takeProfitPercent),
+          maxPositions: toNumOrNull(data.maxPositions),
           withinHours: data.withinHours !== false,
           engineLastScanAt: data.engineLastScanAt ? String(data.engineLastScanAt) : null,
-          engineScanCount: Number(data.engineScanCount) || 0,
+          engineScanCount: toNumOrNull(data.engineScanCount),
           engineLastError: data.engineLastError ? String(data.engineLastError) : null,
           paperWorkerLastAt: data.paperWorkerLastAt ? String(data.paperWorkerLastAt) : null,
           paperWorkerMonitorAt: data.paperWorkerMonitorAt ? String(data.paperWorkerMonitorAt) : null,
@@ -157,10 +149,13 @@ export default function ActiveTradingPage() {
 
   // Unrealized PnL from open positions + realized = session view
   const unrealizedPnl = useMemo(
-    () => session.openPositions.reduce((sum, p) => sum + (p.pnlUsd || 0), 0),
+    () => sumKnownOrNull(session.openPositions.map((p) => toNumOrNull(p.pnlUsd))),
     [session.openPositions]
   );
-  const totalSessionPnl = session.dailyRealizedPnl + unrealizedPnl;
+  const totalSessionPnl =
+    session.dailyRealizedPnl === null || unrealizedPnl === null
+      ? null
+      : session.dailyRealizedPnl + unrealizedPnl;
   const workerAgeSeconds = session.paperWorkerLastAt
     ? Math.max(0, Math.floor((Date.now() - new Date(session.paperWorkerLastAt).getTime()) / 1000))
     : null;
@@ -176,14 +171,14 @@ export default function ActiveTradingPage() {
   const scanFresh = scanAgeSeconds !== null && scanAgeSeconds <= 180;
 
   const profitPct =
-    session.dailyProfitTarget > 0
+    session.dailyProfitTarget != null && session.dailyProfitTarget > 0 && session.dailyRealizedPnl != null
       ? Math.min(
           100,
           Math.max(0, (session.dailyRealizedPnl / session.dailyProfitTarget) * 100)
         )
       : 0;
   const lossPct =
-    session.dailyMaxLoss > 0
+    session.dailyMaxLoss != null && session.dailyMaxLoss > 0 && session.dailyRealizedPnl != null
       ? Math.min(
           100,
           Math.max(
@@ -305,9 +300,7 @@ export default function ActiveTradingPage() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Realized</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    session.dailyRealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className={`text-sm font-mono font-bold mt-0.5 ${pnlClass(session.dailyRealizedPnl)}`}
                 >
                   {formatUsd(session.dailyRealizedPnl, true)}
                 </div>
@@ -315,9 +308,7 @@ export default function ActiveTradingPage() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Unrealized</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className={`text-sm font-mono font-bold mt-0.5 ${pnlClass(unrealizedPnl)}`}
                 >
                   {formatUsd(unrealizedPnl, true)}
                 </div>
@@ -325,9 +316,7 @@ export default function ActiveTradingPage() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Session</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    totalSessionPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className={`text-sm font-mono font-bold mt-0.5 ${pnlClass(totalSessionPnl)}`}
                 >
                   {formatUsd(totalSessionPnl, true)}
                 </div>
@@ -374,7 +363,7 @@ export default function ActiveTradingPage() {
                 Last completed position check {monitorAgeSeconds === null ? 'unverified' : `${monitorAgeSeconds}s ago`}
               </div>
               <div className="text-[11px] text-white/40">
-                {session.engineScanCount.toLocaleString()} market data refreshes recorded. Dashboard refreshes every 8 seconds; the Vercel paper worker is scheduled once per minute.
+                {formatCount(session.engineScanCount)} market data refreshes recorded. Dashboard refreshes every 8 seconds; the Vercel paper worker is scheduled once per minute.
               </div>
               {session.engineLastError && <div className="text-[11px] text-yellow-300/80">Last engine error: {session.engineLastError}</div>}
 
@@ -390,8 +379,7 @@ export default function ActiveTradingPage() {
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-white/60">Profit Target</span>
                 <span className="font-mono text-emerald-400">
-                  {formatUsd(session.dailyRealizedPnl, true)} / $
-                  {session.dailyProfitTarget.toLocaleString()}
+                  {formatUsd(session.dailyRealizedPnl, true)} / {formatUsd(session.dailyProfitTarget)}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -405,8 +393,7 @@ export default function ActiveTradingPage() {
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-white/60">Max Loss Guard</span>
                 <span className="font-mono text-red-400">
-                  {formatUsd(Math.min(0, session.dailyRealizedPnl), true)} / -$
-                  {session.dailyMaxLoss.toLocaleString()}
+                  {formatUsd(session.dailyRealizedPnl == null ? null : Math.min(0, session.dailyRealizedPnl), true)} / {session.dailyMaxLoss == null ? '—' : `-${formatUsd(session.dailyMaxLoss)}`}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -462,19 +449,14 @@ export default function ActiveTradingPage() {
                       </div>
                       <div className="text-right">
                         <div
-                          className={`font-mono font-bold ${
-                            p.pnlUsd >= 0 ? 'text-emerald-400' : 'text-red-400'
-                          }`}
+                          className={`font-mono font-bold ${pnlClass(p.pnlUsd)}`}
                         >
                           {formatUsd(p.pnlUsd, true)}
                         </div>
                         <div
-                          className={`text-xs font-mono ${
-                            p.pnlPercent >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'
-                          }`}
+                          className={`text-xs font-mono ${pnlClass(p.pnlPercent)}`}
                         >
-                          {p.pnlPercent >= 0 ? '+' : ''}
-                          {p.pnlPercent.toFixed(2)}%
+                          {toNumOrNull(p.pnlPercent) == null ? '—' : `${p.pnlPercent >= 0 ? '+' : ''}${p.pnlPercent.toFixed(2)}%`}
                         </div>
                         <button
                           type="button"

@@ -48,7 +48,7 @@ export default function TermsPage() {
         {err && <div className="err">{err}</div>}
         <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
           <button className="btn primary" disabled={!scrolledToEnd || !readConfirmed || busy} onClick={accept}>Accept</button>
-          <a className="btn" href="/api/auth/logout">Decline &amp; sign out</a>
+          <form action="/api/auth/logout" method="post"><button type="submit" className="btn">Decline &amp; sign out</button></form>
         </div>
       </div>
     </div>

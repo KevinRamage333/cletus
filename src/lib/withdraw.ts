@@ -53,7 +53,11 @@ export function issueToken(p: Omit<WithdrawPlan, 'exp' | 'nonce'>, secret: strin
 
 const g = globalThis as unknown as { __wdUsed?: Map<string, number>; __wdLast?: Map<string, number> };
 const used = (g.__wdUsed ??= new Map());
-export function verifyToken(token: unknown, secret: string, uid: string, now = Date.now(), usedNonces: Map<string, number> = used): { ok: true; plan: WithdrawPlan } | { ok: false; error: string } {
+
+export type TokenResult = { ok: true; plan: WithdrawPlan } | { ok: false; error: string };
+
+/** HMAC + expiry + uid check. Does not mark the nonce used. */
+export function parseWithdrawToken(token: unknown, secret: string, uid: string, now = Date.now()): TokenResult {
   const [body, sig] = String(token ?? '').split('.');
   if (!body || !sig) return { ok: false, error: 'Missing confirmation token; preview again' };
   const want = sign(body, secret); const got = Buffer.from(sig, 'base64url');
@@ -62,10 +66,43 @@ export function verifyToken(token: unknown, secret: string, uid: string, now = D
   try { plan = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')); } catch { return { ok: false, error: 'Confirmation token is corrupt' }; }
   if (plan.uid !== uid) return { ok: false, error: 'Confirmation token belongs to another user' };
   if (now > plan.exp) return { ok: false, error: 'Confirmation expired (2 minutes); preview again' };
-  for (const [n, exp] of usedNonces) if (exp < now) usedNonces.delete(n);
-  if (usedNonces.has(plan.nonce)) return { ok: false, error: 'This confirmation was already used' };
-  usedNonces.set(plan.nonce, plan.exp);
+  if (!plan.nonce) return { ok: false, error: 'Confirmation token is corrupt' };
   return { ok: true, plan };
+}
+
+/** In-memory single-use map (tests and local single-process only). Prefer persistWithdrawNonce. */
+export function consumeMemoryNonce(nonce: string, exp: number, now = Date.now(), usedNonces: Map<string, number> = used): boolean {
+  for (const [n, e] of usedNonces) if (e < now) usedNonces.delete(n);
+  if (usedNonces.has(nonce)) return false;
+  usedNonces.set(nonce, exp);
+  return true;
+}
+
+export function verifyToken(token: unknown, secret: string, uid: string, now = Date.now(), usedNonces: Map<string, number> = used): TokenResult {
+  const parsed = parseWithdrawToken(token, secret, uid, now);
+  if (!parsed.ok) return parsed;
+  if (!consumeMemoryNonce(parsed.plan.nonce, parsed.plan.exp, now, usedNonces)) {
+    return { ok: false, error: 'This confirmation was already used' };
+  }
+  return parsed;
+}
+
+/**
+ * Verify the HMAC token then consume the nonce through `consume`.
+ * Pass a DB-backed consume (skipDuplicates on a primary key) so use is single-use across instances.
+ */
+export async function verifyAndConsumeToken(
+  token: unknown,
+  secret: string,
+  uid: string,
+  consume: (nonce: string, exp: number) => Promise<boolean>,
+  now = Date.now(),
+): Promise<TokenResult> {
+  const parsed = parseWithdrawToken(token, secret, uid, now);
+  if (!parsed.ok) return parsed;
+  const ok = await consume(parsed.plan.nonce, parsed.plan.exp);
+  if (!ok) return { ok: false, error: 'This confirmation was already used' };
+  return parsed;
 }
 
 export interface WithdrawDeps {

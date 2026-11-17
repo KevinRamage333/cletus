@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAccount, useBalance, useConnect, useDisconnect, useSignMessage, useSwitchChain } from 'wagmi';
 import { verifyMessage, formatUnits } from 'viem';
 import { Refreshed, StateBox } from '@/components/app/ui';
-import { EVM_CHAINS, EVM_CHAIN_META, EVM_INSTALL_LINKS, ownershipMessage } from '@/lib/evm-wallet';
+import { EVM_CHAINS, EVM_CHAIN_META, EVM_INSTALL_LINKS, ownershipMessage, dedupeEvmConnectors } from '@/lib/evm-wallet';
 
 export function ChainBalance({ address, chainId, active }: { address: `0x${string}`; chainId: number; active: boolean }) {
   const { data, isLoading, isError, dataUpdatedAt } = useBalance({ address, chainId, query: { refetchInterval: 60_000 } });
@@ -35,9 +35,8 @@ export default function EvmWalletCard() {
   }, [connectors]);
   useEffect(() => { setProof(null); }, [address]);
   const supported = EVM_CHAINS.some((c) => c.id === chainId);
-  // De-duplicate: prefer EIP-6963 announced wallets, keep MetaMask/Coinbase entries, drop the generic "Injected" if a named one exists.
-  const named = connectors.filter((c) => c.type !== 'injected' || c.id !== 'injected');
-  const list = named.length ? named.filter((c, i, a) => a.findIndex((x) => x.name === c.name) === i) : connectors;
+  // De-duplicate by EIP-6963 rdns (or connector id), never by display name.
+  const list = dedupeEvmConnectors(connectors);
 
   const prove = async () => {
     if (!address) return;
@@ -45,7 +44,7 @@ export default function EvmWalletCard() {
     try {
       const message = ownershipMessage(address, EVM_CHAIN_META[chainId ?? 1]?.name ?? `chain ${chainId}`, crypto.randomUUID(), new Date().toISOString());
       const signature = await signMessageAsync({ message });
-      setProof((await verifyMessage({ address, message, signature })) ? 'Signature verified in your browser. Nothing was sent to a server.' : 'Signature did not verify.');
+      setProof((await verifyMessage({ address, message, signature })) ? 'Browser-only check passed. This is not a server-verified proof and grants no access.' : 'Browser-only check failed.');
     } catch (e) { setErr((e as Error)?.message?.split('\n')[0] || 'Signing was cancelled.'); }
   };
 
@@ -59,17 +58,17 @@ export default function EvmWalletCard() {
           <div><p className="mb-2 text-[11px] uppercase tracking-wider text-[#8a8478]">Switch network</p><div className="flex flex-wrap gap-1.5" data-testid="evm-switch">{EVM_CHAINS.map((c) => <button key={c.id} disabled={switching || c.id === chainId} onClick={() => { setErr(null); switchChain({ chainId: c.id }); }} className={`border px-2.5 py-1 text-xs font-semibold ${c.id === chainId ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f3dc95]' : 'border-white/10 text-[#a39c8f] hover:text-[#f2ede2]'}`}>{EVM_CHAIN_META[c.id].name}</button>)}</div></div>
           <ul className="space-y-1.5">{EVM_CHAINS.map((c) => <ChainBalance key={c.id} address={address} chainId={c.id} active={c.id === chainId} />)}</ul>
           <div className="flex flex-wrap gap-2">
-            <button className="btn-line !py-2" onClick={prove} data-testid="evm-prove">Prove ownership</button>
+            <button className="btn-line !py-2" onClick={prove} data-testid="evm-prove">Browser signature check</button>
             {supported && <a className="btn-line !py-2" href={`${EVM_CHAIN_META[chainId!].explorer}${address}`} target="_blank" rel="noreferrer">Explorer ↗</a>}
             <button className="btn-line !py-2" onClick={() => disconnect()} data-testid="evm-disconnect">Disconnect</button>
           </div>
-          {proof && <p className="text-xs text-green-300" role="status" data-testid="evm-proof">{proof}</p>}
+          {proof && <p className={`text-xs ${proof.startsWith('Browser-only check passed') ? 'text-[#d8d2c5]' : 'text-red-300'}`} role="status" data-testid="evm-proof">{proof}</p>}
         </div>
       ) : (
         <div className="mt-4 space-y-2">
           {list.map((c) => (
             <div key={c.uid} className="flex items-center justify-between gap-2 border border-white/10 px-3 py-2.5">
-              <span className="flex items-center gap-2 font-semibold text-[#f6f1e4]">{c.icon ? <img src={c.icon} alt="" width={22} height={22} /> : <span className="h-[22px] w-[22px] rounded bg-gradient-to-br from-[#f3dc95] to-[#8f6e22]" />}{c.name === 'Injected' ? 'Browser wallet' : c.name}</span>
+              <span className="flex min-w-0 items-center gap-2 font-semibold text-[#f6f1e4]">{c.icon ? <img src={c.icon} alt="" width={22} height={22} /> : <span className="h-[22px] w-[22px] rounded bg-gradient-to-br from-[#f3dc95] to-[#8f6e22]" />}<span className="min-w-0 truncate">{c.name === 'Injected' ? 'Browser wallet' : c.name}{typeof c.rdns === 'string' && c.rdns ? <span className="ml-2 text-[10px] font-normal text-[#8a8478]">{c.rdns}</span> : null}</span></span>
               {detected[c.uid] === false && EVM_INSTALL_LINKS[c.id]
                 ? <a className="btn-line !px-3 !py-1.5" href={EVM_INSTALL_LINKS[c.id]} target="_blank" rel="noreferrer">Install</a>
                 : <button className="btn-gold !px-3 !py-1.5" disabled={isPending || detected[c.uid] === false} onClick={() => { setErr(null); connect({ connector: c }); }} data-testid={`evm-connect-${c.id}`}>{isPending && variables?.connector && 'uid' in variables.connector && variables.connector.uid === c.uid ? 'Connecting…' : detected[c.uid] === false ? 'Not detected' : 'Connect'}</button>}
