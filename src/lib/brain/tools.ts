@@ -9,6 +9,7 @@ import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
 import { tierFor } from '../sizing';
 import { scoreConfidence, backtestSummary } from '../calibration';
 import { whaleActivity, socialHype, flowStatus } from '../flow-collector';
+import { readMassivePreviousSession } from '../massive-market-data';
 import { describeOwnerPlan } from '../owner-plan';
 
 export interface ToolContext { userId: string; accountId: string; isAdmin: boolean }
@@ -31,6 +32,7 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_base_market_candidates', description: 'Fetch current read-only Base-chain token market snapshots (USD price, 24h volume, liquidity, FDV, 24h move, DEX and pair link). These are discovery candidates, not buy signals; Base paper trading and execution are disabled.', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_base_paper_quote', description: 'Get a read-only Base Uniswap v3 quote and a non-persistent adverse-slippage paper-fill preview for one ERC-20 token versus native USDC. Requires tokenAddress, side (buy or sell), and amountIn. Reports L2 fee estimate only; Base L1 data fee is not included. Never places or broadcasts trades.', parameters: { type: 'OBJECT', properties: { tokenAddress: { type: 'STRING', description: 'Base ERC-20 token contract address' }, side: { type: 'STRING', description: 'buy or sell', enum: ['buy', 'sell'] }, amountIn: { type: 'STRING', description: 'Buy: USDC input amount. Sell: token input amount.' }, slippageBps: { type: 'INTEGER', description: 'Adverse paper-fill slippage in basis points; default 50, maximum 300.' } }, required: ['tokenAddress', 'side', 'amountIn'] } },
   { name: 'get_world_briefing', description: 'The latest rolling world briefing (crypto, macro, Fed, world news) plus SOL price and DexScreener trending tokens.' },
+  { name: 'get_us_equity_previous_session', description: 'Read the previous trading session OHLC and volume for a U.S. equity such as SPY or AAPL. Historical context only; do not present it as a current price.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'U.S. equity symbol' } }, required: ['symbol'] } },
   { name: 'get_news', description: 'Recent stored news headlines, optionally by category.', parameters: { type: 'OBJECT', properties: { category: { type: 'STRING', description: 'crypto | macro | world | fed', enum: ['crypto', 'macro', 'world', 'fed'] }, ...limitParam } } },
   { name: 'get_backtest', description: 'Walk-forward backtest calibration: historical win rate, 95% interval and average net return per market-cap preset and score bucket, and whether the composite score was predictive out of sample. Use this before stating any probability or confidence.' },
   { name: 'get_whale_activity', description: 'On-chain big money movers for a tracked token (Helius): whale net flow, smart-money buys/sells, dev-wallet selling, fresh-wallet bundle clusters, top-holder concentration change, the confirm/veto verdict, fast-exit signal, and Solscan links. Use it as a confirmer/veto next to order flow, never as a buy signal.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'token symbol, e.g. BONK' }, mint: { type: 'STRING', description: 'token mint address' } } } },
@@ -121,6 +123,8 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
       const [b, m] = await Promise.all([prisma.briefing.findFirst({ orderBy: { createdAt: 'desc' } }), prisma.marketSnapshot.findFirst({ orderBy: { createdAt: 'desc' } })]);
       return { briefing: b?.content ?? null, briefingAt: b?.createdAt ?? null, briefingSource: b?.source ?? null, solPriceUsd: m?.solPriceUsd ?? null, solChange24h: m?.solChange24h ?? null, trending: m ? JSON.parse(m.trending) : [] };
     }
+    case 'get_us_equity_previous_session':
+      return readMassivePreviousSession(args?.symbol);
     case 'get_news': {
       const cat = typeof args?.category === 'string' ? args.category : undefined;
       const rows = await prisma.newsItem.findMany({ where: cat ? { category: cat } : {}, orderBy: { publishedAt: 'desc' }, take: lim(args, 12) });
