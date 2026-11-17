@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
 import { parseAddress } from '@/lib/inspector';
 import { inspectAddress } from '@/lib/inspector';
@@ -70,6 +71,11 @@ export async function GET(req: Request) {
       auditError = 'Market price unavailable; pre-trade audit could not be sized.';
     }
 
+    const activeBadge = await prisma.developerVerification.findFirst({
+      where: { mint, status: 'approved', walletProofAt: { not: null }, badgeIssuedAt: { not: null }, badgeExpiresAt: { gt: new Date() }, badgeRevokedAt: null },
+      orderBy: { badgeIssuedAt: 'desc' },
+      select: { wallet: true, projectName: true, badgeIssuedAt: true, badgeExpiresAt: true },
+    });
     const token = inspection.token;
     return NextResponse.json({
       mint,
