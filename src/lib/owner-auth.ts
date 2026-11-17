@@ -17,6 +17,7 @@ export interface OwnerSession {
   exp: number;
 }
 
+const OWNER_SESSION_CONTEXT = 'cletus-owner-v2:';
 const enc = new TextEncoder();
 
 function b64url(bytes: Uint8Array): string {
@@ -80,14 +81,14 @@ export async function signOwnerSession(addr: string, secret = getSessionSecret()
   if (!canonical) throw new Error('invalid owner address');
   const claims: OwnerSession = { typ: 'owner', addr: canonical, nonce, iat: now, exp: now + ttlSec };
   const body = b64url(enc.encode(JSON.stringify(claims)));
-  const sig = b64url(await hmac(body, secret));
+  const sig = b64url(await hmac(OWNER_SESSION_CONTEXT + body, secret));
   return `${body}.${sig}`;
 }
 
 export async function verifyOwnerSession(token: string | undefined | null, secret = getSessionSecret(), now = Math.floor(Date.now() / 1000), env: Record<string, string | undefined> = process.env): Promise<OwnerSession | null> {
   if (!token || !token.includes('.')) return null;
   const [body, sig] = token.split('.');
-  const expected = b64url(await hmac(body, secret));
+  const expected = b64url(await hmac(OWNER_SESSION_CONTEXT + body, secret));
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
