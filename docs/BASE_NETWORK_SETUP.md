@@ -1,28 +1,28 @@
-# Base read-only market-data adapter
+# Base market-data adapter — clean rebuild (v2)
 
-## Included
-- Discovers Base token addresses from DexScreener profile and boost feeds (chainId: base).
-- Fetches Base pair snapshots in batches of at most 30 addresses.
-- Normalizes USD price, 24-hour volume, liquidity, FDV/market cap, price change, pair age, DEX and pair URL.
-- Selects the deepest/most active pair per token; caches successful responses for 30 seconds.
-- Filters all discovery and pair results by Base chain identity.
-- Exposes an on-demand `get_base_market_candidates` tool to the existing shared Cletus Brain; the tool is read-only and only runs when requested.
+## What this module does
+- Reads DexScreener's latest token profile and boost feeds.
+- Keeps only Base-chain entries with valid 20-byte EVM addresses.
+- Fetches pair data in batches of no more than 30 token addresses.
+- Normalizes numeric fields without turning absent prices into zero.
+- Filters pair orientation correctly: DexScreener's `priceUsd` is the base-token price, so a requested token found only on the quote side is not reported as that token's USD price.
+- Selects only priced, positive-liquidity markets; liquidity ranks first and 24-hour volume breaks ties.
+- Uses a 10-second request timeout, 30-second successful-response cache and bounded cache size.
+- Uses best-effort discovery feeds and fails only when all discovery sources fail.
 
-## Pair orientation
-DexScreener may return a pool where the requested token is the quote asset. The current snapshot only accepts pools where the requested token is the base asset, because the returned `priceUsd` belongs to the base token. Quote-side candidates are omitted until their USD price can be calculated correctly. This prevents assigning another token's price to the requested asset.
+## Explicit safety boundary
+This remains read-only discovery. It does not quote swaps, estimate total Base fees, create simulated fills, persist positions, sign transactions, or broadcast. Base paper trading and execution remain disabled. Do not enable them until the separate quote/fee/fill/accounting path is tested end-to-end.
 
-## Safety boundary
-This is discovery and market data only. It does not fetch executable swap quotes, estimate Base gas, model failed transactions, create paper fills, persist positions, sign transactions, or broadcast transactions. Base remains `adapterReady: false` and `paperTradingEnabled: false` in the network registry. Do not change those flags until quote/fill modeling, gas and slippage assumptions, chain-scoped persistence, and paper-only end-to-end tests are complete.
+## Why v2 replaces the original
+The original PR #3 accepted arbitrary non-empty address strings, could convert a missing price into zero, trusted any URL, and selected a pair with a blended liquidity/volume score that could prefer a shallow pool. Those are data-integrity defects. The rewrite validates inputs at the boundary and uses explicit market-quality rules.
 
-## Provider
-DexScreener public API; no API key is required by this adapter. Requests use a 10-second timeout and a short in-process cache. Provider rate limits and terms still apply; avoid high-frequency polling and add a shared limiter before production scheduling.
+## Entry points retained for compatibility
+- `parseBaseTokenIdentities`
+- `parseBasePairs`
+- `filterBasePairsForTokens`
+- `discoverBaseTokens`
+- `fetchBasePairsForTokens`
+- `bestBasePairPerToken`
+- `fetchBaseMarketSnapshot`
 
-## Entry points
-- `discoverBaseTokens()`
-- `fetchBasePairsForTokens(addresses)`
-- `fetchBaseMarketSnapshot(limit)`
-- Brain tool: `get_base_market_candidates`
-- Pure parsers/ranker are covered by `tests/base-market-data.test.ts`.
-
-## Not yet connected
-The automated Solana engine, its entry/audit/exit path, and portfolio remain unchanged. Base is not automatically scanned or traded; the shared Brain can fetch Base snapshots on demand and discuss them with the user.
+The shared Brain's `get_base_market_candidates` tool continues to call the same public snapshot function.
