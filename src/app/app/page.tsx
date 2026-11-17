@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import HeaderCard from '@/components/HeaderCard';
+import HomeFeatureSpotlight from '@/components/HomeFeatureSpotlight';
 import UnifiedDashboardHub from '@/components/UnifiedDashboardHub';
 import TradingNetworks from '@/components/TradingNetworks';
 import CollectivePnlTicker from '@/components/CollectivePnlTicker';
@@ -212,6 +213,7 @@ export default function AppDashboardPage() {
 
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
+          <HomeFeatureSpotlight />
           <HeaderCard />
           <UnifiedDashboardHub />
           <CollectivePnlTicker showCommunityLink />
