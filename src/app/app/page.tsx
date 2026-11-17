@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import HeaderCard from '@/components/HeaderCard';
+import TradingNetworks from '@/components/TradingNetworks';
 import CollectivePnlTicker from '@/components/CollectivePnlTicker';
 import ApprovalQueue from '@/components/ApprovalQueue';
 import LivePortfolio, { type PortfolioPosition, type PortfolioTrade } from '@/components/LivePortfolio';
@@ -211,7 +212,8 @@ export default function AppDashboardPage() {
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <HeaderCard />
-          <CollectivePnlTicker />
+          <CollectivePnlTicker showCommunityLink />
+          <TradingNetworks />
           {/* Trial strip */}
           {stats.trialActive && (
             <div className="rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

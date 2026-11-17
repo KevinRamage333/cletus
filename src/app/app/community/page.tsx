@@ -13,6 +13,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import CollectivePnlTicker from '@/components/CollectivePnlTicker';
 
 type ChatMessage = {
   id: string;
@@ -45,15 +46,6 @@ type AuditResult = {
   at: string;
 };
 
-/** Collective community PnL — all users gains net of losses */
-type CollectivePnl = {
-  netProfit: number;
-  totalGains: number;
-  totalLosses: number;
-  activeUsers: number;
-  updatedAt: string;
-};
-
 function shortAddr(a: string) {
   if (!a || a.length < 12) return a || '—';
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -76,42 +68,11 @@ export default function CommunityPage() {
   const [auditing, setAuditing] = useState(false);
   const [auditError, setAuditError] = useState('');
   const [lastAudit, setLastAudit] = useState<AuditResult | null>(null);
-  const [collective, setCollective] = useState<CollectivePnl>({
-    netProfit: 0,
-    totalGains: 0,
-    totalLosses: 0,
-    activeUsers: 0,
-    updatedAt: '',
-  });
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  // Collective profit ticker — all users net of losses
-  useEffect(() => {
-    async function loadCollective() {
-      try {
-        const res = await fetch('/api/community/collective-pnl');
-        if (res.ok) {
-          const data = await res.json();
-          setCollective({
-            netProfit: Number(data.netProfit) || 0,
-            totalGains: Number(data.totalGains) || 0,
-            totalLosses: Number(data.totalLosses) || 0,
-            activeUsers: Number(data.activeUsers) || 0,
-            updatedAt: data.updatedAt ?? new Date().toISOString(),
-          });
-        }
-      } catch {
-        // keep previous / zeros
-      }
-    }
-    loadCollective();
-    const t = setInterval(loadCollective, 15_000);
-    return () => clearInterval(t);
-  }, []);
 
   // Live community feed (server-side, admin-moderated)
   const loadMessages = useCallback(async () => {
@@ -141,17 +102,6 @@ export default function CommunityPage() {
     const r = await fetch('/api/community/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) setChatError((await r.json().catch(() => ({}))).error ?? 'Moderation failed');
     loadMessages();
-  };
-
-  const formatCollective = (n: number) => {
-    const abs = Math.abs(n);
-    const formatted = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(abs);
-    return n >= 0 ? `+${formatted}` : `-${formatted}`;
   };
 
   const sendChat = async () => {
@@ -270,101 +220,7 @@ export default function CommunityPage() {
             </p>
           </div>
 
-          {/* Collective profit ticker — all users gains over losses */}
-          <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] overflow-hidden">
-            <div className="px-4 py-2 border-b border-white/10 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                Community collective PnL
-              </span>
-              <span className="flex items-center gap-1.5 text-[10px] text-emerald-400/80 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                LIVE
-              </span>
-            </div>
-            <div className="relative overflow-hidden">
-              <div className="animate-[marquee_28s_linear_infinite] flex whitespace-nowrap py-3.5 text-sm font-mono">
-                <span className="inline-flex items-center gap-6 px-6">
-                  <span>
-                    Collective net:{' '}
-                    <strong
-                      className={
-                        collective.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }
-                    >
-                      {formatCollective(collective.netProfit)}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span>
-                    All gains:{' '}
-                    <strong className="text-emerald-400">
-                      {formatCollective(collective.totalGains)}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span>
-                    All losses:{' '}
-                    <strong className="text-red-400">
-                      {formatCollective(-Math.abs(collective.totalLosses))}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span className="text-white/50">
-                    {collective.activeUsers} traders tracked
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span className="text-white/40">
-                    Profit he has gained for the community as a whole
-                  </span>
-                  {/* duplicate for seamless loop */}
-                  <span className="text-white/30">|</span>
-                  <span>
-                    Collective net:{' '}
-                    <strong
-                      className={
-                        collective.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }
-                    >
-                      {formatCollective(collective.netProfit)}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span>
-                    All gains:{' '}
-                    <strong className="text-emerald-400">
-                      {formatCollective(collective.totalGains)}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span>
-                    All losses:{' '}
-                    <strong className="text-red-400">
-                      {formatCollective(-Math.abs(collective.totalLosses))}
-                    </strong>
-                  </span>
-                  <span className="text-white/30">|</span>
-                  <span className="text-white/50">
-                    {collective.activeUsers} traders tracked
-                  </span>
-                </span>
-              </div>
-            </div>
-            <p className="px-4 py-2 text-[10px] text-white/25 border-t border-white/10">
-              Net of all users on Cletus — total gains minus total losses. Not a guarantee of
-              future results.
-            </p>
-          </div>
-
-          <style jsx>{`
-            @keyframes marquee {
-              0% {
-                transform: translateX(0);
-              }
-              100% {
-                transform: translateX(-50%);
-              }
-            }
-          `}</style>
+          <CollectivePnlTicker />
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Chat — 3 cols */}

@@ -78,6 +78,40 @@ export default function DiscoverPage(){
  <div className="grid md:grid-cols-2 gap-3"><div className="bg-[#101010] border border-white/10 rounded-xl p-4"><h2 className="font-bold mb-2">Cletus trade read</h2><p className="text-sm text-white/60">1h {change(selected.change1hPct)} · 24h {change(selected.change24hPct)} · liquidity {short(selected.liquidityUsd)} · volume {short(selected.volume24hUsd)}</p><p className="text-xs text-white/40 mt-3">Score is a heuristic rank, not a probability of profit. Trade plans and orders must pass the existing risk and paper-fill engine.</p>{selected.openPaperPosition&&<p className="mt-2 text-sm">Paper P&amp;L: <b className={(selected.paperPnlUsd??0)>=0?'text-emerald-400':'text-red-400'}>{money(selected.paperPnlUsd)} ({change(selected.paperPnlPct)})</b></p>}</div>
  <div className="bg-[#101010] border border-white/10 rounded-xl p-4 space-y-2"><h2 className="font-bold">Developer &amp; security</h2>{!intel&&!error&&<p className="text-xs text-white/40">Inspecting authorities, holders and sell-route risk…</p>}{error&&<p className="text-xs text-red-300">{error}</p>}{intel&&<><p className="text-xs">Mint authority: <b>{intel.identity.mintAuthority?'Enabled':'Revoked / unavailable'}</b></p><p className="text-xs">Freeze authority: <b>{intel.identity.freezeAuthority?'Enabled':'Revoked / unavailable'}</b></p><p className="text-xs">Pre-trade audit: <b>{intel.security.audit?(intel.security.audit.passed?'Passed':'Failed'):(intel.security.auditError||'Unavailable')}</b></p><p className="text-xs">Top holders: {intel.security.holderConcentration.length}</p>{intel.security.audit?.checks.map((c,i)=><p key={i} className="text-[11px] text-white/55">{c.passed?'✓':'⚠'} {c.name}: {c.detail}</p>)}<p className="text-[10px] text-white/30">{intel.security.sources.join(', ')}</p></>}</div></div></section>
  :<><div className="flex flex-wrap gap-2"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search ticker, name or mint" className="flex-1 min-w-[170px] bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"/><select value={filter} onChange={e=>setFilter(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="all">All scanned</option><option value="qualified">Qualified</option><option value="held">Open paper trades</option></select><select value={sort} onChange={e=>setSort(e.target.value)} className="bg-[#101010] border border-white/10 rounded-lg px-3 py-2 text-sm"><option value="score">Cletus score</option><option value="volume">24h volume</option><option value="momentum">1h momentum</option></select><button onClick={()=>void load()} aria-label="Refresh discovery feed" disabled={loadingFeed} className="bg-amber-300 text-black rounded-lg px-4 text-sm font-bold disabled:opacity-50">↻</button></div>
- <section className="rounded-xl border border-white/10 overflow-hidden bg-[#090909]"><div className="grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 px-3 py-2 text-[9px] uppercase text-white/35"><span>Token / score</span><span>Price</span><span>1h move</span><span>24h vol</span><span>Paper P&amp;L</span></div>{rows.length?rows.map(t=><button key={t.mint} onClick={()=>setSelected(t)} className="w-full text-left grid grid-cols-[1.3fr_.8fr_.8fr_.7fr_.7fr] gap-2 items-center px-3 py-3 border-t border-white/[.06] hover:bg-white/[.04]"><span className="min-w-0"><b className="block text-sm truncate">{t.symbol} <small className="text-white/30">{t.dex}</small></b><small className="text-white/40 truncate block">{t.name} · {t.score}/100 {t.rejected?'· filtered':''}</small></span><span className="text-xs font-mono">{money(t.priceUsd)}</span><span><b className={'text-xs '+(t.change1hPct>=0?'text-emerald-400':'text-red-400')}>{change(t.change1hPct)}</b><span className="block h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden"><i className={'block h-full '+(t.change1hPct>=0?'bg-emerald-400':'bg-red-400')} style={{width:Math.min(100,Math.abs(t.change1hPct)*4)+'%'}}/></span></span><span className="text-xs">{short(t.volume24hUsd)}</span><span className="text-xs">{t.paperPnlUsd==null?'—':money(t.paperPnlUsd)}</span></button>):<p className="p-8 text-center text-white/40">{!feed && loadingFeed ? 'Loading the discovery feed…' : !snapshotAvailable ? 'Waiting for a candidate snapshot.' : feed?.tokens.length ? 'No tokens match these filters.' : 'This scan returned no candidates.'}</p>}</section></>}
+ <section aria-label="Scanned tokens" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+   {rows.length ? rows.map(t => (
+     <article key={`${t.mint}:${t.pool}`} className="overflow-hidden rounded-xl border border-white/10 bg-[#101010]">
+       <Link
+         href={`/app/chart?${new URLSearchParams({ address: t.mint, ...(t.pool ? { pool: t.pool } : {}) })}`}
+         className="block space-y-3 p-4 hover:bg-white/5 focus-visible:outline focus-visible:outline-amber-300"
+         aria-label={`Open ${t.symbol} chart`}
+       >
+         <div className="flex items-start justify-between gap-3">
+           <div className="min-w-0">
+             <h2 className="truncate text-base font-bold">{t.symbol}</h2>
+             <p className="truncate text-xs text-zinc-400">{t.name} · {t.dex}</p>
+           </div>
+           <span className="shrink-0 text-xs font-semibold text-amber-300">{t.score}/100 {t.rejected ? '· Filtered' : ''}</span>
+         </div>
+         <dl className="grid grid-cols-2 gap-2 font-mono text-xs">
+           <div><dt className="text-zinc-400">Price</dt><dd>{money(t.priceUsd)}</dd></div>
+           <div><dt className="text-zinc-400">1h move</dt><dd className={t.change1hPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{change(t.change1hPct)}</dd></div>
+           <div><dt className="text-zinc-400">24h volume</dt><dd>{short(t.volume24hUsd)}</dd></div>
+           <div><dt className="text-zinc-400">Paper P&amp;L</dt><dd className={t.paperPnlUsd == null ? 'text-zinc-400' : t.paperPnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{money(t.paperPnlUsd)}{t.paperPnlPct != null && ` · ${change(t.paperPnlPct)}`}</dd></div>
+         </dl>
+         {t.paperPnlPct != null && <div aria-hidden="true" className="h-1 overflow-hidden rounded bg-white/10">
+           <div className={`h-full ${t.paperPnlPct >= 0 ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: Math.min(100, Math.abs(t.paperPnlPct) * 4) + '%' }} />
+         </div>}
+         <div className="text-xs font-semibold text-amber-300">Open chart →</div>
+       </Link>
+       <button type="button" onClick={() => setSelected(t)} className="w-full border-t border-white/10 px-4 py-2 text-left text-xs text-zinc-300 hover:bg-white/5">Trade setup &amp; token audit</button>
+     </article>
+   )) : (
+     <p className="col-span-full rounded-xl border border-white/10 p-8 text-center text-sm text-zinc-400">
+       {!feed && loadingFeed ? 'Loading the discovery feed…' : !snapshotAvailable ? 'Waiting for a candidate snapshot.' : feed?.tokens.length ? 'No tokens match these filters.' : 'This scan returned no candidates.'}
+     </p>
+   )}
+ </section></>}
+
  <p className="text-[10px] text-white/30">{feed?.summary} · refreshes every 5 seconds. Market movement is not P&amp;L; only open paper positions show simulated P&amp;L.</p></div></main>;
 }
