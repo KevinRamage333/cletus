@@ -15,6 +15,11 @@ describe('hard risk limits', () => {
     expect(hardRiskBlock({ dayPnlUsd: 0, equityUsd: 10000, consecutiveLosses: 4 }, RP)).toMatch(/losses in a row/);
     expect(hardRiskBlock({ dayPnlUsd: -50, equityUsd: 10000, consecutiveLosses: 3 }, RP)).toBeNull();
   });
+  it('lets zero disable the USD cap while keeping the percent cap', () => {
+    const policy = { ...RP, dailyLossLimitUsd: -0 };
+    expect(hardRiskBlock({ dayPnlUsd: 0, equityUsd: 10000, consecutiveLosses: 0 }, policy)).toBeNull();
+    expect(hardRiskBlock({ dayPnlUsd: -300, equityUsd: 4700, consecutiveLosses: 0 }, policy)).toMatch(/5% of equity/);
+  });
   it('caps size by % of equity and pauses after N losses', () => {
     expect(capByEquityPct(2000, 10000, 5)).toEqual({ sizeUsd: 500, capped: true });
     expect(capByEquityPct(200, 10000, 5).capped).toBe(false);
