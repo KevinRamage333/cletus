@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { PageHeader, Refreshed, StateBox, Stat, TokenAvatar } from '@/components/app/ui';
 import { formatPct, formatPrice, formatUsdCompact, type MoverCard } from '@/lib/movers';
+import LiveTokenChart from '@/components/charts/LiveTokenChart';
 import { BASE58_MINT, type CheckState, type HolderFacts, type PublicAuditCheck } from '@/lib/public-audit';
 
 type Audit = { mint: string; auditedAt: string; facts: { mintAuthority: string | null; freezeAuthority: string | null; decimals: number; supplyUi: number; program: string } | null; holders: HolderFacts | null; market: MoverCard | null; checks: PublicAuditCheck[]; verdict: { label: string; state: CheckState }; errors: string[]; sources: string[]; disclaimer: string };
@@ -54,6 +55,7 @@ function AuditInner() {
           <div className="grid gap-3 md:grid-cols-2">
             {data.checks.map((c) => <div key={c.id} className="panel p-4" data-testid="audit-check"><div className="flex items-center justify-between gap-2"><p className="font-semibold text-[#f6f1e4]">{c.label}</p><span className={`border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${STATE[c.state]}`}>{LABEL[c.state]}</span></div><p className="mt-1 break-words text-xs text-[#a39c8f]">{c.detail}</p></div>)}
           </div>
+          <LiveTokenChart key={data.mint} address={data.mint} pool={m?.pair ?? null} title={`Live chart · ${m?.symbol ? '$' + m.symbol : short(data.mint)}`} testId="audit-chart" height={340} />
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Price" value={formatPrice(m?.priceUsd)} /><Stat label="Market cap" value={formatUsdCompact(m?.marketCapUsd)} /><Stat label="Liquidity" value={formatUsdCompact(m?.liquidityUsd)} /><Stat label="24h change" value={formatPct(m?.change24hPct)} tone={m?.change24hPct == null ? 'muted' : m.change24hPct >= 0 ? 'up' : 'down'} />
           </div>
