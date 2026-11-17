@@ -46,19 +46,23 @@ type PrismaLike = {
   cletusVerification: { create: (a: unknown) => Promise<unknown>; findMany: (a: unknown) => Promise<unknown[]> };
   tokenBoost: { create: (a: unknown) => Promise<unknown>; findMany: (a: unknown) => Promise<unknown[]> };
 };
-let dbDisabled = false;
 async function db(): Promise<PrismaLike | null> {
-  if (dbDisabled || !process.env.DATABASE_URL) return null;
+  if (!process.env.DATABASE_URL) return null;
   const { prisma } = await import('./db');
   return prisma as unknown as PrismaLike;
 }
-/** Missing table / schema (migration not applied) or unreachable DB: use the file store for this instance. */
+const fileFallbackAllowed = () => process.env.CLETUS_DEMO === '1';
+/**
+ * No DATABASE_URL: file store (local/demo). With a database, a DB error falls back to the file store only in the
+ * public demo (CLETUS_DEMO=1) and only for that call; in production it is logged and thrown (Audit M4), never sticky.
+ */
 async function withDb<T>(fnDb: (p: PrismaLike) => Promise<T>, fnFile: () => T): Promise<T> {
   const p = await db();
   if (!p) return fnFile();
   try { return await fnDb(p); } catch (e) {
     const code = (e as { code?: string })?.code;
-    if (code === 'P2021' || code === 'P2022' || code === 'P1001' || /does not exist|ECONNREFUSED/i.test(String((e as Error)?.message))) { dbDisabled = true; return fnFile(); }
+    console.error(`[listing-store] database error${code ? ` ${code}` : ''}: ${String((e as Error)?.message ?? e).split('\n')[0].slice(0, 200)}`);
+    if (fileFallbackAllowed()) return fnFile();
     throw e;
   }
 }

@@ -1,5 +1,7 @@
 /** Server helpers for Cletus Verified challenges and signature checks. */
-import { verifyMessage } from 'viem';
+import { createPublicClient, http, verifyMessage } from 'viem';
+import { base, bsc, cronos, mainnet, polygon } from 'viem/chains';
+import { PUBLIC_RPC } from './evm-wallet';
 import { getSessionSecret } from './session';
 import { allowedSiwsHost, randomNonce, signChallenge, verifyChallengeToken, verifySiwsSignature } from './siws';
 import { networkMeta, normalizeAddress, verificationMessage, type ListingNetwork } from './verified';
@@ -41,6 +43,18 @@ export async function checkVerificationProof(body: Record<string, unknown>, now 
   if (t.network === 'solana') signatureValid = verifySiwsSignature(message, signature, t.wallet);
   else if (/^0x[0-9a-fA-F]+$/.test(signature)) {
     try { signatureValid = await verifyMessage({ address: t.wallet as `0x${string}`, message, signature: signature as `0x${string}` }); } catch { signatureValid = false; }
+    // Smart-contract wallets (Safe etc.): ERC-1271 / ERC-6492 check on the token's chain (Audit L3). Read-only eth_call.
+    if (!signatureValid) signatureValid = await verifyContractWalletSignature(t.network, t.wallet, message, signature);
   }
   return { ...t, signatureValid, nonce: claims.nonce, expMs: claims.exp * 1000 };
+}
+
+const VIEM_CHAINS = { ethereum: mainnet, base, bnb: bsc, polygon, cronos } as const;
+export async function verifyContractWalletSignature(network: ListingNetwork, wallet: string, message: string, signature: string): Promise<boolean> {
+  const chain = VIEM_CHAINS[network as keyof typeof VIEM_CHAINS];
+  if (!chain) return false;
+  try {
+    const client = createPublicClient({ chain, transport: http(process.env[`NEXT_PUBLIC_RPC_${chain.id}`] || PUBLIC_RPC[chain.id], { timeout: 8000 }) });
+    return await client.verifyMessage({ address: wallet as `0x${string}`, message, signature: signature as `0x${string}` });
+  } catch { return false; }
 }

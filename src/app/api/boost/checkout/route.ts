@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { boostSafetyFor, parseBoostTarget } from '@/lib/boost-server';
 import { listBoosts } from '@/lib/listing-store';
 import { boostPaymentsEnabled, boostWindow, tierById } from '@/lib/token-boost';
-import { takeToken, clientIp } from '@/lib/request-limit';
+import { takeToken, clientIp, publicErrorMessage } from '@/lib/request-limit';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const tier = tierById(String(body.tier ?? ''));
   if (!tier) return NextResponse.json({ error: 'Choose a boost duration.' }, { status: 400 });
   let safety;
-  try { safety = await boostSafetyFor(t.network, t.token); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Safety sources unavailable' }, { status: (e as { status?: number }).status ?? 502 }); }
+  try { safety = await boostSafetyFor(t.network, t.token); } catch (e) { const pe = publicErrorMessage(e); return NextResponse.json({ error: pe.message }, { status: pe.status }); }
   if (!safety.ok) return NextResponse.json({ status: 'rejected', error: 'This token does not pass the basic safety checks required for boosting.', reasons: safety.reasons }, { status: 422 });
   const window = boostWindow(tier, await listBoosts({ network: t.network, token: t.token }));
   const quote = { ...t, tier: tier.id, label: tier.label, priceUsd: tier.priceUsd, startsAt: window.startsAt.toISOString(), expiresAt: window.expiresAt.toISOString(), name: safety.name, symbol: safety.symbol };

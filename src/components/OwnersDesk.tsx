@@ -123,7 +123,7 @@ export default function OwnersDesk({ onAuthLost }: { onAuthLost?: () => void }) 
               <div className="text-xs text-white/55 space-y-0.5 font-mono text-right">
                 <div>Cash {usd(paper.cashUsd)}</div>
                 <div>Win rate <span data-testid="owners-desk-winrate">{paper.winRatePct == null ? '—' : `${paper.winRatePct.toFixed(1)}%`}</span></div>
-                <div>{paper.openCount} open · {paper.closedCount} closed</div>
+                <div>{paper.openCount} open · {paper.closedCount ?? '—'} closed</div>
                 <div className="text-white/35">Source {paper.source.replace('_', ' ')}</div>
               </div>
             </div>

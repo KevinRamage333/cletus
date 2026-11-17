@@ -35,3 +35,10 @@ export function allowAll(pairs: Array<[string, number]>, windowMs: number, now =
 }
 
 export const _resetRequestLimits = () => store().clear();
+
+/** Client-safe error text: our own 4xx validation messages pass through; upstream/internal errors become generic. */
+export function publicErrorMessage(e: unknown, fallback = 'Safety sources are unavailable right now. Try again shortly.'): { message: string; status: number } {
+  const status = (e as { status?: number })?.status;
+  if (typeof status === 'number' && status >= 400 && status < 500 && e instanceof Error) return { message: e.message, status };
+  return { message: fallback, status: 502 };
+}

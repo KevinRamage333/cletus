@@ -59,7 +59,7 @@ export default function CletusPaperBook({ variant = 'full' }: { variant?: 'full'
         <Stat label="Paper equity" value={usd(data.equityUsd)} sub={`Started with ${usd(data.startingUsd)}`} testId="paper-equity" />
         <Stat label="Total P&L" value={usd(data.totalPnlUsd, true)} tone={tone(data.totalPnlUsd)} sub={`Realized ${usd(data.realizedUsd, true)} · open ${usd(data.unrealizedUsd, true)}`} />
         <Stat label="Open positions" value={data.openCount} sub={data.books.map((b) => `${b.label} ${b.open}`).join(' · ') || '—'} testId="paper-open-count" />
-        <Stat label="Closed trades" value={data.closedCount} sub={data.winRatePct == null ? 'Win rate —' : `Win rate ${data.winRatePct.toFixed(1)}% (${data.wins}W/${data.losses}L)`} testId="paper-closed-count" />
+        <Stat label="Closed trades" value={data.closedCount ?? "—"} sub={data.winRatePct == null ? 'Win rate —' : `Win rate ${data.winRatePct.toFixed(1)}% (${data.wins ?? '—'}W/${data.losses ?? '—'}L)`} testId="paper-closed-count" />
       </div>
       {variant !== 'compact' && data.books.length > 0 && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2" data-testid="paper-books">

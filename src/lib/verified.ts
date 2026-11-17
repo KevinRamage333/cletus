@@ -46,6 +46,7 @@ export interface TokenSecurityFacts {
   controllers: Array<{ address: string; role: string }>;
   mintAuthority?: string | null; // Solana; undefined = unreadable
   freezeAuthority?: string | null; // Solana
+  token2022Risks?: string[]; // Solana Token-2022 extensions (permanent delegate, transfer hook, default frozen…)
   ownerCanMint?: boolean | null; // EVM (GoPlus is_mintable / owner privileges)
   top1Pct: number | null;
   top10Pct: number | null;
@@ -79,6 +80,7 @@ export function evaluateVerificationChecks(f: TokenSecurityFacts): VerifyCheck[]
       ? { id: 'freeze', label: 'Freeze authority', state: 'unknown', detail: 'Mint account could not be read.', required: true }
       : f.freezeAuthority ? { id: 'freeze', label: 'Freeze authority', state: 'fail', detail: 'Still active: holders can be frozen. Revoke it to qualify.', required: true }
         : { id: 'freeze', label: 'Freeze authority', state: 'pass', detail: 'Revoked.', required: true });
+    if (f.token2022Risks?.length) c.push({ id: 'extensions', label: 'Token-2022 extensions', state: 'fail', detail: f.token2022Risks.join(' '), required: true });
   } else {
     c.push(f.ownerCanMint == null
       ? { id: 'mint', label: 'Owner mint / privileges', state: 'unknown', detail: 'Contract privileges could not be read.', required: true }
@@ -138,7 +140,7 @@ export const RECHECK_TTL_MS = 60 * 60_000;
  * $10k, a honeypot/tax flag appears, or (Solana) a mint/freeze authority is re-enabled / (EVM) owner minting appears.
  * Unreadable facts keep the previous state only until the recheck TTL; the caller decides that.
  */
-export function recheckDrops(f: Pick<TokenSecurityFacts, 'network' | 'liquidityUsd' | 'honeypot' | 'sellTaxPct' | 'buyTaxPct' | 'mintAuthority' | 'freezeAuthority' | 'ownerCanMint'>): string[] {
+export function recheckDrops(f: Pick<TokenSecurityFacts, 'network' | 'liquidityUsd' | 'honeypot' | 'sellTaxPct' | 'buyTaxPct' | 'mintAuthority' | 'freezeAuthority' | 'ownerCanMint' | 'token2022Risks'>): string[] {
   const out: string[] = [];
   if (f.liquidityUsd != null && f.liquidityUsd < 10_000) out.push('Liquidity fell under $10,000.');
   if (f.honeypot === true) out.push('Now flagged as a honeypot.');
@@ -146,6 +148,7 @@ export function recheckDrops(f: Pick<TokenSecurityFacts, 'network' | 'liquidityU
   if (f.network === 'solana') {
     if (f.mintAuthority) out.push('Mint authority was re-enabled.');
     if (f.freezeAuthority) out.push('Freeze authority was re-enabled.');
+    for (const r of f.token2022Risks ?? []) out.push(r);
   } else if (f.ownerCanMint) out.push('Owner can now mint or change balances.');
   return out;
 }

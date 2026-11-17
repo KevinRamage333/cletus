@@ -3,7 +3,7 @@ import { listVerifications, saveVerification } from '@/lib/listing-store';
 import { checkVerificationProof } from '@/lib/verified-server';
 import { VERIFIED_DISCLAIMER, badgeExpiry, decideVerification, isBadgeActive } from '@/lib/verified';
 import { cachedTokenFacts } from '@/lib/listing-recheck';
-import { allowAll, clientIp } from '@/lib/request-limit';
+import { allowAll, clientIp, publicErrorMessage } from '@/lib/request-limit';
 import { consumeNonce, consumeNonceInMemory } from '@/lib/withdraw-nonce';
 import { walletConnectEnabled } from '@/lib/wallet-flag';
 export const dynamic = 'force-dynamic';
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   }
   let facts;
   try { facts = await cachedTokenFacts(proof.network, proof.token); }
-  catch (e) { const status = (e as { status?: number }).status ?? 502; return NextResponse.json({ error: e instanceof Error ? e.message : 'Audit sources unavailable' }, { status }); }
+  catch (e) { const pe = publicErrorMessage(e, 'Audit sources are unavailable right now. Try again shortly.'); return NextResponse.json({ error: pe.message }, { status: pe.status }); }
   const d = decideVerification(facts, proof.wallet, proof.signatureValid);
   const now = new Date();
   const fields = {

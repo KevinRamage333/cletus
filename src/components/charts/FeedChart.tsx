@@ -30,7 +30,9 @@ export default function FeedChart() {
 
   const picks = useMemo<Pick[]>(() => {
     const movers = sortMovers(board?.tokens ?? [], 'movers').slice(0, 10).map((t) => ({ key: t.mint, label: t.symbol, address: t.mint, pool: t.pair, source: 'mover' as const, change: t.change1hPct }));
-    const fromFeed = feedSyms.map((s) => ({ key: `sym:${s}`, label: s, symbol: s, source: 'feed' as const }));
+    // Prefer the exact mint when the board knows this ticker, so a look-alike token can't take the chart.
+    const bySym = new Map((board?.tokens ?? []).map((t) => [String(t.symbol ?? '').toUpperCase(), t] as const));
+    const fromFeed = feedSyms.map((s) => { const t = bySym.get(s.replace(/^\$/, '').toUpperCase()); return t ? { key: `sym:${s}`, label: s, address: t.mint, pool: t.pair, source: 'feed' as const } : { key: `sym:${s}`, label: s, symbol: s, source: 'feed' as const }; });
     return [...fromFeed, ...movers];
   }, [board, feedSyms]);
 

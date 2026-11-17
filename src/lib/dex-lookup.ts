@@ -1,12 +1,19 @@
-/** DexScreener lookups for the chart/search pages, cached 30s. */
+/** DexScreener lookups for the chart/search pages, cached 30s in a bounded LRU (500 entries). */
 const cache = new Map<string, { at: number; v: unknown }>();
+export const DEX_CACHE_MAX = 500;
+function remember(url: string, v: unknown) {
+  cache.delete(url);
+  cache.set(url, { at: Date.now(), v });
+  while (cache.size > DEX_CACHE_MAX) cache.delete(cache.keys().next().value as string);
+}
+export const _dexCacheSize = () => cache.size;
 async function get<T>(url: string, ttl = 30_000): Promise<T | null> {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < ttl) return hit.v as T;
   try {
     const r = await fetch(url, { signal: AbortSignal.timeout(8000), cache: 'no-store' });
     if (!r.ok) return (hit?.v as T) ?? null;
-    const v = (await r.json()) as T; cache.set(url, { at: Date.now(), v }); return v;
+    const v = (await r.json()) as T; remember(url, v); return v;
   } catch { return (hit?.v as T) ?? null; }
 }
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -4,6 +4,9 @@ import { OWNER_COOKIE, verifyOwnerSession } from '@/lib/owner-auth';
 import { boostSafetyFor, parseBoostTarget } from '@/lib/boost-server';
 import { listBoosts, saveBoost } from '@/lib/listing-store';
 import { MAX_ACTIVE_BOOSTS_PER_TOKEN, boostWindow, tierById } from '@/lib/token-boost';
+import { publicErrorMessage } from '@/lib/request-limit';
+import { allowedSiwsHost } from '@/lib/siws';
+const safeHost = (o: string) => { try { return new URL(o).host; } catch { return ''; } };
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
@@ -16,6 +19,9 @@ export async function GET() {
 
 /** Owner only: grant a free boost (testing / partners). The token must still pass the basic safety checks. */
 export async function POST(req: Request) {
+  // CSRF: state-changing owner call must come from our own origin (Audit L4).
+  const origin = req.headers.get('origin');
+  if (!origin || !allowedSiwsHost(safeHost(origin))) return NextResponse.json({ error: 'bad origin' }, { status: 403 });
   const sess = await verifyOwnerSession((await cookies()).get(OWNER_COOKIE)?.value);
   if (!sess) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
@@ -24,7 +30,7 @@ export async function POST(req: Request) {
   if ('error' in t) return NextResponse.json({ error: t.error }, { status: 400 });
   const tier = tierById(String(body.tier ?? ''));
   if (!tier) return NextResponse.json({ error: 'tier must be 12h, 24h or 7d' }, { status: 400 });
-  const safety = await boostSafetyFor(t.network, t.token).catch((e: Error) => ({ ok: false, reasons: [e.message] }));
+  const safety = await boostSafetyFor(t.network, t.token).catch((e: unknown) => ({ ok: false, reasons: [publicErrorMessage(e).message] }));
   if (!safety.ok) return NextResponse.json({ error: 'token fails basic safety checks', reasons: safety.reasons }, { status: 422 });
   const existing = await listBoosts(t);
   if (existing.filter((b) => b.status === 'active').length >= MAX_ACTIVE_BOOSTS_PER_TOKEN) return NextResponse.json({ error: 'too many stacked boosts for this token' }, { status: 409 });

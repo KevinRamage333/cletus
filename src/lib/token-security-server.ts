@@ -42,8 +42,22 @@ export function updateAuthorityFromMetadata(data: Uint8Array): string | null {
   return new PublicKey(data.slice(1, 33)).toBase58();
 }
 
-type ParsedMint = { value: { owner: string; data: { parsed?: { type?: string; info?: { mintAuthority: string | null; freezeAuthority: string | null; supply: string; decimals: number } } } } | null };
+type ParsedMint = { value: { owner: string; data: { parsed?: { type?: string; info?: { mintAuthority: string | null; freezeAuthority: string | null; supply: string; decimals: number; extensions?: Array<{ extension?: string; state?: Record<string, unknown> }> } } } } | null };
 type GoPlusSol = { creators?: Array<{ address?: string }>; metadata_mutable?: { metadata_upgrade_authority?: Array<{ address?: string }> }; dex?: Array<{ tvl?: string; burn_percent?: number | null }>; transfer_fee?: { current_fee_rate?: { fee_rate?: string } } };
+
+/** Token-2022 extensions that let someone other than the holder move, block or tax transfers (Audit M5). */
+export function token2022Risks(ext: Array<{ extension?: string; state?: Record<string, unknown> }> | undefined): string[] {
+  const out: string[] = [];
+  for (const e of ext ?? []) {
+    const st = e.state ?? {};
+    if (e.extension === 'permanentDelegate' && st.delegate) out.push('Permanent delegate can move any holder\'s tokens.');
+    if (e.extension === 'transferHook' && st.programId) out.push('Transfer hook program runs on every transfer.');
+    if (e.extension === 'defaultAccountState' && String(st.accountState ?? '').toLowerCase() === 'frozen') out.push('New token accounts start frozen.');
+    if (e.extension === 'nonTransferable') out.push('Token is non-transferable.');
+    if (e.extension === 'pausableConfig' && st.paused === true) out.push('Transfers are paused.');
+  }
+  return out;
+}
 
 async function solanaFacts(token: string): Promise<TokenSecurityFacts> {
   const errors: string[] = [];
@@ -61,6 +75,7 @@ async function solanaFacts(token: string): Promise<TokenSecurityFacts> {
     const info = acct.value?.value?.data?.parsed?.type === 'mint' ? acct.value.value.data.parsed.info : undefined;
     if (!info) throw Object.assign(new Error('That address is not an SPL token mint.'), { status: 400 });
     f.mintAuthority = info.mintAuthority; f.freezeAuthority = info.freezeAuthority;
+    f.token2022Risks = token2022Risks(info.extensions);
     supplyUi = Number(info.supply) / 10 ** info.decimals;
     if (info.mintAuthority) f.controllers.push({ address: info.mintAuthority, role: 'mint authority' });
     if (info.freezeAuthority) f.controllers.push({ address: info.freezeAuthority, role: 'freeze authority' });

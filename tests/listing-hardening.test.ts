@@ -116,3 +116,27 @@ describe('public path matching is segment-exact (PR #98 low)', () => {
     expect(gateDecision('/ownerx', null, 'v1')).not.toEqual({ action: 'next' });
   });
 });
+
+describe('Token-2022 extension risks (Audit M5)', async () => {
+  const { token2022Risks } = await import('@/lib/token-security-server');
+  it('flags permanent delegate, transfer hook and default-frozen accounts', () => {
+    expect(token2022Risks(undefined)).toEqual([]);
+    expect(token2022Risks([{ extension: 'permanentDelegate', state: { delegate: 'D' } }])).toHaveLength(1);
+    expect(token2022Risks([{ extension: 'transferHook', state: { programId: 'P' } }])).toHaveLength(1);
+    expect(token2022Risks([{ extension: 'defaultAccountState', state: { accountState: 'frozen' } }])).toHaveLength(1);
+    expect(token2022Risks([{ extension: 'defaultAccountState', state: { accountState: 'initialized' } }, { extension: 'metadataPointer', state: {} }])).toEqual([]);
+  });
+  it('a Token-2022 risk fails verification and drops a badge', () => {
+    const f = facts({ network: 'solana', mintAuthority: null, freezeAuthority: null, token2022Risks: ['Permanent delegate can move any holder\'s tokens.'] });
+    expect(evaluateVerificationChecks(f).find((c) => c.id === 'extensions')?.state).toBe('fail');
+    expect(recheckDrops(f)).toHaveLength(1);
+  });
+});
+
+describe('public error text (Audit L1)', async () => {
+  const { publicErrorMessage } = await import('@/lib/request-limit');
+  it('passes our own 4xx messages, hides upstream errors', () => {
+    expect(publicErrorMessage(Object.assign(new Error('That address is not an SPL token mint.'), { status: 400 }))).toEqual({ message: 'That address is not an SPL token mint.', status: 400 });
+    expect(publicErrorMessage(new Error('GoPlus HTTP 500 at https://internal')).message).not.toMatch(/GoPlus|https/);
+  });
+});

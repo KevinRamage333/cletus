@@ -10,11 +10,11 @@ export type PaperRow = {
   openedAt: string | null; closedAt: string | null;
 };
 export type PaperBook = { book: string; label: string; startingUsd: number | null; cashUsd: number | null; equityUsd: number | null; open: number; closed: number };
-export type PaperNetwork = { network: string; open: number; closed: number; wins: number; pnlUsd: number | null };
+export type PaperNetwork = { network: string; open: number; closed: number; wins: number | null; pnlUsd: number | null };
 export type PaperSnapshot = {
   available: boolean; simulated: true; mode: 'paper'; publishedAt: string | null; stale: boolean;
   startingUsd: number | null; equityUsd: number | null; totalPnlUsd: number | null; realizedUsd: number | null; unrealizedUsd: number | null;
-  openCount: number; closedCount: number; wins: number; losses: number; winRatePct: number | null;
+  openCount: number; closedCount: number | null; wins: number | null; losses: number | null; winRatePct: number | null;
   books: PaperBook[]; networks: PaperNetwork[]; open: PaperRow[]; recent: PaperRow[]; reason?: string;
 };
 
@@ -67,15 +67,15 @@ export function buildSnapshot(snap: { published_at: unknown; summary: unknown } 
     open: num(b.open) ?? 0, closed: num(b.closed) ?? 0,
   })) : [];
   const networks: PaperNetwork[] = s.networks && typeof s.networks === 'object'
-    ? Object.entries(s.networks as Record<string, Record<string, unknown>>).map(([network, v]) => ({ network, open: num(v.open) ?? 0, closed: num(v.closed) ?? 0, wins: num(v.wins) ?? 0, pnlUsd: num(v.pnlUsd) }))
+    ? Object.entries(s.networks as Record<string, Record<string, unknown>>).map(([network, v]) => ({ network, open: num(v.open) ?? 0, closed: num(v.closed) ?? 0, wins: num(v.wins), pnlUsd: num(v.pnlUsd) }))
     : [];
-  const closedCount = num(s.closedCount) ?? recent.length;
+  const closedCount = num(s.closedCount); // never infer from the 25 most recent rows
   return {
     available: true, simulated: true, mode: 'paper', publishedAt,
     stale: !publishedAt || now - Date.parse(publishedAt) > PAPER_STALE_MS,
     startingUsd: num(s.startingUsd), equityUsd: num(s.equityUsd), totalPnlUsd: num(s.totalPnlUsd), realizedUsd: num(s.realizedUsd),
     unrealizedUsd: open.length ? num(s.unrealizedUsd) : null,
-    openCount: num(s.openCount) ?? open.length, closedCount, wins: num(s.wins) ?? 0, losses: num(s.losses) ?? 0, winRatePct: num(s.winRatePct),
+    openCount: num(s.openCount) ?? open.length, closedCount, wins: num(s.wins), losses: num(s.losses), winRatePct: num(s.winRatePct),
     books, networks, open, recent,
   };
 }

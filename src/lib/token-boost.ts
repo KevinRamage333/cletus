@@ -71,7 +71,7 @@ export function activeBoostSummaries(all: BoostRecord[], now = Date.now()): Boos
   return out.sort((a, b) => a.startedAt - b.startedAt).map(({ startedAt: _s, ...rest }) => rest);
 }
 
-export interface SafetyInput { mintAuthority?: string | null; freezeAuthority?: string | null; ownerCanMint?: boolean | null; liquidityUsd: number | null; honeypot: boolean | null; sellTaxPct: number | null; buyTaxPct?: number | null; network: ListingNetwork }
+export interface SafetyInput { mintAuthority?: string | null; freezeAuthority?: string | null; token2022Risks?: string[]; ownerCanMint?: boolean | null; liquidityUsd: number | null; honeypot: boolean | null; sellTaxPct: number | null; buyTaxPct?: number | null; network: ListingNetwork }
 /** Basic safety gate for boosting. Unknown required facts fail closed. */
 export function boostSafety(f: SafetyInput): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
@@ -79,6 +79,7 @@ export function boostSafety(f: SafetyInput): { ok: boolean; reasons: string[] } 
     if (f.mintAuthority === undefined || f.freezeAuthority === undefined) reasons.push('Mint account could not be read.');
     if (f.mintAuthority) reasons.push('Mint authority is still active.');
     if (f.freezeAuthority) reasons.push('Freeze authority is still active.');
+    for (const r of f.token2022Risks ?? []) reasons.push(r);
   } else {
     if (f.ownerCanMint == null) reasons.push('Contract privileges could not be read.');
     if (f.ownerCanMint) reasons.push('Owner can mint or change balances.');

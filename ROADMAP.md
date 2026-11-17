@@ -17,7 +17,7 @@ Work that is complete on the `redesign/gold-ecosystem` branch ([pull request #98
 - **Gold redesign.** The public site and application screens in a black and metallic-gold design, including the dashboard, signals, paper trading, portfolio, tax, audit, and community views.
 - **Paper ledger.** Simulated trades recorded against live market prices, with account-scoped paper data and realized P&L. Simulation remains the default.
 - **Wallet connect.** Optional, non-custodial Solana and EVM wallet connection for authentication and reads. Connecting a wallet does not authorize Cletus to trade or move funds.
-- **Security audit and tests.** An in-house security audit of the redesign branch is documented in [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md), including a Next.js 15.5.29 and React 19 upgrade. At that audit commit, **617 unit tests** and **55 end-to-end tests** passed. This is not a substitute for a later independent security review.
+- **Security audit and tests.** An in-house security audit of the redesign branch is documented in [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md), including a Next.js 15.5.29 and React 19 upgrade. At the merged redesign head, **698 unit tests** (plus 10 database tests skipped in CI) pass, along with the Playwright end-to-end suite. This is not a substitute for a later independent security review.
 
 Production launch of this work is still in progress (Phase 2).
 
@@ -28,6 +28,8 @@ Production launch of this work is still in progress (Phase 2).
 - **Paper positions on the site**, shown from real simulation data only — no mock positions.
 - **The Owner's Desk**, a personal operations dashboard built on the existing owner page.
 - **Launch** of the redesigned site on cletustechnology.dev and the app on app.cletustechnology.dev, still in simulation, with live trading off.
+- **Per-user autonomy setting** for the public launch: each user picks **"Set my limits"** (their own size, position-count and loss limits) or **"Let him fly"** (Cletus sizes and times every trade on his own judgment, with only data-integrity guards). Planned, not built.
+- **One fund-moving command.** In either autonomy mode, besides trading swaps, the only thing Cletus can do with funds is withdraw profit to the user's own registered wallet. No code path may send funds anywhere else; a test pins every transfer path in the codebase.
 
 ## Phase 3 — Next
 

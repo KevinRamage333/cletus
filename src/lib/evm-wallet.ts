@@ -16,7 +16,7 @@ export const EVM_CHAIN_META: Record<number, { id: string; name: string; explorer
 };
 
 /** Free public RPCs first, then each chain's default. Overridable per chain with NEXT_PUBLIC_RPC_<CHAINID>. */
-const PUBLIC_RPC: Record<number, string> = {
+export const PUBLIC_RPC: Record<number, string> = {
   [mainnet.id]: 'https://ethereum-rpc.publicnode.com',
   [base.id]: 'https://base-rpc.publicnode.com',
   [bsc.id]: 'https://bsc-rpc.publicnode.com',
