@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { parseAddress } from '@/lib/inspector';
 export const dynamic = 'force-dynamic';
 export async function GET() {
-  try { const u=await requireOnboardedUser(); const requests=await prisma.developerVerification.findMany({where:{userId:u.id},orderBy:{createdAt:'desc'},take:30,select:{id:true,mint:true,wallet:true,projectName:true,status:true,reviewNote:true,createdAt:true,reviewedAt:true}});return NextResponse.json({requests},{headers:{'Cache-Control':'no-store'}}); } catch(e){return errorResponse(e)}
+  try { const u=await requireOnboardedUser(); const requests=await prisma.developerVerification.findMany({where:{userId:u.id},orderBy:{createdAt:'desc'},take:30,select:{id:true,mint:true,wallet:true,projectName:true,status:true,reviewNote:true,walletProofAt:true,createdAt:true,reviewedAt:true}});return NextResponse.json({requests},{headers:{'Cache-Control':'no-store'}}); } catch(e){return errorResponse(e)}
 }
 export async function POST(req:Request) {
   try {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
 import { parseAddress } from '@/lib/inspector';
 import { inspectAddress } from '@/lib/inspector';
@@ -74,7 +75,14 @@ export async function GET(req: Request) {
     // Market momentum and security findings are different dimensions. Never turn
     // incomplete audit evidence into an invented numerical safety score.
     const securityAssessment = !audit ? 'unavailable' : audit.passed ? 'checks_passed' : 'flagged';
-    const verification = { status: 'unverified' as const, badge: false, scope: null, reviewedAt: null };
+    const activeBadge = await prisma.developerVerification.findFirst({
+      where: { mint, status: 'approved', walletProofAt: { not: null }, badgeIssuedAt: { not: null }, badgeExpiresAt: { gt: new Date() }, badgeRevokedAt: null },
+      orderBy: { badgeIssuedAt: 'desc' },
+      select: { badgeIssuedAt: true, badgeExpiresAt: true },
+    });
+    const verification = activeBadge
+      ? { status: 'verified' as const, badge: true, scope: 'wallet_ownership_and_project_review', reviewedAt: activeBadge.badgeIssuedAt, expiresAt: activeBadge.badgeExpiresAt }
+      : { status: 'unverified' as const, badge: false, scope: null, reviewedAt: null, expiresAt: null };
     return NextResponse.json({
       mint,
       fetchedAt: new Date().toISOString(),

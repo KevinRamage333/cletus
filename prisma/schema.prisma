@@ -383,7 +383,14 @@ model DeveloperVerification {
   projectName String
   evidenceUrl String?
   statement   String
-  status      String   @default("pending") // pending | needs_evidence | rejected
+  status      String   @default("pending") // pending | needs_evidence | rejected | approved | revoked | expired
+  walletProofAt DateTime?
+  badgeIssuedAt DateTime?
+  badgeExpiresAt DateTime?
+  badgeRevokedAt DateTime?
+  reviewEvents DeveloperVerificationEvent[]
+  challengeHash String?
+  challengeExpiresAt DateTime?
   reviewerId  String?
   reviewNote  String?
   reviewedAt  DateTime?
@@ -393,5 +400,18 @@ model DeveloperVerification {
   @@unique([userId, mint])
   @@index([status, createdAt])
   @@index([mint])
+  @@schema("app")
+}
+
+
+model DeveloperVerificationEvent {
+  id String @id @default(cuid())
+  applicationId String
+  application DeveloperVerification @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorId String
+  action String
+  reason String
+  createdAt DateTime @default(now())
+  @@index([applicationId, createdAt])
   @@schema("app")
 }
