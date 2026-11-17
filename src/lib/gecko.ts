@@ -49,10 +49,10 @@ export const RANGES: Record<string, { tf: Timeframe; aggregate: number; limit: n
   '1Y': { tf: 'day', aggregate: 1, limit: 365, ttlMs: 900_000 },
 };
 
-export async function poolOhlcv(pool: string, range: string) {
+export async function poolOhlcv(pool: string, range: string, network = 'solana') {
   const r = RANGES[range] ?? RANGES['1D'];
-  return cached(`ohlcv:${pool}:${range}`, r.ttlMs, async () => {
-    const res = await fetch(`${GT}/networks/solana/pools/${pool}/ohlcv/${r.tf}?aggregate=${r.aggregate}&limit=${r.limit}&currency=usd`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+  return cached(`ohlcv:${network}:${pool}:${range}`, r.ttlMs, async () => {
+    const res = await fetch(`${GT}/networks/${network}/pools/${pool}/ohlcv/${r.tf}?aggregate=${r.aggregate}&limit=${r.limit}&currency=usd`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
     if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
     return parseOhlcv(await res.json());
   });
