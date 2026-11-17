@@ -1,3 +1,4 @@
+import { totalTradeFees } from './trade-accounting';
 /**
  * The Cletus engine: scan -> score -> audit -> size -> compliance gate -> enter;
  * monitor -> exit -> learn. Runs in-process on the Next.js Node server.
@@ -990,7 +991,7 @@ async function journalExitHook(p: Position, observed: number, reason: string, ex
     appendJournal({
       event: 'exit', v: 1, at: new Date().toISOString(), positionId: p.id, book: p.simulated ? 'paper' : 'live', symbol: p.symbol,
       reason, holdMin: Math.round((Date.now() - p.openedAt.getTime()) / 600) / 100, mfePct: ex.mfePct, maePct: ex.maePct,
-      feesUsd: p.feesUsd + exitFees, observedPrice: observed, exitPrice, exitSlippagePct: exitPrice > 0 ? slippagePct('sell', observed, exitPrice) : null,
+      feesUsd: totalTradeFees(p.feesUsd, p.partialFeesUsd, exitFees), observedPrice: observed, exitPrice, exitSlippagePct: exitPrice > 0 ? slippagePct('sell', observed, exitPrice) : null,
       costUsd: p.sizeUsd + p.partialCostUsd, pnlUsd, pnlPct, partialsTaken: p.partialsTaken, partialPnlUsd: p.partialPnlUsd,
     });
   } catch { /* journal must never block a close */ }
@@ -1325,7 +1326,7 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
   }
   const pnl = proceeds - fee - costPortion;
   await prisma.$transaction([
-    prisma.position.update({ where: { id: p.id }, data: { tokenAmount: p.tokenAmount - sellTokens, sizeUsd: p.sizeUsd - costPortion, partialCostUsd: p.partialCostUsd + costPortion, partialPnlUsd: p.partialPnlUsd + pnl, partialsTaken: rung, lastPrice: price } }),
+    prisma.position.update({ where: { id: p.id }, data: { tokenAmount: p.tokenAmount - sellTokens, sizeUsd: p.sizeUsd - costPortion, partialCostUsd: p.partialCostUsd + costPortion, partialPnlUsd: p.partialPnlUsd + pnl, partialFeesUsd: p.partialFeesUsd + fee, partialsTaken: rung, lastPrice: price } }),
     prisma.account.update({ where: { id: p.accountId }, data: { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } } }),
   ]);
   await log('trade', `${p.simulated ? 'PAPER' : 'LIVE'} PARTIAL TP${rung} ${p.symbol}: sold ${(fraction * 100).toFixed(0)}% at +${gainPct}% rung, PnL ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}${tx ? ` tx ${tx}` : ''}`, p.accountId);
@@ -1424,7 +1425,7 @@ async function closePositionInner(positionId: string, price: number, reason: str
   const pnlPct = (pnlUsd / (p.sizeUsd + p.partialCostUsd)) * 100;
   const won = pnlUsd > 0;
 
-  await prisma.position.update({ where: { id: p.id }, data: { status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason, exitTx, lastPrice: price, feesUsd: p.feesUsd + exitFees } });
+  await prisma.position.update({ where: { id: p.id }, data: { status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason, exitTx, lastPrice: price, feesUsd: totalTradeFees(p.feesUsd, p.partialFeesUsd, exitFees) } });
 
   if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
 
