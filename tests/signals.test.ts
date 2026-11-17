@@ -70,6 +70,17 @@ describe('scanner', () => {
     const ok = r.filter((x) => !x.rejected).map((x) => x.mint);
     expect(ok).toEqual(['ok']);
   });
+  it('requires the configured five-minute volume floor before a token is eligible', () => {
+    const { minVolume5mUsd } = buildConfig({});
+    expect(minVolume5mUsd).toBe(2000);
+    const volume = { h24: 240000, h1: 40000 };
+    const ranked = rankCandidates([
+      pair({ mint: 'below', volume: { ...volume, m5: 1999 } }),
+      pair({ mint: 'at-floor', volume: { ...volume, m5: 2000 } }),
+      pair({ mint: 'invalid', volume: { ...volume, m5: Number.POSITIVE_INFINITY } }),
+    ], { ...f, minVolume5mUsd }, w);
+    expect(ranked.filter((candidate) => !candidate.rejected).map((candidate) => candidate.mint)).toEqual(['at-floor']);
+  });
   it('ranks eligible tokens by volume-to-market-cap', () => {
     const r = rankCandidates([pair({ mint: 'a', mcap: 200000 }), pair({ mint: 'b', mcap: 40000 }), pair({ mint: 'c', mcap: 100000 })], f, w);
     expect(r.map((x) => x.mint)).toEqual(['b', 'c', 'a']);
