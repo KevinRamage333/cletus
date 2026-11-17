@@ -86,23 +86,26 @@ export const TECH_STACK: Array<{ layer: string; tech: string; status: BuildStatu
   { layer: 'Hosting', tech: 'Vercel (web), managed Postgres; worker processes separate from the web tier', status: 'built' },
 ];
 
+export const ROADMAP_VISION =
+  'Cletus is being built as an autonomous AI trader that analyzes markets, explains its decisions, and trades transparently across many chains. Live trading is not enabled. The site and engine run in simulation: paper trades against real market data, with no mock data and nothing signed. Nothing here promises or projects returns.';
+
 export interface Phase { n: number; title: string; status: BuildStatus; items: string[] }
 export const ROADMAP: Phase[] = [
-  { n: 1, title: 'Foundation', status: 'built', items: ['Application architecture and authentication', 'Market-data integrations', 'Paper-trading engine', 'Safety defaults: simulation mode and kill switch'] },
-  { n: 2, title: 'Integration & verification', status: 'in-progress', items: ['Unify signals, audit, portfolio and community in one app', 'Realistic paper validation and walk-forward testing', 'Working Solana and EVM wallet connections', 'Professional web and mobile experience'] },
-  { n: 3, title: 'Security & readiness', status: 'future', items: ['Independent security audit and penetration testing', 'Legal and compliance review', 'Operational monitoring and runbooks', 'Controlled beta with real users'] },
-  { n: 4, title: 'Community & multi-chain', status: 'future', items: ['Gold community launch', 'Market intelligence on Ethereum, Base, BNB, Polygon and Cronos', 'Premium intelligence tiers', 'Developer documentation and APIs'] },
-  { n: 5, title: 'Companion & ecosystem', status: 'future', items: ['Persistent Cletus companion', 'Financial education', 'Virtual-world research', 'Token or staking concepts only after legal, audit and disclosure requirements are met'] },
+  { n: 1, title: 'Shipped', status: 'built', items: ['Gold redesign of the public site and app (pull request #98)', 'Paper ledger: simulated trades on live market prices', 'Optional non-custodial Solana and EVM wallet connect', 'In-house security audit with 617 unit tests and 55 end-to-end tests passing'] },
+  { n: 2, title: 'In progress', status: 'in-progress', items: ['Live charts on the Feed, Community and Audit screens', 'Cletus Verified for developers, and Token Boost (payments off; boosts do not affect the trading engine)', 'Real-data paper positions on the site, with no mock data', "The Owner's Desk operations dashboard", 'Launch on cletustechnology.dev, still in simulation, with live trading off'] },
+  { n: 3, title: 'Next', status: 'future', items: ['Multi-network paper trading on Ethereum, Base, BNB, Polygon, Cronos and Arbitrum, only after the site is live and wallet audits pass', 'wagmi 3 upgrade, as its own stage, with the wallet end-to-end suite', 'Live trading on any network stays off until it is separately and explicitly approved'] },
+  { n: 4, title: 'Agent Council', status: 'future', items: ['Charlotte, Signal & Allocation Analyst, Defender, Guardian and Operations Steward', 'Advisory and read-only: no trade execution, signing, custody or fund movement', 'A Council screen that brings the agents together; it is not shipped'] },
+  { n: 5, title: 'Future vision', status: 'future', items: ['The Grove: coming, details TBA', 'GitHub Sponsors to fund engineering, testing, documentation and security work once the repository is public', 'Sponsorship is support for the project, not an investment, token sale, or share of trading results'] },
 ];
 
 export const NEXT_PRIORITIES = [
-  'Improve signal quality and reduce low-quality entries.',
-  'Strengthen risk and drawdown controls.',
-  'Improve exit discipline.',
-  'Improve execution quality and routing.',
-  'Better trade analytics and review loops.',
-  'Reduce bad trades instead of chasing more trades.',
-  'Stronger operational monitoring and fail-safe patterns.',
+  'Ship live charts on the Feed, Community and Audit screens.',
+  'Finish Cletus Verified and Token Boost, with payments off and no effect on the trading engine.',
+  'Show real-data paper positions on the site.',
+  "Complete The Owner's Desk.",
+  'Launch the site on cletustechnology.dev, still in simulation.',
+  'Upgrade wagmi 3 after wallet-connect audits pass.',
+  'Expand paper trading to Ethereum, Base, BNB, Polygon, Cronos and Arbitrum only after the site is live and those audits pass.',
 ];
 
 export const TRUST_PRINCIPLES = [

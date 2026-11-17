@@ -1,12 +1,12 @@
 import { PageHero, Section, SectionHead, StatusBadge } from '@/components/site/ui';
-import { NEXT_PRIORITIES, ROADMAP, STATUS_NOTE } from '@/lib/site-content';
+import { NEXT_PRIORITIES, ROADMAP, ROADMAP_VISION, STATUS_NOTE } from '@/lib/site-content';
 
-export const metadata = { title: 'Roadmap · Cletus', description: 'Five phases from foundation to ecosystem.' };
+export const metadata = { title: 'Roadmap · Cletus', description: 'Five phases from what is shipped to the longer vision. Live trading is not enabled.' };
 
 export default function RoadmapPage() {
   return (
     <>
-      <PageHero eyebrow="Roadmap" title={<>Five phases. <span className="metal">No shortcuts.</span></>}>Security, legal review and realistic validation come before any live financial service.</PageHero>
+      <PageHero eyebrow="Roadmap" title={<>Five phases. <span className="metal">No shortcuts.</span></>}>{ROADMAP_VISION}</PageHero>
       <Section>
         <ol className="relative space-y-6 border-l border-[rgba(212,175,55,.3)] pl-8" data-testid="roadmap">
           {ROADMAP.map((p) => (
@@ -21,7 +21,7 @@ export default function RoadmapPage() {
         </ol>
       </Section>
       <Section className="!pt-0">
-        <SectionHead eyebrow="Immediate priorities" title="Not more trades. Better, safer trades." />
+        <SectionHead eyebrow="Immediate priorities" title="Finish the site in simulation. No live trading yet." />
         <ol className="grid gap-3 md:grid-cols-2">{NEXT_PRIORITIES.map((p, i) => <li key={p} className="panel flex gap-3 p-4 text-[#d8d2c5]"><span className="num text-[#c9a24a]">{String(i + 1).padStart(2, '0')}</span>{p}</li>)}</ol>
         <p className="mt-8 text-xs text-[#6f695f]">{STATUS_NOTE}</p>
       </Section>

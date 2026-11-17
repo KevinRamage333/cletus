@@ -89,7 +89,7 @@ export default function HomePage() {
 
       <div className="border-y border-[rgba(212,175,55,.12)] bg-[#08080a]">
         <Section>
-          <SectionHead eyebrow="Roadmap" title="Five phases from foundation to ecosystem." />
+          <SectionHead eyebrow="Roadmap" title="Five phases, from what is shipped to the longer vision." />
           <ol className="grid gap-4 md:grid-cols-5">
             {ROADMAP.map((p) => <li key={p.n} className="panel p-5"><p className="num text-xs text-[#c9a24a]">PHASE {p.n}</p><h3 className="mt-1 font-bold text-[#f6f1e4]">{p.title}</h3><div className="mt-3"><StatusBadge status={p.status} /></div></li>)}
           </ol>
