@@ -14,10 +14,7 @@ const nextConfig = {
     config.resolve.alias = { ...(config.resolve.alias || {}), 'react-native': false };
     return config;
   },
-  experimental: {
-    instrumentationHook: true,
-    serverComponentsExternalPackages: ['@prisma/client', 'pg'],
-  },
+  serverExternalPackages: ['@prisma/client', 'pg'],
   async redirects() {
     // The guest /demo pages were replaced by the public corporate site and the read-only app screens.
     return [

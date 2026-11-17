@@ -5,10 +5,11 @@ import { rejectApproval } from '@/lib/approval-store';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const { a } = await appContext();
-    const r = await rejectApproval(a.id, params.id);
+    const r = await rejectApproval(a.id, id);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
     return NextResponse.json(r);
   } catch (e) { return errorResponse(e); }

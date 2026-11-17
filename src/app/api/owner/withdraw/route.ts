@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * daily cap holds and OWNER_REMOTE_WITHDRAW=on — see owner-withdraw-queue.ts.
  */
 async function owner() {
-  return verifyOwnerSession(cookies().get(OWNER_COOKIE)?.value);
+  return verifyOwnerSession((await cookies()).get(OWNER_COOKIE)?.value);
 }
 
 export async function GET() {
