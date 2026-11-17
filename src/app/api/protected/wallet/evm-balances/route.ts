@@ -22,19 +22,33 @@ function formatNativeBalance(raw: bigint): string {
   return fraction ? `${whole.toString()}.${fraction}` : whole.toString();
 }
 
-async function readBalance(rpcUrl: string, address: string): Promise<string> {
+async function readQuantity(
+  rpcUrl: string,
+  method: 'eth_chainId' | 'eth_getBalance',
+  params: string[],
+  signal: AbortSignal,
+): Promise<bigint> {
   const response = await fetch(rpcUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     cache: 'no-store',
-    signal: AbortSignal.timeout(10_000),
+    signal,
   });
-  if (!response.ok) throw new Error(`RPC returned HTTP ${response.status}`);
-  const payload = await response.json() as { result?: string; error?: { message?: string } };
-  if (payload.error) throw new Error(payload.error.message || 'RPC request failed');
-  if (!payload.result || !/^0x[0-9a-f]+$/i.test(payload.result)) throw new Error('RPC returned an invalid balance');
-  return formatNativeBalance(BigInt(payload.result));
+  if (!response.ok) throw new Error('RPC request failed');
+  const payload = await response.json() as { result?: unknown; error?: unknown };
+  if (payload.error || typeof payload.result !== 'string' || !/^0x[0-9a-f]{1,64}$/i.test(payload.result)) {
+    throw new Error('RPC returned an invalid quantity');
+  }
+  return BigInt(payload.result);
+}
+
+async function readBalance(rpcUrl: string, address: string, chainId: string): Promise<string> {
+  const signal = AbortSignal.timeout(10_000);
+  const providerChain = await readQuantity(rpcUrl, 'eth_chainId', [], signal);
+  if (providerChain !== BigInt(chainId)) throw new Error('RPC network mismatch');
+  const balance = await readQuantity(rpcUrl, 'eth_getBalance', [address, 'latest'], signal);
+  return formatNativeBalance(balance);
 }
 
 export async function GET(request: NextRequest) {
@@ -55,7 +69,7 @@ export async function GET(request: NextRequest) {
         return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance: null, status: 'not_configured' as const };
       }
       try {
-        const balance = await readBalance(rpcUrl, address);
+        const balance = await readBalance(rpcUrl, address, network.chainId);
         return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance, status: 'ok' as const };
       } catch {
         return { key: network.key, name: network.name, symbol: network.symbol, chainId: network.chainId, balance: null, status: 'unavailable' as const, error: 'Balance provider temporarily unavailable.' };
