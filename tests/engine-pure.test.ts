@@ -86,3 +86,15 @@ describe('secret hygiene', () => {
     expect(redactSecrets(kp.publicKey.toBase58())).toBe(kp.publicKey.toBase58());
   });
 });
+
+import { totalTradeFees } from '@/lib/trade-accounting';
+
+describe('complete trade fee accounting', () => {
+  it('adds entry, partial-exit and final-exit fees once', () => {
+    expect(totalTradeFees(0.12, 0.08, 0.05)).toBeCloseTo(0.25);
+  });
+
+  it('ignores absent, negative and non-finite fee values', () => {
+    expect(totalTradeFees(0.1, null, undefined, -1, Number.NaN, Number.POSITIVE_INFINITY)).toBeCloseTo(0.1);
+  });
+});
