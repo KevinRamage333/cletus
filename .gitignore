@@ -24,3 +24,7 @@ data/owner-snapshot.json
 
 # nightly retrain registry (box only)
 data/weight-sets/
+
+# Playwright
+/test-results/
+/playwright-report/
