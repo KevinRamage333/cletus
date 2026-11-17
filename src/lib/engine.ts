@@ -107,8 +107,10 @@ let cachedOpenPositions: Position[] = [];
 function fallbackEngineState(c: Config, err?: string): EngineStateRow {
   return {
     id: 'global',
-    killSwitch: cachedEngineState?.killSwitch ?? false,
-    killReason: cachedEngineState?.killReason ?? null,
+    // Database state is authoritative. An unavailable read must never allow entries
+    // or live execution based on a missing/stale cached kill-switch value.
+    killSwitch: true,
+    killReason: 'Engine state database unavailable; trading held until state can be verified',
     killedAt: cachedEngineState?.killedAt ?? null,
     priorityFeeLamports: cachedEngineState?.priorityFeeLamports ?? c.priorityFeeLamports,
     slippageBps: cachedEngineState?.slippageBps ?? Math.round(c.slippageTolerance * 10000),
@@ -134,7 +136,6 @@ export async function getEngineState() {
     return st;
   } catch (e) {
     const reason = (e as Error)?.message ?? 'engine state unavailable';
-    if (cachedEngineState) return cachedEngineState;
     return fallbackEngineState(c, reason);
   }
 }
