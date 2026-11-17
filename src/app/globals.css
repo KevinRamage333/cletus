@@ -111,9 +111,9 @@ input,textarea,select { border-radius:5px; border-color:#665032; }
 .tw .rounded-xl { border-radius:8px; }
 .tw .rounded-full { border-radius:6px; }
 .tw .bg-black { background-color:#080809; }
-.tw .bg-\\[\\#121212\\] { background-color:#151315; }
-.tw .border-white\\/10 { border-color:rgba(192,154,77,.26); }
-.tw .text-white\\/40 { color:#a79e91; }
+.tw .bg-\[\#121212\] { background-color:#151315; }
+.tw .border-white\/10 { border-color:rgba(192,154,77,.26); }
+.tw .text-white\/40 { color:#a79e91; }
 .tw .gold-text { background:linear-gradient(110deg,#f2dcaa,#c49c53); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .cletus-site h1,.cletus-site h2,.cletus-site h3 { background:none; -webkit-background-clip:initial; background-clip:initial; color:inherit; text-transform:none; letter-spacing:inherit; margin:0; }
 .cletus-site a { text-decoration:none; }
