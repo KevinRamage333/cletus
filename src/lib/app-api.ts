@@ -35,7 +35,12 @@ export function positionView(p: Position, e: Config) {
 
 export async function tradeSession(u: User, a: Account, c: Config, s: AccountSettings) {
   const e = effectiveConfig(c, s);
-  const [{ equity, open }, pnl] = await Promise.all([accountEquity(a), periodPnl(a.id, s.timezone || c.timezone)]);
+  const [{ equity, open }, pnl, engineState, paperWorkerHeartbeat] = await Promise.all([
+    accountEquity(a),
+    periodPnl(a.id, s.timezone || c.timezone),
+    prisma.engineState.findUnique({ where: { id: 'global' }, select: { lastScanAt: true, lastError: true, scanCount: true } }),
+    prisma.logEntry.findFirst({ where: { accountId: null, message: { startsWith: 'PAPER_WORKER_HEARTBEAT' } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, message: true } }),
+  ]);
   const rs = runState(a);
   return {
     ...rs, pauseReason: a.pauseReason, mode: c.mode === 'live' && a.isOperator ? 'live' : 'paper',
@@ -45,7 +50,11 @@ export async function tradeSession(u: User, a: Account, c: Config, s: AccountSet
     aggression: e.aggression, aggressionKey: AGGRESSION_UI[e.aggression], positionSizePercent: s.positionSizePct ?? c.maxPositionPctOfEquity,
     positionSizeIsServer: s.positionSizePct === null, stopLossPercent: e.stopLossPct, takeProfitPercent: e.takeProfitPct,
     maxPositions: e.maxOpenPositions, withinHours: withinTradingHours(s), tradingHours: s.tradingHoursEnabled ? { start: s.tradingStart, end: s.tradingEnd, days: s.activeDays, timezone: s.timezone } : null,
-    engineLastScanAt: (await prisma.engineState.findUnique({ where: { id: 'global' } }))?.lastScanAt ?? null,
+    engineLastScanAt: engineState?.lastScanAt ?? null,
+    engineScanCount: engineState?.scanCount ?? 0,
+    engineLastError: engineState?.lastError ?? null,
+    paperWorkerLastAt: paperWorkerHeartbeat?.createdAt ?? null,
+    paperWorkerMessage: paperWorkerHeartbeat?.message ?? null,
     user: { email: u.email },
   };
 }
