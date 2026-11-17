@@ -45,6 +45,8 @@ export default function CletusAIPage() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const liveOnRef = useRef(false);
+  const voiceRequestInFlightRef = useRef(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,6 +108,7 @@ export default function CletusAIPage() {
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Cletus is unavailable");
       if (data.conversationId) convRef.current = data.conversationId;
       setMessages((prev) => [
         ...prev,
@@ -130,11 +133,17 @@ export default function CletusAIPage() {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1;
     u.onstart = () => setLiveStatus('speaking');
-    u.onend = () => setLiveStatus(liveOn ? 'listening' : 'idle');
+    u.onend = () => {
+      setLiveStatus(liveOnRef.current ? 'listening' : 'idle');
+      if (liveOnRef.current && recognitionRef.current && !voiceRequestInFlightRef.current) {
+        try { recognitionRef.current.start(); } catch { /* already listening */ }
+      }
+    };
     window.speechSynthesis.speak(u);
   };
 
   const stopLive = useCallback(() => {
+    liveOnRef.current = false;
     setLiveOn(false);
     setLiveStatus('idle');
     setLiveTranscript('');
@@ -162,6 +171,7 @@ export default function CletusAIPage() {
       return;
     }
 
+    liveOnRef.current = true;
     setLiveOn(true);
     setLiveStatus('listening');
     setLiveTranscript('Listening… speak to Cletus');
@@ -177,7 +187,9 @@ export default function CletusAIPage() {
         const piece = event.results[i][0].transcript;
         if (event.results[i].isFinal) finalText += piece;
       }
-      if (!finalText.trim()) return;
+      if (!finalText.trim() || voiceRequestInFlightRef.current || !liveOnRef.current) return;
+      voiceRequestInFlightRef.current = true;
+      try { recognition.stop(); } catch { /* already stopped */ }
 
       setLiveTranscript(finalText.trim());
       setLiveStatus('speaking');
@@ -192,6 +204,7 @@ export default function CletusAIPage() {
           body: JSON.stringify({ message: userLine, voice: true, conversationId: convRef.current }),
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Voice AI unavailable');
         const answer =
           data.answer ?? data.message ?? "I didn't catch that. Try again.";
         setMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
@@ -200,16 +213,20 @@ export default function CletusAIPage() {
         const fail = 'Connection error on voice. Try text chat.';
         setMessages((prev) => [...prev, { role: 'assistant', content: fail }]);
         speak(fail);
+      } finally {
+        voiceRequestInFlightRef.current = false;
       }
     };
 
     recognition.onerror = () => {
+      liveOnRef.current = false;
+      setLiveOn(false);
       setLiveStatus('error');
       setLiveTranscript('Mic error — check permissions or use text chat.');
     };
 
     recognition.onend = () => {
-      if (recognitionRef.current && liveOn) {
+      if (recognitionRef.current === recognition && liveOnRef.current && !voiceRequestInFlightRef.current) {
         try {
           recognition.start();
         } catch {
@@ -222,9 +239,11 @@ export default function CletusAIPage() {
     try {
       recognition.start();
     } catch {
+      liveOnRef.current = false;
+      setLiveOn(false);
       setLiveStatus('error');
     }
-  }, [liveOn]);
+  }, []);
 
   useEffect(() => {
     return () => stopLive();
@@ -279,7 +298,7 @@ export default function CletusAIPage() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">
                 Cletus live scanner · top {signals.length}
               </h2>
-              <span className="text-xs font-mono text-emerald-400/80">LIVE</span>
+              <span className="text-xs font-mono text-[#d7b46d]">LATEST RECEIVED · NOT A LIVE-ENGINE GUARANTEE</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
               {signals.slice(0, 8).map((s) => (

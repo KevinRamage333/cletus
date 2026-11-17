@@ -1,0 +1,7 @@
+import {NextResponse} from 'next/server';
+import {requireOnboardedUser,errorResponse,HttpError} from '@/lib/auth';
+import {getConfig} from '@/lib/config';
+import {providerOrder} from '@/lib/providers';
+import {xaiConfig} from '@/lib/xai';
+export const dynamic='force-dynamic';
+export async function GET(){try{const user=await requireOnboardedUser();if(!user.isAdmin)throw new HttpError(403,'Operator only');const c=getConfig();const gemini=Boolean(c.enableAiBrain&&c.hasGeminiKey&&process.env.GEMINI_API_KEY);const xai=Boolean(c.enableAiBrain&&xaiConfig().key);const order=providerOrder({BRAIN_PROVIDER:process.env.BRAIN_PROVIDER,hasGeminiKey:gemini,hasXaiKey:xai,enableAiBrain:c.enableAiBrain}).filter(x=>x!=='mock');return NextResponse.json({asOf:new Date().toISOString(),companions:[{name:'Cletus',route:'/app/ai',api:'/api/ai',providerConfigured:order.length>0,providerOrder:order,liveResponseTested:false},{name:'Charlotte',route:'/app/world',api:'/api/world',providerConfigured:order.length>0,providerOrder:order,liveResponseTested:false}],features:{separateWorldConversationScopes:true,voice:'browser-dependent',mentorRules:'configured in system persona',autonomousCompanionActions:false},note:'Configuration inspection only; does not make paid model requests or assert live responses. A failed provider call is reported as unavailable, not replaced with fake text.'},{headers:{'Cache-Control':'no-store'}})}catch(e){return errorResponse(e)}}
