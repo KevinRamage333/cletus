@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 type CollectivePnl = {
+  suppressed?: boolean;
+  minContributors?: number;
   netProfit: number;
   totalGains: number;
   totalLosses: number;
@@ -32,6 +34,8 @@ function money(value: number) {
 export default function CollectivePnlTicker({ demo = false, showCommunityLink = false }: { demo?: boolean; showCommunityLink?: boolean }) {
   const [data, setData] = useState<CollectivePnl>(EMPTY);
   const [loaded, setLoaded] = useState(false);
+  const [suppressed, setSuppressed] = useState(false);
+  const [threshold, setThreshold] = useState(5);
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
@@ -46,6 +50,8 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
         if (!response.ok) throw new Error('Collective P&L unavailable');
         const payload = await response.json();
         if (stopped) return;
+        setSuppressed(payload.suppressed === true);
+        setThreshold(Number(payload.minContributors) || 5);
         setData({
           netProfit: Number(payload.netProfit) || 0,
           totalGains: Number(payload.totalGains) || 0,
@@ -80,7 +86,7 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
           Community collective P&L
         </span>
         <span className="text-[10px] uppercase tracking-wider text-[#E5C76B]/90">
-          Paper trading · Aggregate
+          Paper trading · Realized aggregate
         </span>
       </div>
       {demo ? (
@@ -89,6 +95,8 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
         <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>
       ) : !loaded ? (
         <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>
+      ) : suppressed ? (
+        <p className="px-4 py-4 text-sm text-white/60">Community realized paper P&L is hidden until at least {threshold} separate accounts have closed positions. This protects individual traders' privacy.</p>
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
@@ -112,7 +120,7 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
             </div>
           </div>
           <div className="px-4 py-2 border-t border-white/10 flex items-center justify-between gap-3">
-            <span className="text-[10px] text-white/30">All participating users combined; no individual results shown.</span>
+            <span className="text-[10px] text-white/30">All-time realized paper P&L from closed positions only; open-position gains and losses excluded.</span>
             <span className="text-[10px] text-white/30 whitespace-nowrap">
               {data.updatedAt ? `Updated ${new Date(data.updatedAt).toLocaleTimeString()}` : 'Live'}
             </span>
