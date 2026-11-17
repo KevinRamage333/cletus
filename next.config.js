@@ -24,6 +24,7 @@ const nextConfig = {
       { source: '/demo', destination: '/app', permanent: false },
       { source: '/demo/:path*', destination: '/app', permanent: false },
       { source: '/brain', destination: '/app/ai', permanent: false },
+      { source: '/tax', destination: '/app/tax', permanent: false },
       { source: '/grove', destination: '/roadmap', permanent: false },
       { source: '/app/discover', destination: '/app/signals', permanent: false },
       { source: '/app/auditor', destination: '/app/audit', permanent: false },
