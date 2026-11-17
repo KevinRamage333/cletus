@@ -3,12 +3,14 @@ import { PublicKey } from '@solana/web3.js';
 import { getSessionUser } from '@/lib/auth';
 import { RISK_VERSION, TERMS_VERSION } from '@/lib/legal';
 import { getSessionSecret } from '@/lib/session';
+import { walletConnectEnabled } from '@/lib/wallet-flag';
 import { allowedSiwsHost, issueSiwsChallenge, originFromRequest } from '@/lib/siws';
 
 export const dynamic = 'force-dynamic';
 
 /** Issue a Sign-In-With-Solana challenge. Auth only — no transaction is created. */
 export async function GET(req: Request) {
+  if (!walletConnectEnabled()) return NextResponse.json({ error: 'wallet connect is disabled' }, { status: 403 });
   const u = await getSessionUser();
   if (!u) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   if (u.termsVersion !== TERMS_VERSION || u.riskVersion !== RISK_VERSION) {

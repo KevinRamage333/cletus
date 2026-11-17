@@ -19,6 +19,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}/api/health`,
     reuseExistingServer: true,
     timeout: 120_000,
-    env: { CLETUS_DEMO: '1', TRADING_MODE: 'simulation', CLETUS_ALLOW_DEV_SECRET: 'true', COOKIE_SECURE: 'false' },
+    env: { CLETUS_DEMO: '1', TRADING_MODE: 'simulation', CLETUS_ALLOW_DEV_SECRET: 'true', COOKIE_SECURE: 'false', PAPER_READ_DATABASE_URL: process.env.PAPER_READ_DATABASE_URL ?? '' },
   },
 });

@@ -7,6 +7,7 @@ import { FINANCIAL_CONSENT_VERSION } from '@/lib/financial-consent';
 import { validateWalletSetup } from '@/lib/onboarding';
 import { getSessionSecret } from '@/lib/session';
 import { verifySiwsResponse } from '@/lib/siws';
+import { walletConnectEnabled } from '@/lib/wallet-flag';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
   );
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
+  if (v.source === 'connected' && !walletConnectEnabled()) return NextResponse.json({ error: 'wallet connect is disabled; continue in paper mode' }, { status: 403 });
   if (v.source === 'connected') {
     const err = await verifySiwsResponse({
       message: String(body.message),

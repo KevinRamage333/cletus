@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import TokenChart from '@/components/TokenChart';
+import CletusPaperBook from '@/components/paper/CletusPaperBook';
 
 type Position = {
   id: string;
@@ -93,6 +94,7 @@ function formatPrice(p: number) {
   if (p < 1) return p.toFixed(4);
   return p.toFixed(2);
 }
+
 
 export default function ActiveTradingPage() {
   const [session, setSession] = useState<TradeSession>(EMPTY);
@@ -235,6 +237,7 @@ export default function ActiveTradingPage() {
 
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-2xl mx-auto space-y-4">
+          <CletusPaperBook variant="compact" />
           {/* Status + controls */}
           <section className="rounded-2xl border border-white/10 bg-[#121212] p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">

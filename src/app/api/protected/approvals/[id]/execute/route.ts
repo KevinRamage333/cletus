@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server';
 import { errorResponse } from '@/lib/auth';
 import { appContext } from '@/lib/app-api';
 import { executeApproval } from '@/lib/approval-store';
+import { getConfig } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
 /** Submit a wallet-signed Jupiter swap. Cletus never signs this transaction. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Send path: closed unless the platform is explicitly in live mode AND user swaps are explicitly enabled.
+  if (getConfig().mode !== 'live' || process.env.USER_SWAPS_LIVE_ENABLED !== 'true') return NextResponse.json({ error: 'live swaps are disabled (paper mode)' }, { status: 403 });
   try {
     const { a, u } = await appContext();
     if (!u.walletPublicKey) return NextResponse.json({ error: 'connect your own wallet first' }, { status: 400 });

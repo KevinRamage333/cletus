@@ -64,7 +64,10 @@ async function installMockPhantom(page: Page) {
   return kp.publicKey.toBase58();
 }
 
+const WALLET_ON = /^(1|true)$/i.test(process.env.NEXT_PUBLIC_WALLET_CONNECT_ENABLED ?? '');
+
 test.describe('wallet connectors', () => {
+  test.skip(!WALLET_ON, 'public wallet connect is off by default (NEXT_PUBLIC_WALLET_CONNECT_ENABLED); see wallet-off.spec.ts');
   test('lists Solana and EVM wallets with install links when none are present', async ({ page }) => {
     await attestAge(page);
     await page.goto('/app/wallet');

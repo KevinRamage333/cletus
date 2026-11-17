@@ -8,6 +8,7 @@ import {
   isMobileUserAgent, inWalletBrowser, findSupportedAdapter, extraDetectedWallets,
   type SupportedWallet,
 } from '@/lib/connect-wallets';
+import { walletConnectEnabled, WALLET_CONNECT_OFF_MESSAGE } from '@/lib/wallet-flag';
 
 export type ConnectMode = 'onboarding' | 'demo' | 'settings' | 'owner';
 
@@ -194,6 +195,20 @@ export default function ConnectWallet({ mode, currentPublicKey, source, onPaper,
   const shownKey = currentPublicKey || (connected && publicKey ? publicKey.toBase58() : null);
   const paper = !shownKey && (source === 'paper' || source === 'disconnected');
   const showMobileHint = mobile && !insideWallet;
+
+  // Public wallet connect is behind a flag (off by default). Owner login is not affected.
+  if (mode !== 'owner' && !walletConnectEnabled()) {
+    return (
+      <div className="space-y-4" data-testid="wallet-connect-disabled">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="font-semibold text-amber-300">Wallet connect is off</div>
+          <p className="text-sm text-zinc-300 mt-2 leading-relaxed">{WALLET_CONNECT_OFF_MESSAGE}</p>
+        </div>
+        {mode !== 'settings' && <button type="button" className="btn" disabled={busy} onClick={choosePaper} data-testid="continue-paper">Continue in paper mode</button>}
+        {err && <p role="alert" className="text-sm text-red-300">{err}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
