@@ -35,11 +35,12 @@ export function positionView(p: Position, e: Config) {
 
 export async function tradeSession(u: User, a: Account, c: Config, s: AccountSettings) {
   const e = effectiveConfig(c, s);
-  const [{ equity, open }, pnl, engineState, paperWorkerHeartbeat] = await Promise.all([
+  const [{ equity, open }, pnl, engineState, paperWorkerHeartbeat, paperMonitor] = await Promise.all([
     accountEquity(a),
     periodPnl(a.id, s.timezone || c.timezone),
     prisma.engineState.findUnique({ where: { id: 'global' }, select: { lastScanAt: true, lastError: true, scanCount: true } }),
     prisma.logEntry.findFirst({ where: { accountId: null, message: { startsWith: 'PAPER_WORKER_HEARTBEAT' } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true, message: true } }),
+    prisma.logEntry.findFirst({ where: { accountId: null, message: 'PAPER_WORKER_HEARTBEAT monitor=completed' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
   ]);
   const rs = runState(a);
   return {
@@ -55,6 +56,7 @@ export async function tradeSession(u: User, a: Account, c: Config, s: AccountSet
     engineLastError: engineState?.lastError ?? null,
     paperWorkerLastAt: paperWorkerHeartbeat?.createdAt ?? null,
     paperWorkerMessage: paperWorkerHeartbeat?.message ?? null,
+    paperWorkerMonitorAt: paperMonitor?.createdAt ?? null,
     user: { email: u.email },
   };
 }

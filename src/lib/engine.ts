@@ -407,13 +407,13 @@ export async function entryBlockReason(a: Account, c: Config, deps: { getLamport
 export const scanDeadlineMs = () => envNum('SCAN_TICK_DEADLINE_MS', 150_000);
 export const monitorDeadlineMs = () => envNum('MONITOR_TICK_DEADLINE_MS', 45_000);
 
-export async function scanTick(): Promise<string> {
+export async function scanTick(deadlineMs = scanDeadlineMs()): Promise<string> {
   if (mem.scanning) return 'scan already running';
   mem.scanning = true;
   const gen = nextGen(mem.scanFence);
   const started = Date.now();
   try {
-    const out = await withDeadline(scanTickInner(gen), scanDeadlineMs(), 'scan tick');
+    const out = await withDeadline(scanTickInner(gen), deadlineMs, 'scan tick');
     mem.lastScanDoneAt = Date.now();
     return out;
   } catch (e) {
@@ -1153,25 +1153,27 @@ async function fastRecheck(mint: string, signature?: string) {
   } catch { /* polling is the backstop */ }
 }
 
-export async function monitorTick(): Promise<void> {
-  if (mem.monitoring) return;
+export async function monitorTick(deadlineMs = monitorDeadlineMs()): Promise<boolean> {
+  if (mem.monitoring) return false;
   mem.monitoring = true;
   const gen = nextGen(mem.monitorFence);
   const started = Date.now();
   try {
-    await withDeadline(monitorTickInner(gen), monitorDeadlineMs(), 'monitor tick');
-    mem.lastMonitorDoneAt = Date.now();
+    const completed = await withDeadline(monitorTickInner(gen), deadlineMs, 'monitor tick');
+    if (completed) mem.lastMonitorDoneAt = Date.now();
+    return completed;
   } catch (e) {
     if (e instanceof DeadlineError) {
       nextGen(mem.monitorFence);
       await log('warn', `watchdog: monitor stuck ${Math.round((Date.now() - started) / 1000)}s at stage "${mem.monitorStage}" — abandoned, monitoring resumes next tick`).catch(() => undefined);
     }
+    return false;
   } finally {
     mem.monitoring = false;
   }
 }
 
-async function monitorTickInner(gen: number): Promise<void> {
+async function monitorTickInner(gen: number): Promise<boolean> {
   const c = getConfig();
   const stage = (s: string) => { if (mem.monitorFence.gen === gen) mem.monitorStage = s; };
   try {
@@ -1184,7 +1186,7 @@ async function monitorTickInner(gen: number): Promise<void> {
     syncPoolSubscriptions(new Map(open.filter((p) => p.pairAddress).map((p) => [p.pairAddress as string, p.mint])), (m, sig) => onPoolChange(m, sig));
     if (!open.length) {
       void import('./profit-sweep').then((m) => m.maybeRunProfitSweep()).catch(() => undefined);
-      return;
+      return true;
     }
     const mints = [...new Set(open.map((p) => p.mint))];
     stage('jupiter prices');
@@ -1229,8 +1231,10 @@ async function monitorTickInner(gen: number): Promise<void> {
       if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkLowVolume(p, px)) return;
       if (!p.simulated && c.mode === 'live' && !st.killSwitch && await checkVolumeFade(p, px)) return;
     });
+    return true;
   } catch (e) {
     await log('error', `monitorTick error: ${(e as Error).message}`);
+    return false;
   } finally {
     stage('idle');
   }

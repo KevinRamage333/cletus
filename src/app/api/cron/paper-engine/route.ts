@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getConfig } from '@/lib/config';
-import { ensureOperatorAccount, monitorTick, scanTick } from '@/lib/engine';
+import { ensureOperatorAccount, monitorDeadlineMs, monitorTick, scanDeadlineMs, scanTick } from '@/lib/engine';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,6 +9,9 @@ export const maxDuration = 60;
 
 const LOCK_NAMESPACE = 20261116;
 const LOCK_ID = 1;
+const TRANSACTION_TIMEOUT_MS = 55_000;
+const WORK_BUDGET_MS = 45_000;
+const MONITOR_BUDGET_MS = 20_000;
 
 /**
  * Vercel Cron entry point for the paper engine.
@@ -27,6 +30,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'Set CLETUS_ENGINE_TRANSPORT=cron to enable the scheduled worker' }, { status: 409 });
   }
 
+  if (process.env.CLETUS_DEMO === '1' || process.env.CLETUS_DEMO === 'true') {
+    return NextResponse.json({ ok: false, error: 'The paper worker is disabled in demo mode' }, { status: 409 });
+  }
+
   const config = getConfig();
   if (config.mode !== 'simulation') {
     return NextResponse.json({
@@ -41,27 +48,34 @@ export async function GET(req: Request) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const workEndsAt = performance.now() + WORK_BUDGET_MS;
       const locks = await tx.$queryRaw<Array<{ locked: boolean }>>`
-        SELECT pg_try_advisory_xact_lock(${LOCK_NAMESPACE}, ${LOCK_ID}) AS locked
+        SELECT pg_try_advisory_xact_lock(${LOCK_NAMESPACE}::integer, ${LOCK_ID}::integer) AS locked
       `;
       if (!locks[0]?.locked) return { skipped: true as const };
 
-      await ensureOperatorAccount();
-      const scanSummary = await scanTick();
-      await monitorTick();
+      const monitorBudget = Math.min(MONITOR_BUDGET_MS, monitorDeadlineMs(), Math.floor(workEndsAt - performance.now()));
+      const monitorCompleted = monitorBudget > 0 && await monitorTick(monitorBudget);
+      const monitoredAt = monitorCompleted ? new Date().toISOString() : null;
+      let scanSummary = 'scan skipped: position check incomplete';
+      if (monitorCompleted) {
+        await ensureOperatorAccount();
+        const scanBudget = Math.min(scanDeadlineMs(), Math.floor(workEndsAt - performance.now()));
+        scanSummary = scanBudget > 0 ? await scanTick(scanBudget) : 'scan skipped: worker budget exhausted';
+      }
       const at = new Date();
 
       await tx.logEntry.create({
         data: {
           level: 'info',
-          message: `PAPER_WORKER_HEARTBEAT scan="${scanSummary.slice(0, 220)}" monitoredAt=${at.toISOString()}`,
+          message: `PAPER_WORKER_HEARTBEAT monitor=${monitorCompleted ? 'completed' : 'incomplete'}`,
           accountId: null,
           createdAt: at,
         },
       });
 
-      return { skipped: false as const, scanSummary, scannedAt: at.toISOString(), monitoredAt: at.toISOString() };
-    }, { maxWait: 5_000, timeout: 55_000 });
+      return { skipped: false as const, scanSummary, heartbeatAt: at.toISOString(), monitoredAt };
+    }, { maxWait: 5_000, timeout: TRANSACTION_TIMEOUT_MS });
 
     if (result.skipped) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'Another paper-engine tick holds the worker lock' });
