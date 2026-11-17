@@ -44,3 +44,10 @@ export function mostTradedToken(rows: Array<{ mint: string; symbol: string | nul
 
 /** Up/down tone for a change value: gains green, losses red. */
 export const toneOf = (n: number | null | undefined): 'up' | 'down' | 'flat' => (n == null || !Number.isFinite(n) || n === 0 ? 'flat' : n > 0 ? 'up' : 'down');
+
+/** Chart axis labels in the viewer's own time zone (lightweight-charts defaults to UTC). */
+export const localTime = (t: unknown): string => new Date(Number(t) * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+export const localTick = (t: unknown, kind: number): string => {
+  const d = new Date(Number(t) * 1000);
+  return kind <= 0 ? String(d.getFullYear()) : kind === 1 ? d.toLocaleDateString([], { month: 'short' }) : kind === 2 ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};

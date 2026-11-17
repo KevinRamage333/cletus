@@ -1,7 +1,7 @@
 'use client';
 /** Cumulative realized P&L line (recorded closes only). Green above zero, red below. Renders an explicit empty state when there are no points. */
 import { useEffect, useRef } from 'react';
-import { GAIN, LOSS, type PnlPoint } from '@/lib/live-chart';
+import { GAIN, LOSS, localTick, localTime, type PnlPoint } from '@/lib/live-chart';
 
 export default function PnlChart({ points, height = 240, testId = 'pnl-chart', empty }: { points: PnlPoint[]; height?: number; testId?: string; empty: { title: string; body: string } }) {
   const box = useRef<HTMLDivElement>(null);
@@ -15,8 +15,9 @@ export default function PnlChart({ points, height = 240, testId = 'pnl-chart', e
       const c = lw.createChart(box.current, {
         width: box.current.clientWidth, height,
         layout: { background: { color: '#0a0907' }, textColor: '#b9ad8a', fontSize: 11 },
+        localization: { timeFormatter: localTime },
         grid: { vertLines: { color: 'rgba(212,175,55,0.06)' }, horzLines: { color: 'rgba(212,175,55,0.06)' } },
-        rightPriceScale: { borderColor: 'rgba(212,175,55,0.25)' }, timeScale: { borderColor: 'rgba(212,175,55,0.25)' },
+        rightPriceScale: { borderColor: 'rgba(212,175,55,0.25)' }, timeScale: { borderColor: 'rgba(212,175,55,0.25)', tickMarkFormatter: localTick },
       });
       const s = c.addBaselineSeries({ baseValue: { type: 'price', price: 0 }, topLineColor: GAIN, topFillColor1: 'rgba(34,197,94,0.28)', topFillColor2: 'rgba(34,197,94,0.02)', bottomLineColor: LOSS, bottomFillColor1: 'rgba(239,68,68,0.02)', bottomFillColor2: 'rgba(239,68,68,0.28)', lineWidth: 2, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
       s.setData(points.map((p) => ({ time: p.time as never, value: p.value })));

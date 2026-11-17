@@ -5,7 +5,7 @@
  * Polls while visible, keeps the last good chart on failure, gains green / losses red.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CHART_RANGES, CHART_REFRESH_MS, GAIN, LOSS, type ChartRange } from '@/lib/live-chart';
+import { CHART_RANGES, CHART_REFRESH_MS, GAIN, LOSS, localTick, localTime, type ChartRange } from '@/lib/live-chart';
 import { formatPct, formatPrice, formatUsdCompact } from '@/lib/movers';
 
 type Candle = { time: number; open: number; high: number; low: number; close: number; volume: number };
@@ -53,9 +53,10 @@ export default function LiveTokenChart({ address, symbol, pool, height = 360, ti
       const chart = lw.createChart(box.current, {
         width: box.current.clientWidth, height,
         layout: { background: { color: '#0a0907' }, textColor: '#b9ad8a', fontSize: 11 },
+        localization: { timeFormatter: localTime },
         grid: { vertLines: { color: 'rgba(212,175,55,0.06)' }, horzLines: { color: 'rgba(212,175,55,0.06)' } },
         rightPriceScale: { borderColor: 'rgba(212,175,55,0.25)' },
-        timeScale: { borderColor: 'rgba(212,175,55,0.25)', timeVisible: true, secondsVisible: false },
+        timeScale: { borderColor: 'rgba(212,175,55,0.25)', timeVisible: true, secondsVisible: false, tickMarkFormatter: localTick },
         crosshair: { mode: 1 },
       });
       const candles = chart.addCandlestickSeries({ upColor: GAIN, borderUpColor: GAIN, wickUpColor: GAIN, downColor: LOSS, borderDownColor: LOSS, wickDownColor: LOSS, priceFormat: { type: 'price', precision: 8, minMove: 0.00000001 } });
