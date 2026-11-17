@@ -95,3 +95,27 @@ h1 { background: linear-gradient(90deg, var(--gold), var(--glow)); -webkit-backg
 :where(.tw) label { margin: 0; color: inherit; font-size: inherit; }
 .tw { font-size: 14px; line-height: 1.5; }
 .tw .gold-text { background: linear-gradient(135deg, #D4AF37, #F59E0B); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Cletus Obsidian / Champagne design system — shared by legacy and App Router pages. */
+:root { --bg:#080809; --panel:#131214; --panel2:#1b1815; --border:#4c3c24; --text:#f0e9dc; --muted:#a79e91; --accent:#d7b46d; --gold:#d7b46d; --glow:#c09a4d; }
+html { color-scheme:dark; }
+body { background:#080809; color:#f0e9dc; }
+:focus-visible { outline:2px solid #e2c67e; outline-offset:3px; }
+::selection { background:#b9964c; color:#111; }
+.card { border-radius:8px; background:linear-gradient(145deg,#191613,#111113); border-color:#6d5430; box-shadow:0 10px 35px rgba(0,0,0,.18); }
+.btn { border-radius:5px; border-color:#70562e; }
+.btn.primary { background:linear-gradient(110deg,#e4c67d,#bc9148); color:#16110a; }
+input,textarea,select { border-radius:5px; border-color:#665032; }
+.tw { background:#080809; color:#f0e9dc; }
+.tw .rounded-2xl { border-radius:10px; }
+.tw .rounded-xl { border-radius:8px; }
+.tw .rounded-full { border-radius:6px; }
+.tw .bg-black { background-color:#080809; }
+.tw .bg-\\[\\#121212\\] { background-color:#151315; }
+.tw .border-white\\/10 { border-color:rgba(192,154,77,.26); }
+.tw .text-white\\/40 { color:#a79e91; }
+.tw .gold-text { background:linear-gradient(110deg,#f2dcaa,#c49c53); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.cletus-site h1,.cletus-site h2,.cletus-site h3 { background:none; -webkit-background-clip:initial; background-clip:initial; color:inherit; text-transform:none; letter-spacing:inherit; margin:0; }
+.cletus-site a { text-decoration:none; }
+.cletus-site img { object-fit:contain; }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; } }
