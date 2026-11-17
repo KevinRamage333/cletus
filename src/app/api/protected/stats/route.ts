@@ -36,7 +36,7 @@ export async function GET() {
     return NextResponse.json({
       pnl24h: realized24 + unrealized, pnl24hRealized: realized24, unrealized, pnl24hPercent: a.startingBalance ? ((realized24 + unrealized) / a.startingBalance) * 100 : 0,
       winRate: sc.winRate !== null ? sc.winRate * 100 : 0, winRateKnown: sc.winRate !== null, activePositions: eq.open.length, maxPositions: e.maxOpenPositions,
-      totalTrades: closed.length, bestTrade: pnls.length ? Math.max(...pnls) : 0, worstTrade: pnls.length ? Math.min(...pnls) : 0, bestSymbol: best?.symbol ?? null, worstSymbol: worst?.symbol ?? null,
+      totalTrades: closed.length, bestTrade: pnls.length ? Math.max(...pnls) : null, worstTrade: pnls.length ? Math.min(...pnls) : null, bestSymbol: best?.symbol ?? null, worstSymbol: worst?.symbol ?? null, refreshedAt: new Date().toISOString(),
       sharpeRatio: sc.sharpeAnnualised ?? 0, sharpeKnown: sc.sharpeAnnualised !== null, equity: eq.equity, cash: a.cashUsd, startingBalance: a.startingBalance, realizedPnl: a.realizedPnl, totalPnl: a.realizedPnl + unrealized,
       maxDrawdownPct: sc.maxDrawdownPct, ...runState(a), pauseReason: a.pauseReason, ...trialInfo(u),
       identity: u.email, wallet: { address: u.walletPublicKey, source: u.walletSource ?? (u.walletPublicKey ? 'connected' : 'paper'), connected: Boolean(u.walletPublicKey) },

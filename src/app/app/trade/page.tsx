@@ -11,6 +11,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import TokenChart from '@/components/TokenChart';
+import { Money, ScreenStatus } from '@/components/ScreenStatus';
+import { refreshedLabel, screenState } from '@/lib/figure';
 
 type Position = {
   id: string;
@@ -32,11 +34,11 @@ type TradeSession = {
   paused: boolean;
   pauseReason?: string;
   mode: 'paper' | 'live';
-  capital: number;
-  available: number;
-  dailyRealizedPnl: number;
-  dailyProfitTarget: number;
-  dailyMaxLoss: number;
+  capital: number | null;
+  available: number | null;
+  dailyRealizedPnl: number | null;
+  dailyProfitTarget: number | null;
+  dailyMaxLoss: number | null;
   openPositions: Position[];
   aggression: string;
   positionSizePercent: number;
@@ -56,11 +58,11 @@ const EMPTY: TradeSession = {
   running: false,
   paused: false,
   mode: 'paper',
-  capital: 0,
-  available: 0,
-  dailyRealizedPnl: 0,
-  dailyProfitTarget: 0,
-  dailyMaxLoss: 0,
+  capital: null,
+  available: null,
+  dailyRealizedPnl: null,
+  dailyProfitTarget: null,
+  dailyMaxLoss: null,
   openPositions: [],
   aggression: '—',
   positionSizePercent: 0,
@@ -76,13 +78,15 @@ const EMPTY: TradeSession = {
   paperWorkerMessage: null,
 };
 
-function formatUsd(n: number, showSign = false) {
+function formatUsd(n: number | null, showSign = false) {
+  if (n === null || Number.isNaN(n)) return 'Unavailable';
   const abs = Math.abs(n);
   const s = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
   }).format(abs);
+  if (n === 0) return showSign ? '+$0.00' : '$0.00';
   if (!showSign) return n < 0 ? `-${s}` : s;
   return `${n >= 0 ? '+' : '-'}${s}`;
 }
@@ -96,6 +100,9 @@ function formatPrice(p: number) {
 
 export default function ActiveTradingPage() {
   const [session, setSession] = useState<TradeSession>(EMPTY);
+  const [known, setKnown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [chartFor, setChartFor] = useState<string | null>(null);
@@ -105,24 +112,29 @@ export default function ActiveTradingPage() {
       const res = await fetch('/api/protected/trade/session', {
         credentials: 'include',
       });
-      if (res.ok) {
-        const data = await res.json();
-        setSession({
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Paper trading data is unavailable');
+      const num = (value: unknown) => {
+        if (value === null || value === undefined || value === '') return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      setSession({
           running: !!data.running,
           paused: !!data.paused,
           pauseReason: data.pauseReason,
           mode: data.mode === 'live' ? 'live' : 'paper',
-          capital: Number(data.capital) || 0,
-          available: Number(data.available) || 0,
-          dailyRealizedPnl: Number(data.dailyRealizedPnl) || 0,
-          dailyProfitTarget: Number(data.dailyProfitTarget) || 0,
-          dailyMaxLoss: Number(data.dailyMaxLoss) || 0,
+          capital: num(data.capital),
+          available: num(data.available),
+          dailyRealizedPnl: num(data.dailyRealizedPnl),
+          dailyProfitTarget: num(data.dailyProfitTarget),
+          dailyMaxLoss: num(data.dailyMaxLoss),
           openPositions: Array.isArray(data.openPositions) ? data.openPositions : [],
           aggression: data.aggression ?? '—',
-          positionSizePercent: Number(data.positionSizePercent) || 0,
-          stopLossPercent: Number(data.stopLossPercent) || 0,
-          takeProfitPercent: Number(data.takeProfitPercent) || 0,
-          maxPositions: Number(data.maxPositions) || 0,
+          positionSizePercent: num(data.positionSizePercent) ?? 0,
+          stopLossPercent: num(data.stopLossPercent) ?? 0,
+          takeProfitPercent: num(data.takeProfitPercent) ?? 0,
+          maxPositions: num(data.maxPositions) ?? 0,
           withinHours: data.withinHours !== false,
           engineLastScanAt: data.engineLastScanAt ? String(data.engineLastScanAt) : null,
           engineScanCount: Number(data.engineScanCount) || 0,
@@ -131,9 +143,11 @@ export default function ActiveTradingPage() {
           paperWorkerMonitorAt: data.paperWorkerMonitorAt ? String(data.paperWorkerMonitorAt) : null,
           paperWorkerMessage: data.paperWorkerMessage ? String(data.paperWorkerMessage) : null,
         });
-      }
-    } catch {
-      // keep previous
+        setKnown(true);
+        setError(null);
+        setRefreshedAt(new Date().toISOString());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Paper trading data is unavailable');
     } finally {
       setLoading(false);
     }
@@ -157,10 +171,10 @@ export default function ActiveTradingPage() {
 
   // Unrealized PnL from open positions + realized = session view
   const unrealizedPnl = useMemo(
-    () => session.openPositions.reduce((sum, p) => sum + (p.pnlUsd || 0), 0),
-    [session.openPositions]
+    () => (known ? session.openPositions.reduce((sum, p) => sum + (Number.isFinite(p.pnlUsd) ? p.pnlUsd : 0), 0) : null),
+    [known, session.openPositions]
   );
-  const totalSessionPnl = session.dailyRealizedPnl + unrealizedPnl;
+  const totalSessionPnl = session.dailyRealizedPnl === null || unrealizedPnl === null ? null : session.dailyRealizedPnl + unrealizedPnl;
   const workerAgeSeconds = session.paperWorkerLastAt
     ? Math.max(0, Math.floor((Date.now() - new Date(session.paperWorkerLastAt).getTime()) / 1000))
     : null;
@@ -176,21 +190,12 @@ export default function ActiveTradingPage() {
   const scanFresh = scanAgeSeconds !== null && scanAgeSeconds <= 180;
 
   const profitPct =
-    session.dailyProfitTarget > 0
-      ? Math.min(
-          100,
-          Math.max(0, (session.dailyRealizedPnl / session.dailyProfitTarget) * 100)
-        )
+    session.dailyProfitTarget && session.dailyRealizedPnl !== null && session.dailyProfitTarget > 0
+      ? Math.min(100, Math.max(0, (session.dailyRealizedPnl / session.dailyProfitTarget) * 100))
       : 0;
   const lossPct =
-    session.dailyMaxLoss > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            (Math.abs(Math.min(0, session.dailyRealizedPnl)) / session.dailyMaxLoss) * 100
-          )
-        )
+    session.dailyMaxLoss && session.dailyRealizedPnl !== null && session.dailyMaxLoss > 0
+      ? Math.min(100, Math.max(0, (Math.abs(Math.min(0, session.dailyRealizedPnl)) / session.dailyMaxLoss) * 100))
       : 0;
 
   const emptyReason = !session.running
@@ -235,6 +240,12 @@ export default function ActiveTradingPage() {
 
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-2xl mx-auto space-y-4">
+          <ScreenStatus
+            state={screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
+            error={error}
+            emptyLabel="No open paper positions."
+            refreshedLabel={refreshedLabel('Portfolio P&L', refreshedAt)}
+          />
           {/* Status + controls */}
           <section className="rounded-2xl border border-white/10 bg-[#121212] p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -305,31 +316,25 @@ export default function ActiveTradingPage() {
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Realized</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    session.dailyRealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className="text-sm font-mono font-bold mt-0.5"
                 >
-                  {formatUsd(session.dailyRealizedPnl, true)}
+                  <Money value={known ? session.dailyRealizedPnl : null} signed />
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Unrealized</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    unrealizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className="text-sm font-mono font-bold mt-0.5"
                 >
-                  {formatUsd(unrealizedPnl, true)}
+                  <Money value={unrealizedPnl} signed />
                 </div>
               </div>
               <div className="rounded-xl bg-black/40 border border-white/10 p-3 text-center">
                 <div className="text-[10px] text-white/40 uppercase">Session</div>
                 <div
-                  className={`text-sm font-mono font-bold mt-0.5 ${
-                    totalSessionPnl >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}
+                  className="text-sm font-mono font-bold mt-0.5"
                 >
-                  {formatUsd(totalSessionPnl, true)}
+                  <Money value={totalSessionPnl} signed />
                 </div>
               </div>
             </div>
@@ -390,8 +395,7 @@ export default function ActiveTradingPage() {
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-white/60">Profit Target</span>
                 <span className="font-mono text-emerald-400">
-                  {formatUsd(session.dailyRealizedPnl, true)} / $
-                  {session.dailyProfitTarget.toLocaleString()}
+                  {formatUsd(known ? session.dailyRealizedPnl : null, true)} / {session.dailyProfitTarget == null ? 'Unavailable' : `$${session.dailyProfitTarget.toLocaleString()}`}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
@@ -405,8 +409,7 @@ export default function ActiveTradingPage() {
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-white/60">Max Loss Guard</span>
                 <span className="font-mono text-red-400">
-                  {formatUsd(Math.min(0, session.dailyRealizedPnl), true)} / -$
-                  {session.dailyMaxLoss.toLocaleString()}
+                  {formatUsd(known && session.dailyRealizedPnl !== null ? Math.min(0, session.dailyRealizedPnl) : null, true)} / {session.dailyMaxLoss == null ? 'Unavailable' : `-$${session.dailyMaxLoss.toLocaleString()}`}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
