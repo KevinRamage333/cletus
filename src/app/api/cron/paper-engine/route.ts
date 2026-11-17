@@ -40,6 +40,7 @@ export async function GET(req: Request) {
     await prisma.logEntry.create({data:{level:'info',message:`${HEARTBEAT} started lease=${token}`,accountId:null}});
     const monitorBudget = Math.min(18_000,monitorDeadlineMs(),Math.max(0,WORK_BUDGET_MS-(performance.now()-started)));
     const monitorCompleted = monitorBudget>0 && await monitorTick(monitorBudget);
+    const monitoredAt = monitorCompleted ? new Date().toISOString() : null;
     let scanSummary = 'scan skipped: monitor incomplete';
     if (monitorCompleted) {
       await ensureOperatorAccount();
@@ -47,7 +48,7 @@ export async function GET(req: Request) {
       scanSummary = remaining>0 ? await scanTick(Math.min(scanDeadlineMs(),remaining)) : 'scan skipped: budget exhausted';
     }
     await prisma.logEntry.create({data:{level:'info',message:`${HEARTBEAT} completed monitor=${monitorCompleted} scan=${scanSummary.slice(0,250)}`,accountId:null}});
-    return NextResponse.json({ok:true,mode:'simulation',monitorCompleted,scanSummary,heartbeatAt:new Date().toISOString()},{headers:{'Cache-Control':'no-store'}});
+    return NextResponse.json({ok:true,skipped:false,mode:'simulation',monitorCompleted,monitoredAt,scanSummary,heartbeatAt:new Date().toISOString()},{headers:{'Cache-Control':'no-store'}});
   } catch(e) {
     const message=e instanceof Error?e.message:'Unknown error';
     try { await prisma.logEntry.create({data:{level:'error',message:`PAPER_WORKER_ERROR ${message.slice(0,450)}`,accountId:null}}); } catch { /* preserve failure */ }
