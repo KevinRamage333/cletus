@@ -54,7 +54,7 @@ export default function DemoHome({ searchParams }: { searchParams: { soon?: stri
             <Link href="/demo/community" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Community</Link>
             <Link href="/demo/brain" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Ask Cletus</Link>
             <Link href="/demo/wallet" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Wallet preview</Link>
-            <Link href="/demo/dashboard" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Dashboard preview</Link>
+            <Link href="/live/paper" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Recorded paper results</Link>
             <Link href="/whitepaper" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Whitepaper</Link>
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function DemoHome({ searchParams }: { searchParams: { soon?: stri
       </section>
       <section className="rounded-xl border border-amber-500/30 bg-zinc-950 p-5">
         <h2 className="text-xl font-bold gold-text">Accounts: coming online soon</h2>
-        <p className="text-sm text-zinc-400 mt-2">Sign-up stays closed in this public demo. You can preview the optional wallet connection (you stay in control — Cletus never holds keys) and a sample live dashboard with positions, P&amp;L, trade history and the 0.5% platform fee. Private beta accounts will open here later. Until then, this site collects no personal data.</p>
+        <p className="text-sm text-zinc-400 mt-2">Sign-up stays closed in this public demo. You can preview the optional wallet connection (you stay in control — Cletus never holds keys) and the recorded paper report when its data source is available. Private beta accounts will open here later. Until then, this site collects no personal data.</p>
         <p className="text-sm text-zinc-400 mt-2">Owner withdrawals from the trading wallet: <span className="text-amber-300">available when the trading worker is online</span>.</p>
         <TradingNetworks demo />
         <p className="text-sm text-zinc-400 mt-2">Read the <Link href="/whitepaper" className="text-amber-300">whitepaper and roadmap</Link>, the <Link href="/demo/disclaimer" className="text-amber-300">Terms and Risk Disclaimer</Link>, and the <Link href="/legal" className="text-amber-300">legal notice</Link>.</p>

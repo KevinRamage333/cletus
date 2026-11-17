@@ -36,8 +36,8 @@ describe('onboarding gate: route blocking', () => {
     expect(gateDecision('/demo/dashboard', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
     expect(gateDecision('/api/demo/brain', null, V, V, FC)).toMatchObject({ action: 'deny', status: 401 });
   });
-  it('anonymous users are redirected to sign-up for pages and get 401 for APIs', () => {
-    expect(gateDecision('/', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
+  it('keeps the public home accessible and requires sign-up on private routes', () => {
+    expect(gateDecision('/', null, V, V, FC)).toEqual({ action: 'next' });
     expect(gateDecision('/feedback', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
     expect(gateDecision('/api/status', null, V, V, FC)).toMatchObject({ action: 'deny', status: 401 });
     expect(gateDecision('/onboarding/terms', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
