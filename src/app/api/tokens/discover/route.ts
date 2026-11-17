@@ -15,7 +15,7 @@ export async function GET() {
     ]);
     const open = new Map(positions.map(p => [p.mint, p] as const));
     const stored = readCandidateSnapshot(state?.candidateSnapshot);
-    const useStored = stored !== null && (mem.candidateSnapshotAt === null || stored.at > mem.candidateSnapshotAt);
+    const useStored = stored !== null && stored.at > (mem.candidateSnapshotAt ?? -Infinity);
     const snapshotAt = useStored ? stored.at : mem.candidateSnapshotAt;
     const candidates = useStored ? stored.candidates : mem.candidates;
     const tokens = candidates.slice(0, 100).map(c => {

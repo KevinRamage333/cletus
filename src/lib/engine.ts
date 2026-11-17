@@ -117,6 +117,7 @@ function fallbackEngineState(c: Config, err?: string): EngineStateRow {
     lastScanAt: cachedEngineState?.lastScanAt ?? null,
     lastError: err ?? cachedEngineState?.lastError ?? null,
     scanCount: cachedEngineState?.scanCount ?? 0,
+    candidateSnapshot: cachedEngineState?.candidateSnapshot ?? null,
     updatedAt: cachedEngineState?.updatedAt ?? new Date(),
   };
 }
