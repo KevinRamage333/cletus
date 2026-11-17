@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMovers } from '@/components/market/useMovers';
 import { PageHeader, Refreshed, StateBox, TokenAvatar, useNow } from '@/components/app/ui';
+import { BoostedTag, VerifiedBadge, useListings } from '@/components/listings/Listings';
+import { splitBoosted } from '@/lib/token-boost';
 import { MOVER_SORTS, formatAge, formatPct, formatPrice, formatUsdCompact, freshness, sortMovers, type MoverCard, type MoverSort } from '@/lib/movers';
 
 function Change({ label, v }: { label: string; v: number | null }) {
@@ -10,9 +12,10 @@ function Change({ label, v }: { label: string; v: number | null }) {
   return <span className={`num inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}><span className="text-[9px] opacity-70">{label}</span>{formatPct(v)}</span>;
 }
 
-function Card({ t, now }: { t: MoverCard; now: number }) {
+function Card({ t, now, verified, boostedUntil }: { t: MoverCard; now: number; verified?: boolean; boostedUntil?: string | null }) {
   return (
-    <article className="panel group flex flex-col p-3 transition-colors hover:border-[rgba(212,175,55,.45)]" data-testid="token-card">
+    <article className={`panel group flex flex-col p-3 transition-colors hover:border-[rgba(212,175,55,.45)] ${boostedUntil ? 'border-[#d4af37]/60 shadow-[0_0_0_1px_rgba(212,175,55,.25)]' : ''}`} data-testid="token-card" data-mint={t.mint}>
+      {(verified || boostedUntil) && <div className="mb-2 flex flex-wrap gap-1.5">{boostedUntil && <BoostedTag expiresAt={boostedUntil} />}{verified && <VerifiedBadge />}</div>}
       <div className="flex gap-3">
         <TokenAvatar src={t.imageUrl} symbol={t.symbol} size={64} />
         <div className="min-w-0 flex-1">
@@ -31,7 +34,7 @@ function Card({ t, now }: { t: MoverCard; now: number }) {
         <div><dt className="text-[#8a8478]">Liquidity</dt><dd className="text-[#d8d2c5]">{formatUsdCompact(t.liquidityUsd)}</dd></div>
       </dl>
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-[11px]">
-        <span className="num text-[#8a8478]">{formatPrice(t.priceUsd)} · {t.dex}{t.boosted ? ' · boosted' : ''}</span>
+        <span className="num text-[#8a8478]">{formatPrice(t.priceUsd)} · {t.dex}{t.boosted ? ' · DexScreener boost' : ''}</span>
         <span className="flex gap-2">
           <Link href={`/app/audit?mint=${t.mint}`} className="font-semibold text-[#c9a24a] hover:text-[#f3dc95]">Audit</Link>
           <Link href={`/app/paper?mint=${t.mint}`} className="font-semibold text-[#c9a24a] hover:text-[#f3dc95]">Paper</Link>
@@ -47,11 +50,21 @@ export default function SignalsPage() {
   const [sort, setSort] = useState<MoverSort>('movers');
   const [q, setQ] = useState('');
   const now = useNow(5000);
+  const listings = useListings(true);
   const cards = useMemo(() => {
     const all = sortMovers(data?.tokens ?? [], sort);
     const s = q.trim().toLowerCase();
     return s ? all.filter((t) => t.symbol.toLowerCase().includes(s) || t.name.toLowerCase().includes(s) || t.mint === q.trim()) : all;
   }, [data, sort, q]);
+  const { boostedRow, rest } = useMemo(() => {
+    const boosts = listings.data?.boosts ?? [];
+    const pool = [...cards, ...(listings.data?.boostedCards ?? []).filter((b) => !cards.some((c) => c.mint === b.mint))];
+    const { boosted } = splitBoosted(pool, boosts);
+    const s = q.trim().toLowerCase();
+    const shown = s ? boosted.filter((t) => t.symbol.toLowerCase().includes(s) || t.name.toLowerCase().includes(s) || t.mint === q.trim()) : boosted;
+    const ids = new Set(shown.map((b) => b.mint));
+    return { boostedRow: shown, rest: cards.filter((c) => !ids.has(c.mint)) };
+  }, [cards, listings.data, q]);
   const fresh = freshness(data?.fetchedAt, now);
   const stale = !!data && (data.stale || fresh === 'stale' || (!!error && state === 'ready'));
 
@@ -75,7 +88,14 @@ export default function SignalsPage() {
       {state === 'ready' && (
         <>
           <p className="mb-3 text-xs text-[#8a8478]" data-testid="signals-count">{cards.length} tokens{q && ` matching “${q}”`}</p>
-          {cards.length === 0 ? <StateBox kind="empty" title="No tokens match that filter" /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="signals-grid">{cards.map((t) => <Card key={t.mint} t={t} now={now} />)}</div>}
+          {boostedRow.length > 0 && (
+            <section className="mb-5" data-testid="boosted-row" aria-label="Boosted tokens">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-xs font-bold uppercase tracking-[.18em] text-[#e3c06a]">⚡ Boosted · paid promotion</h2><Link href="/app/boost" className="text-[11px] text-[#8a8478] underline">What is this?</Link></div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{boostedRow.map((t) => <Card key={`b-${t.mint}`} t={t} now={now} verified={listings.isVerified('solana', t.mint)} boostedUntil={listings.boostOf('solana', t.mint)?.expiresAt ?? null} />)}</div>
+              <p className="mt-2 text-[10px] text-[#6f695f]">Boosts are paid placement, not Cletus signals, and never affect what Cletus trades.</p>
+            </section>
+          )}
+          {cards.length === 0 ? <StateBox kind="empty" title="No tokens match that filter" /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="signals-grid">{rest.map((t) => <Card key={t.mint} t={t} now={now} verified={listings.isVerified('solana', t.mint)} />)}</div>}
         </>
       )}
     </div>
