@@ -1,12 +1,16 @@
 # Base complete transaction-fee estimator
 
 ## What this phase adds
-- Connects the existing Base QuoterV2 quote to the exact single-hop SwapRouter02 calldata builder.
-- Uses the caller-supplied public wallet address only as the `from` and recipient for read-only `eth_estimateGas`.
+- Connects the Base QuoterV2 quote to exact single-hop SwapRouter02 calldata.
+- Uses the caller-supplied public wallet address only as the sender/recipient for read-only `eth_estimateGas`.
 - Reads the pending nonce, current EIP-1559 base fee and priority fee from the Base RPC.
-- Serializes the exact current unsigned EIP-1559 transaction envelope and passes those bytes to the official Base GasPriceOracle `getL1Fee(bytes)`.
-- Reports L1 data fee plus a conservative L2 maximum-fee budget, including a 20% gas-limit buffer.
+- Serializes the current unsigned EIP-1559 transaction envelope and passes those bytes to the official Base GasPriceOracle `getL1Fee(bytes)`.
+- Reports the L1 data fee plus a conservative L2 maximum-fee budget, including a 20% gas-limit buffer.
+- Exposes the calculation through authenticated `POST /api/base/complete-fee`.
 - Keeps token amounts in integer arithmetic and returns the estimate as read-only data.
+
+## Request
+The authenticated API accepts `tokenAddress`, `walletAddress` (public address only), `side` (`buy` or `sell`), `amountIn` (decimal string), and optional `slippageBps` (0–300).
 
 ## Why this is still an estimate
 The L1 oracle result is exact for the unsigned transaction bytes supplied at quote time. A future transaction can differ because its nonce, fee caps, calldata, or network state may change. The L2 estimate is a conservative maximum-fee budget, not a prediction of the final charged amount.
