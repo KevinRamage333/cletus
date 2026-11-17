@@ -116,6 +116,7 @@ model Position {
   creator        String?   // dev/creator wallet from RugCheck (correlation cap)
   partialPnlUsd  Float     @default(0)
   partialCostUsd Float     @default(0) // cost basis already sold via partial take-profits
+  partialFeesUsd Float     @default(0) // fees charged on partial take-profit fills
 
   @@index([accountId, status])
   @@index([accountId, mint]) // Legacy Solana lookup compatibility
