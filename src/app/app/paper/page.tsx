@@ -1,4 +1,5 @@
 'use client';
+import { TokenListingTags } from '@/components/listings/Listings';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
@@ -65,7 +66,7 @@ function PaperDesk() {
           <div className="mt-3 flex flex-wrap gap-1.5">{picks.map((t) => <button key={t.mint} onClick={() => setMint(t.mint)} className={`border px-2 py-1 text-[11px] font-semibold ${t.mint === mint ? 'border-[#d4af37] text-[#f3dc95]' : 'border-white/10 text-[#a39c8f]'}`}>{t.symbol}</button>)}</div>
           <div className="mt-4 min-h-[64px]" data-testid="paper-quote">
             {!mint ? <StateBox kind="empty" title="Pick a token to see a live quote" /> : sel ? (
-              <div className="flex items-center gap-3"><TokenAvatar src={sel.imageUrl} symbol={sel.symbol} /><div><p className="font-bold text-[#f6f1e4]">{sel.name} <span className="text-[#c9a24a]">${sel.symbol}</span></p><p className="num text-xs text-[#a39c8f]">{formatPrice(sel.priceUsd)} · mcap {formatUsdCompact(sel.marketCapUsd)} · liq {formatUsdCompact(sel.liquidityUsd)} · 1h {formatPct(sel.change1hPct)}</p></div></div>
+              <div className="flex items-center gap-3"><TokenAvatar src={sel.imageUrl} symbol={sel.symbol} /><div><p className="font-bold text-[#f6f1e4]">{sel.name} <span className="text-[#c9a24a]">${sel.symbol}</span></p><TokenListingTags mint={sel.mint} /><p className="num text-xs text-[#a39c8f]">{formatPrice(sel.priceUsd)} · mcap {formatUsdCompact(sel.marketCapUsd)} · liq {formatUsdCompact(sel.liquidityUsd)} · 1h {formatPct(sel.change1hPct)}</p></div></div>
             ) : loading ? <div className="skeleton h-12" /> : <StateBox kind={qErr ? 'error' : 'empty'} title={qErr ? 'Quote unavailable' : 'No DexScreener pool found for this mint'}>{qErr}</StateBox>}
           </div>
           <label htmlFor="amount" className="mt-4 block text-xs text-[#8a8478]">Amount (paper USD)</label>

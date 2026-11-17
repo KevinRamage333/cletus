@@ -1,4 +1,5 @@
 'use client';
+import { TokenListingTags } from '@/components/listings/Listings';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
@@ -48,7 +49,7 @@ function AuditInner() {
           <div className={`panel flex flex-wrap items-center gap-4 border p-5 ${STATE[data.verdict.state]}`}>
             {m && <TokenAvatar src={m.imageUrl} symbol={m.symbol} size={52} />}
             <div className="min-w-0 flex-1"><p className="text-lg font-bold text-[#f6f1e4]">{m ? `${m.name} ($${m.symbol})` : short(data.mint)}</p><p className="num break-all text-[11px] text-[#8a8478]">{data.mint}</p></div>
-            <p className="text-sm font-bold uppercase tracking-[.14em]" data-testid="audit-verdict">{data.verdict.label}</p>
+            <div className="text-right"><p className="text-sm font-bold uppercase tracking-[.14em]" data-testid="audit-verdict">{data.verdict.label}</p><TokenListingTags mint={data.mint} /></div>
           </div>
           {data.errors.length > 0 && <StateBox kind="stale" title="Some sources did not respond">{data.errors.join(' · ')}</StateBox>}
           <div className="grid gap-3 md:grid-cols-2">

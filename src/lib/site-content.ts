@@ -33,6 +33,8 @@ export const WHAT_WE_BUILT: Capability[] = [
   { title: 'Portfolio & tax reporting', status: 'in-progress', body: 'Portfolio views and exportable records that help users understand what actually happened.', points: ['Paper portfolio with last-refreshed times', 'Connected-wallet balances', 'Realized gain/loss export (CSV)', 'Not tax advice'] },
   { title: 'Cletus Audit', status: 'built', body: 'Evidence-based token checks from public on-chain data.', points: ['Mint and freeze authority', 'Holder concentration', 'Liquidity and market data', 'Clear "could not verify" states'] },
   { title: 'Gold community', status: 'in-progress', body: 'A collective, privacy-conscious view of activity and market discussion.', points: ['Anonymous public labels', 'Opt-in participation and moderation', 'Aggregated collective paper P&L', 'Network coverage at a glance'] },
+  { title: 'Cletus Verified', status: 'in-progress', body: 'An automated badge for token developers: prove control of the deployer or authority wallet with a signature, pass the Cletus audit, and the token shows a gold badge for 30 days.', points: ['Wallet-signature ownership proof (Solana and EVM)', 'Automated audit: authorities, holders, liquidity, LP, honeypot data', 'Badge on Signals, token pages and Cletus Audit', 'Automated check, not an endorsement'] },
+  { title: 'Token Boost', status: 'in-progress', body: 'Paid promotion on the Signals board, clearly labelled and kept separate from trading decisions.', points: ['12-hour, 24-hour and 7-day boosts that expire automatically', 'Basic safety checks required to boost', 'Never affects what Cletus trades', 'Paid checkout built; payments not yet enabled'] },
   { title: 'Security & administration', status: 'built', body: 'Restricted, auditable administrative actions and fail-safe defaults.', points: ['Simulation mode by default', 'Kill switch', 'Non-custodial wallet connections', 'Audit trail for moderation and approvals'] },
 ];
 
@@ -52,6 +54,7 @@ export function revenueRow(volume: number) {
 }
 export const REVENUE_STREAMS = [
   { title: 'Transaction fee', status: 'future' as BuildStatus, body: 'A 0.5% platform fee on swaps a user approves in their own wallet, collected through the Jupiter referral program. Not active: live trading is not enabled.' },
+  { title: 'Token Boost placements', status: 'future' as BuildStatus, body: 'Paid, clearly labelled promotion of tokens on the Signals board. Checkout is built but payment collection is off until pricing, payment method and legal review are approved.' },
   { title: 'Premium intelligence', status: 'future' as BuildStatus, body: 'Advanced signals, deeper audits and research tools as optional paid tiers.' },
   { title: 'Partnerships & data', status: 'future' as BuildStatus, body: 'Integrations and sponsorships with aligned infrastructure and data providers.' },
 ];
@@ -89,9 +92,9 @@ export const TECH_STACK: Array<{ layer: string; tech: string; status: BuildStatu
 export interface Phase { n: number; title: string; status: BuildStatus; items: string[] }
 export const ROADMAP: Phase[] = [
   { n: 1, title: 'Foundation', status: 'built', items: ['Application architecture and authentication', 'Market-data integrations', 'Paper-trading engine', 'Safety defaults: simulation mode and kill switch'] },
-  { n: 2, title: 'Integration & verification', status: 'in-progress', items: ['Unify signals, audit, portfolio and community in one app', 'Realistic paper validation and walk-forward testing', 'Working Solana and EVM wallet connections', 'Professional web and mobile experience'] },
+  { n: 2, title: 'Integration & verification', status: 'in-progress', items: ['Unify signals, audit, portfolio and community in one app', 'Realistic paper validation and walk-forward testing', 'Working Solana and EVM wallet connections', 'Professional web and mobile experience', 'Cletus Verified for token developers (automated)'] },
   { n: 3, title: 'Security & readiness', status: 'future', items: ['Independent security audit and penetration testing', 'Legal and compliance review', 'Operational monitoring and runbooks', 'Controlled beta with real users'] },
-  { n: 4, title: 'Community & multi-chain', status: 'future', items: ['Gold community launch', 'Market intelligence on Ethereum, Base, BNB, Polygon and Cronos', 'Premium intelligence tiers', 'Developer documentation and APIs'] },
+  { n: 4, title: 'Community & multi-chain', status: 'future', items: ['Gold community launch', 'Market intelligence on Ethereum, Base, BNB, Polygon and Cronos', 'Premium intelligence tiers', 'Developer documentation and APIs', 'Paid Token Boost placements (after payment and legal approval)'] },
   { n: 5, title: 'Companion & ecosystem', status: 'future', items: ['Persistent Cletus companion', 'Financial education', 'Virtual-world research', 'Token or staking concepts only after legal, audit and disclosure requirements are met'] },
 ];
 

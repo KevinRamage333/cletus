@@ -38,3 +38,11 @@ export function BoostedTag({ expiresAt }: { expiresAt?: string }) {
     </span>
   );
 }
+
+/** Badges for one Solana token (token detail / audit). Renders nothing when the token is neither verified nor boosted. */
+export function TokenListingTags({ mint, network = 'solana' }: { mint: string; network?: string }) {
+  const { isVerified, boostOf } = useListings(false, 60_000);
+  const v = isVerified(network, mint), b = boostOf(network, mint);
+  if (!v && !b) return null;
+  return <span className="mt-1 flex flex-wrap justify-end gap-1.5">{v && <VerifiedBadge />}{b && <BoostedTag expiresAt={b.expiresAt} />}</span>;
+}

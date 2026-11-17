@@ -29,7 +29,7 @@ describe('corporate site gate', () => {
     for (const p of ['/api/kill-switch', '/api/protected/withdraw/confirm', '/api/protected/trade/start', '/api/community/messages', '/api/engine/scan']) expect(demoGateDecision(p)).toEqual({ action: 'soon' });
   });
   it('demo exposes only the DB-free app screens', () => {
-    expect(DEMO_APP_ROUTES).toEqual(['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet']);
+    expect(DEMO_APP_ROUTES).toEqual(['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet', '/app/verified', '/app/boost']);
     for (const p of DEMO_APP_ROUTES) expect(demoGateDecision(p)).toEqual({ action: 'next' });
     for (const p of ['/app/config', '/app/trade', '/app/operations', '/app/wallet/engine']) expect(demoGateDecision(p)).toMatchObject({ action: 'redirect' });
   });

@@ -10,6 +10,8 @@ const APP_FEATURES = [
   { t: 'Portfolio', href: '/app/portfolio', d: 'Paper positions and connected-wallet balances, each with a last-refreshed time.' },
   { t: 'Tax view', href: '/app/tax', d: 'Realized gain and loss records from your trades, exportable as CSV. Not tax advice.' },
   { t: 'Cletus Audit', href: '/app/audit', d: 'Mint and freeze authority, holder concentration and liquidity for any Solana token.' },
+  { t: 'Cletus Verified', href: '/app/verified', d: 'Token developers prove wallet control and pass an automated audit to earn an expiring gold badge. Not an endorsement.' },
+  { t: 'Token Boost', href: '/app/boost', d: 'Clearly labelled paid placement on the Signals board. Never affects trading. Payments coming soon.' },
   { t: 'Community', href: '/app/community', d: 'People Cletus trades for, collective P&L, tokens per network and network coverage.' },
   { t: 'Wallets', href: '/app/wallet', d: 'Phantom, Solflare, Backpack, MetaMask, Coinbase Wallet and other injected wallets.' },
   { t: 'Cletus AI', href: '/app/ai', d: 'A research assistant that explains context. It cannot place trades.' },
