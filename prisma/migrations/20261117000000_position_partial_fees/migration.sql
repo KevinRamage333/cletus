@@ -1,0 +1,2 @@
+ALTER TABLE "app"."Position"
+ADD COLUMN "partialFeesUsd" DOUBLE PRECISION NOT NULL DEFAULT 0;
