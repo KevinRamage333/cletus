@@ -71,6 +71,10 @@ export async function GET(req: Request) {
     }
 
     const token = inspection.token;
+    // Market momentum and security findings are different dimensions. Never turn
+    // incomplete audit evidence into an invented numerical safety score.
+    const securityAssessment = !audit ? 'unavailable' : audit.passed ? 'checks_passed' : 'flagged';
+    const verification = { status: 'unverified' as const, badge: false, scope: null, reviewedAt: null };
     return NextResponse.json({
       mint,
       fetchedAt: new Date().toISOString(),
@@ -97,6 +101,11 @@ export async function GET(req: Request) {
       signals: signals ? Object.fromEntries(Object.entries(signals).map(([k, v]) => [k, Math.round(v * 100)])) : null,
       compositeScore: score === null ? null : Math.round(score * 100),
       scoreMode: c.signalWeightSet,
+      grading: {
+        market: { score: score === null ? null : Math.round(score * 100), basis: 'Market signal heuristic' },
+        security: { assessment: securityAssessment, score: null, basis: 'Observed audit checks; no calibrated numerical security score' },
+        verification,
+      },
       security: {
         audit,
         auditError,
