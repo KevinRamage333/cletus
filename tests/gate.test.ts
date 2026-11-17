@@ -31,6 +31,11 @@ describe('onboarding gate: step order', () => {
 });
 
 describe('onboarding gate: route blocking', () => {
+  it('opens the guest overview while protecting nested demo and app routes', () => {
+    expect(gateDecision('/demo', null, V, V, FC)).toEqual({ action: 'next' });
+    expect(gateDecision('/demo/dashboard', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
+    expect(gateDecision('/api/demo/brain', null, V, V, FC)).toMatchObject({ action: 'deny', status: 401 });
+  });
   it('anonymous users are redirected to sign-up for pages and get 401 for APIs', () => {
     expect(gateDecision('/', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
     expect(gateDecision('/feedback', null, V, V, FC)).toEqual({ action: 'redirect', to: '/signup' });
