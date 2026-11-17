@@ -64,7 +64,7 @@ export default function WhitepaperPage() {
           >
             Download PDF
           </a>
-          <Link href="/demo/disclaimer" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline text-center">
+          <Link href="/legal/risk" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline text-center">
             Terms &amp; risk
           </Link>
         </div>

@@ -108,7 +108,7 @@ export default function LivePortfolio(p: Props) {
         )}
         {p.demo && <p className="text-[11px] text-white/35 mt-3">Sample paper trades for the public demo. Live fills will link to Solscan when a signature exists.</p>}
       </section>
-      <p className="text-[11px] text-white/30 text-center">Past results do not guarantee future outcomes. Not financial advice. Trading involves risk of loss. <Link href="/demo/disclaimer" className="text-amber-300">Terms &amp; risk</Link></p>
+      <p className="text-[11px] text-white/30 text-center">Past results do not guarantee future outcomes. Not financial advice. Trading involves risk of loss. <Link href="/legal/risk" className="text-amber-300">Terms &amp; risk</Link></p>
     </div>
   );
 }

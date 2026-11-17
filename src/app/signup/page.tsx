@@ -28,7 +28,7 @@ export default function SignupPage() {
         <p className="muted" style={{ fontSize: 12, maxWidth: 520 }}>18+ only. Crypto trading is risky. The only guarantee is that you can lose money, including all funds you choose to put at risk. No profit, income, or return is guaranteed. The beta runs in simulation mode: real market data, paper trades, no real funds.</p>
       </div>
       <form className="card" onSubmit={submit}>
-        <p><Link href="/demo">Explore without an account</Link></p>
+        <p><Link href="/app">Explore without an account</Link></p>
         <h2 style={{ color: 'var(--gold)' }}>Join the beta</h2>
         <label htmlFor="email">Email</label>
         <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />

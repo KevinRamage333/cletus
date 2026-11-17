@@ -18,6 +18,19 @@ const nextConfig = {
     instrumentationHook: true,
     serverComponentsExternalPackages: ['@prisma/client', 'pg'],
   },
+  async redirects() {
+    // The guest /demo pages were replaced by the public corporate site and the read-only app screens.
+    return [
+      { source: '/demo', destination: '/app', permanent: false },
+      { source: '/demo/:path*', destination: '/app', permanent: false },
+      { source: '/brain', destination: '/app/ai', permanent: false },
+      { source: '/grove', destination: '/roadmap', permanent: false },
+      { source: '/app/discover', destination: '/app/signals', permanent: false },
+      { source: '/app/auditor', destination: '/app/audit', permanent: false },
+      { source: '/app/staking', destination: '/roadmap', permanent: false },
+      { source: '/app/world', destination: '/roadmap', permanent: false },
+    ];
+  },
   async headers() {
     return [{ source: '/(.*)', headers: [
       { key: 'X-Frame-Options', value: 'DENY' },

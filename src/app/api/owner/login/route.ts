@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   });
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   if (!isOwnerWallet(address)) {
-    return NextResponse.json({ error: 'this wallet is not the owner wallet', redirect: '/demo' }, { status: 403 });
+    return NextResponse.json({ error: 'this wallet is not the owner wallet', redirect: '/' }, { status: 403 });
   }
   const claims = await verifyChallengeToken(challenge, secret);
   if (!claims) return NextResponse.json({ error: 'sign-in challenge expired' }, { status: 400 });

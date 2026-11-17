@@ -138,6 +138,8 @@ describe('withdraw: execution', () => {
   });
   it('on the public (Vercel demo) site the withdraw APIs are unavailable', () => {
     for (const p of ['/api/protected/withdraw/status', '/api/protected/withdraw/preview', '/api/protected/withdraw/confirm']) expect(demoGateDecision(p)).toEqual({ action: 'soon' });
-    expect(demoGateDecision('/app/wallet')).toEqual({ action: 'redirect', to: '/demo?soon=%2Fapp%2Fwallet' });
+    expect(demoGateDecision('/app/wallet/engine')).toEqual({ action: 'redirect', to: '/app?soon=%2Fapp%2Fwallet%2Fengine' });
+    // The connect-only wallet screen is public in the demo; withdrawals are not.
+    expect(demoGateDecision('/app/wallet')).toEqual({ action: 'next' });
   });
 });

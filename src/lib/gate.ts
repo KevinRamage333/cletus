@@ -28,6 +28,14 @@ const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/api/live', '/
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 PUBLIC_PREFIXES.push('/whitepaper', '/cletus-whitepaper.pdf');
 
+/** Corporate site (cletustechnology.dev) pages and the public read-only market-data API. Always public, also before the age gate. */
+export const SITE_PUBLIC_PREFIXES = ['/about', '/technology', '/features', '/roadmap', '/sponsors', '/developers', '/contact', '/legal', '/api/market/'];
+PUBLIC_PREFIXES.push(...SITE_PUBLIC_PREFIXES);
+export function isSitePublic(pathname: string): boolean {
+  if (pathname === '/') return true;
+  return SITE_PUBLIC_PREFIXES.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p || pathname.startsWith(p + '/')));
+}
+
 export function requiredStep(
   s: SessionClaims | null,
   currentTermsVersion: string,
@@ -82,12 +90,16 @@ export function gateDecision(
 /** Demo-mode gate (public preview without a database). Pure; unit-tested. */
 const DEMO_PUBLIC = ['/onboarding/age', '/api/onboarding/age', '/demo', '/live', '/owner', '/legal', '/api/demo/', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
-DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf');
+DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf', ...SITE_PUBLIC_PREFIXES);
+/** App screens that work without a database (public market data, local paper trading, connect-only wallets). Exact paths. */
+export const DEMO_APP_ROUTES = ['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet'];
 export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
 export function demoGateDecision(pathname: string): DemoDecision {
-  if (pathname === '/' || pathname === '/signup') return { action: 'redirect', to: '/demo' };
+  if (pathname === '/') return { action: 'next' };
+  if (pathname === '/signup') return { action: 'redirect', to: '/app' };
+  if (DEMO_APP_ROUTES.includes(pathname.replace(/\/$/, '') || '/')) return { action: 'next' };
   if (DEMO_PUBLIC.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
   if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest|pdf)$/.test(pathname)) return { action: 'next' };
   if (pathname.startsWith('/api/')) return { action: 'soon' };
-  return { action: 'redirect', to: `/demo?soon=${encodeURIComponent(pathname)}` };
+  return { action: 'redirect', to: `/app?soon=${encodeURIComponent(pathname)}` };
 }
