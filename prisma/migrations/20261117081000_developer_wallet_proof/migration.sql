@@ -1,0 +1,1 @@
+ALTER TABLE "app"."DeveloperVerification" ADD COLUMN "walletProofAt" TIMESTAMP(3), ADD COLUMN "challengeHash" TEXT, ADD COLUMN "challengeExpiresAt" TIMESTAMP(3);
