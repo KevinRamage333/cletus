@@ -27,7 +27,7 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
     try {
       const qs = new URLSearchParams({ address, range });
       if (poolHint) qs.set('pool', poolHint);
-      const r = await fetch(`${apiBase}?${qs}`, { cache: 'no-store' });
+      const r = await fetch(`${apiBase}${apiBase.includes('?') ? '&' : '?'}${qs}`, { cache: 'no-store' });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? 'chart unavailable');
       setData(d); setErr(null); setUpdated(new Date());
