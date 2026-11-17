@@ -30,7 +30,7 @@ vi.mock('@/lib/app-api', () => ({
     const { prisma } = await import('@/lib/db');
     const { getConfig } = await import('@/lib/config');
     const a = await prisma.account.findUniqueOrThrow({ where: { id: fixture.accountId } });
-    return { a, c: getConfig() };
+    return { u: { email: 'paper-lifecycle@test.local' }, a, c: getConfig() };
   },
 }));
 
@@ -102,6 +102,15 @@ it.skipIf(!enabled)('runs real paper exits through cron and reconciles the perfo
     expect(report.account.cashUsd).toBeCloseTo(1000 + pnl);
     expect(report.account.equityUsd).toBeCloseTo(1000 + pnl);
     expect(report.account.realizedPnlUsd).toBeCloseTo(pnl);
+
+    const { GET: exportTrades } = await import('@/app/api/protected/tax/export/route');
+    const csv = await exportTrades();
+    expect(csv.status).toBe(200);
+    const [, header, trade] = (await csv.text()).trim().split('\n');
+    expect(header).toContain('cost_basis_usd,proceeds_usd,fees_usd,realized_pnl_usd');
+    const columns = trade.split(',');
+    expect(columns.slice(0, 3)).toEqual(['paper', p.symbol, p.mint]);
+    expect(columns.slice(5, 9)).toEqual(['100.00', (100 + pnl + 3).toFixed(2), '3.00', pnl.toFixed(2)]);
   } finally {
     await prisma.account.delete({ where: { id: a.id } });
     vi.unstubAllEnvs();
