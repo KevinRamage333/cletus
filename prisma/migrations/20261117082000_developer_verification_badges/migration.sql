@@ -1,0 +1,4 @@
+ALTER TABLE "app"."DeveloperVerification" ADD COLUMN "badgeIssuedAt" TIMESTAMP(3), ADD COLUMN "badgeExpiresAt" TIMESTAMP(3), ADD COLUMN "badgeRevokedAt" TIMESTAMP(3);
+CREATE TABLE "app"."DeveloperVerificationEvent" ("id" TEXT NOT NULL,"applicationId" TEXT NOT NULL,"actorId" TEXT NOT NULL,"action" TEXT NOT NULL,"reason" TEXT NOT NULL,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "DeveloperVerificationEvent_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "DeveloperVerificationEvent_applicationId_createdAt_idx" ON "app"."DeveloperVerificationEvent"("applicationId","createdAt");
+ALTER TABLE "app"."DeveloperVerificationEvent" ADD CONSTRAINT "DeveloperVerificationEvent_applicationId_fkey" FOREIGN KEY ("applicationId") REFERENCES "app"."DeveloperVerification"("id") ON DELETE CASCADE ON UPDATE CASCADE;
