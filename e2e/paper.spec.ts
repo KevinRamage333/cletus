@@ -22,7 +22,7 @@ test.describe('Cletus paper book', () => {
     void request;
   });
 
-  for (const path of ['/app', '/app/portfolio', '/app/community']) {
+  for (const path of ['/app', '/app/portfolio', '/app/community', '/app/trade', '/app/feed']) {
     test(`renders on ${path} with the paper label`, async ({ page }, info) => {
       await attestAge(page);
       await page.goto(path);

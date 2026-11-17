@@ -1,7 +1,6 @@
 /** Server helpers for Cletus Verified challenges and signature checks. */
 import { createPublicClient, http, verifyMessage } from 'viem';
-import { base, bsc, cronos, mainnet, polygon } from 'viem/chains';
-import { PUBLIC_RPC } from './evm-wallet';
+import { EVM_CHAINS, PUBLIC_RPC } from './evm-wallet';
 import { getSessionSecret } from './session';
 import { allowedSiwsHost, randomNonce, signChallenge, verifyChallengeToken, verifySiwsSignature } from './siws';
 import { networkMeta, normalizeAddress, verificationMessage, type ListingNetwork } from './verified';
@@ -49,9 +48,9 @@ export async function checkVerificationProof(body: Record<string, unknown>, now 
   return { ...t, signatureValid, nonce: claims.nonce, expMs: claims.exp * 1000 };
 }
 
-const VIEM_CHAINS = { ethereum: mainnet, base, bnb: bsc, polygon, cronos } as const;
+const CHAIN_ID: Record<string, number> = { ethereum: 1, base: 8453, bnb: 56, polygon: 137, cronos: 25 };
 export async function verifyContractWalletSignature(network: ListingNetwork, wallet: string, message: string, signature: string): Promise<boolean> {
-  const chain = VIEM_CHAINS[network as keyof typeof VIEM_CHAINS];
+  const chain = EVM_CHAINS.find((c) => c.id === CHAIN_ID[network]);
   if (!chain) return false;
   try {
     const client = createPublicClient({ chain, transport: http(process.env[`NEXT_PUBLIC_RPC_${chain.id}`] || PUBLIC_RPC[chain.id], { timeout: 8000 }) });
