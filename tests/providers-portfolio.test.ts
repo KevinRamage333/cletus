@@ -144,7 +144,7 @@ describe('market-cap presets and filters', () => {
   });
   it('rejects thin pools, low vol/mcap and young tokens', () => {
     const now = Date.now();
-    const pair = (o: { mcap: number; v: number; liq: number; ageH: number }) => ({ chainId: 'solana', pairAddress: 'p', baseToken: { address: `m${Math.random()}`, symbol: 'T', name: 'T' }, priceUsd: '1', marketCap: o.mcap, volume: { h24: o.v }, liquidity: { usd: o.liq }, pairCreatedAt: now - o.ageH * 3600_000, priceChange: { h1: 1 } });
+    const pair = (o: { mcap: number; v: number; liq: number; ageH: number }) => ({ chainId: 'solana', pairAddress: 'p', baseToken: { address: `m${Math.random()}`, symbol: 'T', name: 'T' }, priceUsd: '1', marketCap: o.mcap, volume: { h24: o.v, m5: 3000 }, liquidity: { usd: o.liq }, pairCreatedAt: now - o.ageH * 3600_000, priceChange: { h1: 1 } });
     const f = { ...buildConfig({}) };
     const w = Object.fromEntries(Object.keys(f.initialWeights).map((k) => [k, 0.125])) as never;
     const [ok, thin, lowVol, young] = [

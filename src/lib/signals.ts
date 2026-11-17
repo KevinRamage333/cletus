@@ -161,7 +161,7 @@ export interface ScanCandidate {
 export interface ScanFilters {
   volumeSpikeMcapPct?: number; breakout5mPct?: number; buyPressureRatio?: number;
   minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; minTokenAgeHours: number; maxHourlyPriceMovement: number; nanoCapMax: number;
-  minLiquidityUsd?: number; minVolumeMcapRatio?: number; requireKnownAge?: boolean;
+  minVolume5mUsd?: number; minLiquidityUsd?: number; minVolumeMcapRatio?: number; requireKnownAge?: boolean;
   signalWeightSet?: SignalWeightSet;
 }
 
@@ -172,6 +172,8 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
     const mcap = p.marketCap ?? p.fdv ?? 0;
     const price = Number(p.priceUsd ?? 0);
     const v24 = p.volume?.h24 ?? 0;
+    const v5 = p.volume?.m5 ?? 0;
+    const minVolume5mUsd = f.minVolume5mUsd ?? 0;
     const ageHours = p.pairCreatedAt ? (now - p.pairCreatedAt) / 3_600_000 : null;
     const signals = computeSignals(p, f);
     const c: ScanCandidate = {
@@ -187,6 +189,7 @@ export function rankCandidates(pairs: DexPair[], f: ScanFilters, weights: Record
     if (!(price > 0)) c.rejected = 'no price';
     else if (mcap < f.minMarketCap || mcap > f.maxMarketCap) c.rejected = `mcap outside $${f.minMarketCap}-$${f.maxMarketCap}`;
     else if (v24 < f.minVolume24hUsd) c.rejected = `24h volume < $${f.minVolume24hUsd}`;
+    else if (minVolume5mUsd > 0 && (!Number.isFinite(v5) || v5 < minVolume5mUsd)) c.rejected = `5m volume < ${minVolume5mUsd} or unavailable`;
     else if (f.minVolumeMcapRatio && c.volMcap < f.minVolumeMcapRatio) c.rejected = `24h volume < ${(f.minVolumeMcapRatio * 100).toFixed(0)}% of mcap`;
     else if (f.minLiquidityUsd && !((c.liquidityUsd ?? 0) >= f.minLiquidityUsd)) c.rejected = `pool liquidity < $${f.minLiquidityUsd.toLocaleString()}`;
     else if (ageHours !== null && ageHours < f.minTokenAgeHours) c.rejected = `younger than ${f.minTokenAgeHours}h`;

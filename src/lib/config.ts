@@ -133,7 +133,7 @@ export interface Config {
   riskPerTradePct: number; maxTotalExposurePct: number; equityProtectionLevel: number; minTradeUsd: number;
   // scanner / filters
   mcapPreset: McapPreset; minVolumeMcapRatio: number; enablePresetLab: boolean;
-  minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; volumeSpikeMcapPct: number; breakout5mPct: number; buyPressureRatio: number; minLiquidityUsd: number; nanoCapMax: number;
+  minMarketCap: number; maxMarketCap: number; minVolume24hUsd: number; minVolume5mUsd: number; volumeSpikeMcapPct: number; breakout5mPct: number; buyPressureRatio: number; minLiquidityUsd: number; nanoCapMax: number;
   minTokenAgeHours: number; maxHolderConcentration: number; maxHourlyPriceMovement: number; requireLiquidityLock: boolean; minLpLockedPct: number;
   scanTopN: number; auditTopN: number;
   // audit
@@ -278,6 +278,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     enablePresetLab: bool(env.ENABLE_PRESET_LAB, true),
     // Fixed: USD (not "SOL"), per-token 24h volume floor. Level MIN_VOLUME_USD acts as a lower bound too.
     minVolume24hUsd: Math.max(num(env.MIN_MARKET_VOLUME_24H, 10000), num(env.MIN_VOLUME_USD, num(env[`${aggression}_MIN_VOLUME_USD`], L.minVolumeUsd))),
+    minVolume5mUsd: Math.max(0, num(env.MIN_MARKET_VOLUME_5M, 2000)),
     // Spec signal rules: volume spike = 5m volume > 5% of mcap; breakout = >5% price rise in 5m; buy pressure = buys > 70% of 5m txns.
     volumeSpikeMcapPct: num(env.VOLUME_SPIKE_5M_MCAP_PCT, 5),
     breakout5mPct: num(env.BREAKOUT_5M_PRICE_PCT, 5),
