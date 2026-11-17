@@ -57,6 +57,7 @@ export async function tradeSession(u: User, a: Account, c: Config, s: AccountSet
     paperWorkerLastAt: paperWorkerHeartbeat?.createdAt ?? null,
     paperWorkerMessage: paperWorkerHeartbeat?.message ?? null,
     paperWorkerMonitorAt: paperMonitor?.createdAt ?? null,
+    syntheticPaper: process.env.CLETUS_SYNTHETIC_PAPER === '1' && c.mode !== 'live',
     user: { email: u.email },
   };
 }

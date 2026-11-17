@@ -9,6 +9,7 @@ next-env.d.ts
 !.env.example
 # local db
 prisma/*.db
+tests/e2e/artifacts/
 prisma/*.db-journal
 dev.log
 .env*.local

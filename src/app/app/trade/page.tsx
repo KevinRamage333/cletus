@@ -52,6 +52,7 @@ type TradeSession = {
   paperWorkerLastAt: string | null;
   paperWorkerMonitorAt: string | null;
   paperWorkerMessage: string | null;
+  syntheticPaper?: boolean;
 };
 
 const EMPTY: TradeSession = {
@@ -142,6 +143,7 @@ export default function ActiveTradingPage() {
           paperWorkerLastAt: data.paperWorkerLastAt ? String(data.paperWorkerLastAt) : null,
           paperWorkerMonitorAt: data.paperWorkerMonitorAt ? String(data.paperWorkerMonitorAt) : null,
           paperWorkerMessage: data.paperWorkerMessage ? String(data.paperWorkerMessage) : null,
+          syntheticPaper: data.syntheticPaper === true,
         });
         setKnown(true);
         setError(null);
@@ -346,6 +348,17 @@ export default function ActiveTradingPage() {
               </div>
             </div>
           </section>
+
+          {session.syntheticPaper && (
+            <section data-testid="synthetic-paper" className="rounded-2xl border border-amber-400/30 bg-[#121212] p-4 space-y-3">
+              <h2 className="text-sm font-semibold">Synthetic paper ticket</h2>
+              <p className="text-xs text-white/50">Records a simulated buy or sell in this test account. It does not sign or broadcast a transaction.</p>
+              <div className="flex gap-2">
+                <button type="button" data-testid="synthetic-buy" disabled={busy} onClick={() => post('/api/protected/trade/synthetic?side=buy')} className="px-4 py-2 rounded-full text-sm font-semibold bg-[#D4AF37] text-black">Paper buy</button>
+                <button type="button" data-testid="synthetic-sell" disabled={busy} onClick={() => post('/api/protected/trade/synthetic?side=sell')} className="px-4 py-2 rounded-full text-sm font-semibold border border-white/20">Paper sell</button>
+              </div>
+            </section>
+          )}
 
           {/* On-chain verification */}
           <section className="rounded-2xl border border-white/10 bg-[#121212] p-4">
