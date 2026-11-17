@@ -41,6 +41,7 @@ interface EngineMemory {
   candidates: Array<ScanCandidate & { audit?: AuditResult }>;
   solPrice: number;
   lastScanSummary: string;
+  candidateSnapshotAt?: number;
   prices: Map<string, number>;
   liquidity: Map<string, number>;
   monitorTicks: number;
@@ -463,6 +464,7 @@ async function scanTickInner(gen: number): Promise<string> {
     const marketRegime = assessMarketRegime(eligible.map((r) => ({ h1: r.priceChangeH1, h24: r.priceChangeH24 })));
     const marketRegimeMode = ['off', 'shadow', 'on'].includes(process.env.MARKET_REGIME_GATE ?? '') ? process.env.MARKET_REGIME_GATE! : 'shadow';
     mem.candidates = ranked.slice(0, c.scanTopN);
+    mem.candidateSnapshotAt = Date.now();
     await prisma.engineState.update({ where: { id: 'global' }, data: { lastScanAt: new Date(), scanCount: { increment: 1 } } });
 
     const accounts = await prisma.account.findMany({ where: { labPreset: null, OR: [{ isOperator: true }, { user: { is: { walletSetupAt: { not: null } } } }] } });
