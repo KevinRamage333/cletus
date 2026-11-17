@@ -40,6 +40,43 @@ export default function CletusAIPage() {
   const [loading, setLoading] = useState(false);
   const [signals, setSignals] = useState<TokenSignal[]>([]);
   const convRef = useRef<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string }>>([]);
+  const [historyReady, setHistoryReady] = useState(false);
+
+  const selectConversation = useCallback(async (id: string) => {
+    const response = await fetch(`/api/brain?conversationId=${encodeURIComponent(id)}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const data = await response.json();
+    convRef.current = id;
+    setConversationId(id);
+    setMessages((data.messages ?? []).map((m: { role: string; content: string }) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: m.content })));
+  }, []);
+
+  const refreshConversations = useCallback(async () => {
+    const response = await fetch('/api/brain', { cache: 'no-store' });
+    if (!response.ok) return [];
+    const data = await response.json();
+    const list = (data.conversations ?? []) as Array<{ id: string; title: string }>;
+    setConversations(list);
+    return list;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    refreshConversations().then(async (list) => {
+      if (!active) return;
+      // Server-side ownership checks apply when opening a conversation.
+      if (list.length) await selectConversation(list[0].id);
+    }).catch(() => {}).finally(() => { if (active) setHistoryReady(true); });
+    return () => { active = false; };
+  }, [refreshConversations, selectConversation]);
+
+  const newConversation = () => {
+    convRef.current = null;
+    setConversationId(null);
+    setMessages([]);
+  };
   const [liveOn, setLiveOn] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'listening' | 'speaking' | 'error'>('idle');
   const [liveTranscript, setLiveTranscript] = useState('');
@@ -93,7 +130,7 @@ export default function CletusAIPage() {
 
   const sendChat = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || !historyReady) return;
     setInput('');
     const next = [...messages, { role: 'user' as const, content: text }];
     setMessages(next);
@@ -109,7 +146,11 @@ export default function CletusAIPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Cletus is unavailable");
-      if (data.conversationId) convRef.current = data.conversationId;
+      if (data.conversationId) {
+        convRef.current = data.conversationId;
+        setConversationId(data.conversationId);
+        void refreshConversations();
+      }
       setMessages((prev) => [
         ...prev,
         {
@@ -187,7 +228,7 @@ export default function CletusAIPage() {
         const piece = event.results[i][0].transcript;
         if (event.results[i].isFinal) finalText += piece;
       }
-      if (!finalText.trim() || voiceRequestInFlightRef.current || !liveOnRef.current) return;
+      if (!finalText.trim() || voiceRequestInFlightRef.current || !liveOnRef.current || !historyReady) return;
       voiceRequestInFlightRef.current = true;
       try { recognition.stop(); } catch { /* already stopped */ }
 
@@ -205,6 +246,11 @@ export default function CletusAIPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Voice AI unavailable');
+        if (data.conversationId) {
+          convRef.current = data.conversationId;
+          setConversationId(data.conversationId);
+          void refreshConversations();
+        }
         const answer =
           data.answer ?? data.message ?? "I didn't catch that. Try again.";
         setMessages((prev) => [...prev, { role: 'assistant', content: answer }]);
@@ -243,7 +289,7 @@ export default function CletusAIPage() {
       setLiveOn(false);
       setLiveStatus('error');
     }
-  }, []);
+  }, [historyReady, refreshConversations]);
 
   useEffect(() => {
     return () => stopLive();
@@ -291,6 +337,11 @@ export default function CletusAIPage() {
               <strong className="text-white/70">live scanner signals</strong> (USD prices)
             </p>
           </div>
+
+          <section aria-label="Chat conversations" className="rounded-xl border border-white/10 p-3 flex flex-wrap gap-2 items-center">
+            <button type="button" onClick={newConversation} className="rounded border border-white/20 px-3 py-2 text-xs">+ New chat</button>
+            {conversations.slice(0, 12).map((c) => <button type="button" key={c.id} onClick={() => void selectConversation(c.id)} aria-current={conversationId === c.id ? 'true' : undefined} className={`rounded border px-3 py-2 text-xs ${conversationId === c.id ? 'border-amber-400' : 'border-white/20'}`}>{c.title}</button>)}
+          </section>
 
           {/* 8 token signals from Cletus */}
           <section className="rounded-xl border border-white/10 bg-white/5 p-4">
