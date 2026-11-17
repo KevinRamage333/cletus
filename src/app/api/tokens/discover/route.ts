@@ -29,7 +29,7 @@ export async function GET() {
         openPaperPosition:!!p, paperPnlUsd:pnl, paperPnlPct:p && pnl !== null ? pnl / p.sizeUsd * 100 : null };
     });
     return NextResponse.json({ fetchedAt:new Date().toISOString(), candidateScanAt:snapshotAt == null ? null : new Date(snapshotAt).toISOString(), scanAt:state?.lastScanAt?.toISOString() ?? null,
-      scanCount:state?.scanCount ?? 0, engine:{stateAvailable:state !== null,killSwitch:state?.killSwitch ?? false,pausedUntil:state?.pausedUntil?.toISOString() ?? null,lastError:state?.lastError ?? null},
+      scanCount:state?.scanCount ?? 0, engine:{stateAvailable:state !== null,killSwitch:state?.killSwitch ?? true,pausedUntil:state?.pausedUntil?.toISOString() ?? null,lastError:state?.lastError ?? null},
       scanning:mem.scanning,scanStage:mem.scanStage,summary:mem.lastScanSummary,tokens,
       disclaimer:'Only existing simulated positions have P&L. Other tokens show market movement, not hypothetical profits.' },
       {headers:{'Cache-Control':'no-store, max-age=0'}});
