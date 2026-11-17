@@ -16,18 +16,18 @@ function parseSignals(raw: string): Record<string, unknown> {
 
 export async function GET() {
   try {
-    const { a } = await appContext();
+    const { a, c } = await appContext();
     const [equity, closedCount, closed, daily] = await Promise.all([
       accountEquity(a),
       prisma.position.count({ where: { accountId: a.id, status: 'closed' } }),
       prisma.position.findMany({
-        where: { accountId: a.id, status: 'closed' },
+        where: { accountId: a.id, status: 'closed', simulated: true },
         orderBy: { closedAt: 'asc' },
         take: 5000,
         select: { id: true, symbol: true, mint: true, network: true, sizeUsd: true, entryPrice: true, exitPrice: true, feesUsd: true, pnlUsd: true, pnlPct: true, openedAt: true, closedAt: true, exitReason: true, simulated: true, signals: true },
       }),
       prisma.position.aggregate({
-        where: { accountId: a.id, status: 'closed', closedAt: { gte: new Date(Date.now() - 86_400_000) } },
+        where: { accountId: a.id, status: 'closed', simulated: true, closedAt: { gte: new Date(Date.now() - 86_400_000) } },
         _sum: { pnlUsd: true, feesUsd: true }, _count: { _all: true },
       }),
     ]);
@@ -70,7 +70,7 @@ export async function GET() {
     }));
 
     return NextResponse.json({
-      mode: 'paper', generatedAt: new Date().toISOString(),
+      mode: c.mode, generatedAt: new Date().toISOString(),
       account: { startingBalance: a.startingBalance, cashUsd: a.cashUsd, equityUsd: equity.equity, realizedPnlUsd: a.realizedPnl,
         unrealizedPnlUsd: open.reduce((sum, p) => sum + p.unrealizedPnlUsd, 0) },
       coverage: { closedTradesAvailable: closedCount, analyzedTrades: closed.length, truncated: closedCount > closed.length, recentTradesReturned: recent.length },
