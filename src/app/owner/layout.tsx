@@ -3,7 +3,7 @@ import WalletProviders from '@/components/WalletProviders';
 import { COMPANY_LEGAL } from '@/lib/company';
 import Link from 'next/link';
 
-export const metadata = { title: 'Cletus owner desk', robots: { index: false, follow: false } };
+export const metadata = { title: "The Owner's Desk", robots: { index: false, follow: false } };
 
 export default function OwnerLayout({ children }: { children: ReactNode }) {
   return (
@@ -12,7 +12,7 @@ export default function OwnerLayout({ children }: { children: ReactNode }) {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link href="/owner" className="flex items-center gap-2 no-underline">
             <img src="/cletus-logo.png" alt="Cletus" className="w-8 h-8 rounded-full" />
-            <span className="gold-text font-bold text-lg">Cletus</span>
+            <span className="gold-text font-bold text-lg">The Owner&apos;s Desk</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-300">OWNER</span>
           </Link>
         </div>
