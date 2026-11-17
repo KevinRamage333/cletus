@@ -384,6 +384,9 @@ model DeveloperVerification {
   evidenceUrl String?
   statement   String
   status      String   @default("pending") // pending | needs_evidence | rejected
+  walletProofAt DateTime?
+  challengeHash String?
+  challengeExpiresAt DateTime?
   reviewerId  String?
   reviewNote  String?
   reviewedAt  DateTime?
