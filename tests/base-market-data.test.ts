@@ -1,47 +1,113 @@
 import { describe, expect, it } from 'vitest';
-import { bestBasePairPerToken, filterBasePairsForTokens, parseBasePairs, parseBaseTokenIdentities } from '@/lib/base-market-data';
+import {
+  bestBasePairPerToken,
+  filterBasePairsForTokens,
+  isBaseAddress,
+  parseBasePairs,
+  parseBaseTokenIdentities,
+} from '@/lib/base-market-data';
 
-describe('Base read-only market data', () => {
-  it('keeps only Base token identities and de-duplicates case-insensitively', () => {
+const A = '0x00000000000000000000000000000000000000a1';
+const B = '0x00000000000000000000000000000000000000b2';
+const C = '0x00000000000000000000000000000000000000c3';
+const D = '0x00000000000000000000000000000000000000d4';
+
+function pair(overrides: Record<string, unknown> = {}) {
+  return {
+    chainId: 'base', pairAddress: D,
+    baseToken: { address: A, name: 'Token', symbol: 'TOK' },
+    quoteToken: { address: B, symbol: 'USDC' },
+    priceUsd: '0.25', volume: { h24: 100 }, liquidity: { usd: 500 },
+    fdv: 10000, priceChange: { h24: 4 }, pairCreatedAt: 1700000000000,
+    url: 'https://dexscreener.com/base/example', ...overrides,
+  };
+}
+
+describe('Base market-data adapter v2', () => {
+  it('validates EVM addresses strictly', () => {
+    expect(isBaseAddress(A)).toBe(true);
+    expect(isBaseAddress('0xabc')).toBe(false);
+    expect(isBaseAddress('0x' + 'g'.repeat(40))).toBe(false);
+    expect(isBaseAddress(null)).toBe(false);
+  });
+
+  it('keeps only Base token identities and deduplicates case-insensitively', () => {
     expect(parseBaseTokenIdentities([
-      { chainId: 'base', tokenAddress: '0xAbC' },
+      { chainId: 'base', tokenAddress: A },
+      { chainId: 'base', tokenAddress: A.toUpperCase().replace('0X', '0x') },
+      { chainId: 'ethereum', tokenAddress: B },
       { chainId: 'base', tokenAddress: '0xabc' },
-      { chainId: 'solana', tokenAddress: 'So111' },
-      { chainId: 'base', tokenAddress: '' },
-    ])).toEqual([{ network: 'base', address: '0xAbC' }]);
+    ])).toEqual([{ network: 'base', address: A }]);
   });
 
-  it('rejects non-Base and malformed pairs and normalizes numeric fields safely', () => {
-    const pairs = parseBasePairs([
-      { chainId: 'base', pairAddress: '0xPair', baseToken: { address: '0xToken', symbol: 'TOK' }, quoteToken: { address: '0xUsdc', symbol: 'USDC' }, priceUsd: '0.25', volume: { h24: 100 }, liquidity: { usd: 500 }, priceChange: { h24: 4 } },
-      { chainId: 'solana', pairAddress: 'pair2', baseToken: { address: 'mint' }, quoteToken: { address: 'quote' } },
-      { chainId: 'base', pairAddress: '', baseToken: { address: '0xToken' }, quoteToken: { address: '0xUsdc' } },
+  it('rejects wrong-chain, malformed and duplicate pairs', () => {
+    const parsed = parseBasePairs([
+      pair(),
+      pair({ chainId: 'ethereum', pairAddress: C }),
+      pair({ pairAddress: '0xabc' }),
+      pair({ pairAddress: D.toUpperCase().replace('0X', '0x') }),
     ]);
-    expect(pairs).toHaveLength(1);
-    expect(pairs[0]).toMatchObject({ chainId: 'base', priceUsd: 0.25, volume24hUsd: 100, liquidityUsd: 500, priceChange24hPct: 4 });
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].pairAddress).toBe(D);
   });
 
-  it('keeps null prices null instead of converting them to zero', () => {
-    const pairs = parseBasePairs([
-      { chainId: 'base', pairAddress: 'p1', baseToken: { address: '0xToken' }, quoteToken: { address: '0xQ' }, priceUsd: null },
+  it('does not manufacture a zero price from missing or malformed values', () => {
+    const parsed = parseBasePairs([
+      pair({ priceUsd: null }),
+      pair({ pairAddress: C, priceUsd: '' }),
+      pair({ pairAddress: '0x00000000000000000000000000000000000000e5', priceUsd: 'not-a-number' }),
     ]);
-    expect(pairs[0].priceUsd).toBeNull();
+    expect(parsed.map(row => row.priceUsd)).toEqual([null, null, null]);
   });
 
-  it('filters out quote-side matches until their USD price can be normalized safely', () => {
-    const pairs = parseBasePairs([
-      { chainId: 'base', pairAddress: 'p1', baseToken: { address: '0xBase' }, quoteToken: { address: '0xRequested' }, priceUsd: '2' },
-      { chainId: 'base', pairAddress: 'p2', baseToken: { address: '0xRequested' }, quoteToken: { address: '0xUsd' }, priceUsd: '0.5' },
-      { chainId: 'base', pairAddress: 'p3', baseToken: { address: '0xOther' }, quoteToken: { address: '0xUsd' }, priceUsd: '8' },
-    ]);
-    expect(filterBasePairsForTokens(pairs, ['0xrequested']).map((p) => p.pairAddress)).toEqual(['p2']);
+  it('normalizes invalid numeric fields safely and accepts valid market-cap fallback', () => {
+    const [parsed] = parseBasePairs([pair({
+      volume: { h24: -10 }, liquidity: { usd: 'not-a-number' },
+      fdv: 0, marketCap: '2000', priceChange: { h24: 'bad' },
+      pairCreatedAt: 'bad', url: 'javascript:alert(1)',
+    })]);
+    expect(parsed).toMatchObject({
+      volume24hUsd: 0, liquidityUsd: 0, fdvUsd: 2000,
+      priceChange24hPct: null, pairCreatedAtMs: null, url: null,
+    });
   });
 
-  it('chooses the deepest/most active pair for each token', () => {
-    const pairs = parseBasePairs([
-      { chainId: 'base', pairAddress: 'p1', baseToken: { address: '0xToken' }, quoteToken: { address: '0xQ' }, liquidity: { usd: 100 }, volume: { h24: 10 } },
-      { chainId: 'base', pairAddress: 'p2', baseToken: { address: '0xtoken' }, quoteToken: { address: '0xQ' }, liquidity: { usd: 200 }, volume: { h24: 10 } },
+  it('accepts only secure DexScreener pair URLs', () => {
+    expect(parseBasePairs([pair({ url: 'https://evil.example/path' })])[0].url).toBeNull();
+    expect(parseBasePairs([pair({ url: 'http://dexscreener.com/base/pair' })])[0].url).toBeNull();
+    expect(parseBasePairs([pair()])[0].url).toBe('https://dexscreener.com/base/example');
+  });
+
+  it('filters quote-side matches and malformed requested addresses', () => {
+    const parsed = parseBasePairs([
+      pair({ pairAddress: C, baseToken: { address: B }, quoteToken: { address: A } }),
+      pair({ pairAddress: D, baseToken: { address: A }, quoteToken: { address: B } }),
     ]);
-    expect(bestBasePairPerToken(pairs).get('0xtoken')?.pairAddress).toBe('p2');
+    expect(filterBasePairsForTokens(parsed, [A, '0xabc']).map(row => row.pairAddress)).toEqual([D]);
+  });
+
+  it('ranks by liquidity first and volume second', () => {
+    const parsed = parseBasePairs([
+      pair({ pairAddress: C, liquidity: { usd: 100 }, volume: { h24: 100000 } }),
+      pair({ pairAddress: D, liquidity: { usd: 200 }, volume: { h24: 1 } }),
+    ]);
+    expect(bestBasePairPerToken(parsed).get(A)?.pairAddress).toBe(D);
+  });
+
+  it('uses volume only to break equal-liquidity ties', () => {
+    const parsed = parseBasePairs([
+      pair({ pairAddress: C, liquidity: { usd: 500 }, volume: { h24: 100 } }),
+      pair({ pairAddress: D, liquidity: { usd: 500 }, volume: { h24: 200 } }),
+    ]);
+    expect(bestBasePairPerToken(parsed).get(A)?.pairAddress).toBe(D);
+  });
+
+  it('excludes unpriced and zero-liquidity markets from candidate selection', () => {
+    const parsed = parseBasePairs([
+      pair({ pairAddress: C, priceUsd: null, liquidity: { usd: 9000 } }),
+      pair({ pairAddress: D, priceUsd: '0', liquidity: { usd: 10000 } }),
+      pair({ pairAddress: '0x00000000000000000000000000000000000000e5', liquidity: { usd: 0 } }),
+    ]);
+    expect(bestBasePairPerToken(parsed).size).toBe(0);
   });
 });
