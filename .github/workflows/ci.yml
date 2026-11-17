@@ -14,6 +14,20 @@ jobs:
     name: Unit tests and typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: cletus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d cletus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,3 +44,13 @@ jobs:
         run: npm test
       - name: Run TypeScript typecheck
         run: npm run typecheck
+
+      - name: Migrate disposable paper ledger database
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
+      - name: Reconcile concurrent paper exits
+        run: npm test -- tests/paper-settlement.pg.test.ts
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
+          PAPER_SETTLEMENT_PG_TEST: '1'

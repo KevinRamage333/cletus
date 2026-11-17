@@ -1,4 +1,5 @@
 import { totalTradeFees } from './trade-accounting';
+import { settlePaperExit } from './paper-settlement';
 /**
  * The Cletus engine: scan -> score -> audit -> size -> compliance gate -> enter;
  * monitor -> exit -> learn. Runs in-process on the Next.js Node server.
@@ -1331,10 +1332,24 @@ async function partialCloseInner(positionId: string, price: number, fraction: nu
     fee = simFeesUsd(proceeds, q.source === 'jupiter' ? q.feeBps : Math.max(c.simFeeBps, q.feeBps), st.priorityFeeLamports, (mem.solPrice || c.solPriceFallbackUsd));
   }
   const pnl = proceeds - fee - costPortion;
-  await prisma.$transaction([
-    prisma.position.update({ where: { id: p.id }, data: { tokenAmount: p.tokenAmount - sellTokens, sizeUsd: p.sizeUsd - costPortion, partialCostUsd: p.partialCostUsd + costPortion, partialPnlUsd: p.partialPnlUsd + pnl, partialFeesUsd: p.partialFeesUsd + fee, partialsTaken: rung, lastPrice: price } }),
-    prisma.account.update({ where: { id: p.accountId }, data: { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } } }),
-  ]);
+  const fill = {
+    tokenAmount: p.tokenAmount - sellTokens,
+    sizeUsd: p.sizeUsd - costPortion,
+    partialCostUsd: p.partialCostUsd + costPortion,
+    partialPnlUsd: p.partialPnlUsd + pnl,
+    partialFeesUsd: p.partialFeesUsd + fee,
+    partialsTaken: rung,
+    lastPrice: price,
+  };
+  const balance = { cashUsd: { increment: proceeds - fee }, realizedPnl: { increment: pnl } };
+  if (p.simulated) {
+    if (!(await settlePaperExit(p, fill, balance))) return;
+  } else {
+    await prisma.$transaction([
+      prisma.position.update({ where: { id: p.id }, data: fill }),
+      prisma.account.update({ where: { id: p.accountId }, data: balance }),
+    ]);
+  }
   await log('trade', `${p.simulated ? 'PAPER' : 'LIVE'} PARTIAL TP${rung} ${p.symbol}: sold ${(fraction * 100).toFixed(0)}% at +${gainPct}% rung, PnL ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}${tx ? ` tx ${tx}` : ''}`, p.accountId);
   if (!p.simulated) {
     try {
@@ -1431,12 +1446,29 @@ async function closePositionInner(positionId: string, price: number, reason: str
   const pnlPct = (pnlUsd / (p.sizeUsd + p.partialCostUsd)) * 100;
   const won = pnlUsd > 0;
 
-  await prisma.position.update({ where: { id: p.id }, data: { status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason, exitTx, lastPrice: price, feesUsd: totalTradeFees(p.feesUsd, p.partialFeesUsd, exitFees) } });
-
-  if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
+  const fill = {
+    status: 'closed', closedAt: new Date(), exitPrice, pnlUsd, pnlPct, exitReason: reason,
+    exitTx, lastPrice: price, feesUsd: totalTradeFees(p.feesUsd, p.partialFeesUsd, exitFees),
+  };
+  const balance = {
+    cashUsd: { increment: proceeds - exitFees },
+    realizedPnl: { increment: remainderPnl },
+    consecutiveWins: won ? { increment: 1 } : 0,
+    consecutiveLosses: won ? 0 : { increment: 1 },
+  };
+  let updated: Account;
+  if (live) {
+    await prisma.position.update({ where: { id: p.id }, data: fill });
+    if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
+    updated = await prisma.account.update({ where: { id: a.id }, data: balance });
+  } else {
+    const settled = await settlePaperExit(p, fill, balance);
+    if (!settled) return;
+    updated = settled;
+    if (journalOn()) await journalExitHook(p, price, reason, exitPrice, exitFees, pnlUsd, pnlPct);
+  }
 
   // Account bookkeeping, drawdown & recovery mode.
-  const updated = await prisma.account.update({ where: { id: a.id }, data: { cashUsd: { increment: proceeds - exitFees }, realizedPnl: { increment: remainderPnl }, consecutiveWins: won ? { increment: 1 } : 0, consecutiveLosses: won ? 0 : { increment: 1 } } });
   // A live operator's drawdown/recovery is judged on the on-chain wallet by sampleLiveEquity (live-drawdown.ts),
   // never on this account's ~$10k paper peak (which made both checks dead for a ~$10 wallet).
   const liveOperatorBook = c.mode === 'live' && a.isOperator;
