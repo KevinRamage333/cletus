@@ -55,7 +55,7 @@ it.skipIf(!enabled)('runs a paper entry and exits through cron and reconciles th
     ENABLE_TRAILING_STOP: 'false', TRADE_JOURNAL: 'off',
     ENABLE_24_7_TRADING: 'true', ENABLE_PRESET_LAB: 'false', MIN_COMPOSITE_SCORE: '0.01',
     SEC_WASH_TRADE_WINDOW_MINUTES: '60', MAX_POSITION_SIZE_USD: '100',
-    MCAP_PRESET: 'BALANCED',
+    MCAP_PRESET: 'BALANCED', OWNER_PLAN_ENABLED: 'false',
   };
   for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
   const a = await prisma.account.create({
