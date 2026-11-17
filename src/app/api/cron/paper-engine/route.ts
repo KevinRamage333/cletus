@@ -48,19 +48,19 @@ export async function GET(req: Request) {
 
       await ensureOperatorAccount();
       const scanSummary = await scanTick();
-      await monitorTick();
+      const monitorCompleted = await monitorTick();
       const at = new Date();
 
       await tx.logEntry.create({
         data: {
           level: 'info',
-          message: `PAPER_WORKER_HEARTBEAT scan="${scanSummary.slice(0, 220)}" monitoredAt=${at.toISOString()}`,
+          message: `PAPER_WORKER_HEARTBEAT monitor=${monitorCompleted ? 'completed' : 'incomplete'}`,
           accountId: null,
           createdAt: at,
         },
       });
 
-      return { skipped: false as const, scanSummary, scannedAt: at.toISOString(), monitoredAt: at.toISOString() };
+      return { skipped: false as const, scanSummary, heartbeatAt: at.toISOString(), monitoredAt: monitorCompleted ? at.toISOString() : null };
     }, { maxWait: 5_000, timeout: 55_000 });
 
     if (result.skipped) {
