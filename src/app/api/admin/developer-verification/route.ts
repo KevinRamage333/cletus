@@ -9,15 +9,16 @@ export async function PATCH(req:Request){try{
  if(!id||!['needs_evidence','rejected','approved','revoked'].includes(action)||note.length<10||note.length>1000)throw new HttpError(400,'Invalid action or review reason (10–1000 characters)');
  const now=new Date();
  const result=await prisma.$transaction(async tx=>{
+   const identity=await tx.developerVerification.findUnique({where:{id},select:{mint:true}});
+   if(!identity)throw new HttpError(404,'Application not found');
+   // Serialize all review transitions for the mint before reading current status.
+   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${identity.mint}, 0))`;
    const application=await tx.developerVerification.findUnique({where:{id}});
    if(!application)throw new HttpError(404,'Application not found');
    if(action==='approved'){
      if(!application.walletProofAt)throw new HttpError(409,'Wallet ownership proof is required');
      if(application.status==='approved'&&application.badgeExpiresAt&&application.badgeExpiresAt>now&&!application.badgeRevokedAt)throw new HttpError(409,'Badge already active');
      if(application.status==='rejected'||application.status==='revoked')throw new HttpError(409,'Rejected or revoked application cannot be reapproved; a new independent review process is required');
-     // Only one active verified badge per mint. Lock the token mint row via
-     // a transaction-scoped advisory lock to serialize competing approvals.
-     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${application.mint}, 0))`;
      const other=await tx.developerVerification.findFirst({where:{mint:application.mint,status:'approved',badgeExpiresAt:{gt:now},badgeRevokedAt:null,id:{not:id}},select:{id:true}});
      if(other)throw new HttpError(409,'Another active badge already exists for this mint');
    } else if(action==='revoked'){
