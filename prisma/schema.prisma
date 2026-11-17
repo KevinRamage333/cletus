@@ -146,6 +146,7 @@ model EngineState {
   lastScanAt          DateTime?
   lastError           String?
   scanCount           Int       @default(0)
+  candidateSnapshot   String?
   updatedAt           DateTime  @updatedAt
   @@schema("app")
 }
