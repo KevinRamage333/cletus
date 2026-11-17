@@ -128,3 +128,8 @@ describe('onboarding API validation', () => {
     expect(gateDecision('/api/onboarding/wallet/challenge', sess({ tv: V, rv: V }), V, V, FC)).toMatchObject({ action: 'deny', status: 403 });
   });
 });
+
+it('routes only the exact paper cron endpoint to its bearer-secret check', () => {
+  expect(gateDecision('/api/cron/paper-engine', null, V, V, FC)).toEqual({ action: 'next' });
+  expect(gateDecision('/api/cron/paper-engine/extra', null, V, V, FC)).toMatchObject({ action: 'deny', status: 401 });
+});
