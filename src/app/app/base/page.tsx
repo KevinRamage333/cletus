@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 
 type BaseMarket = {
@@ -71,7 +71,7 @@ export default function BasePaperDeskPage() {
 
   useEffect(() => { void loadMarkets(); }, [loadMarkets]);
 
-  const requestEstimate = async (event: React.FormEvent<HTMLFormElement>) => {
+  const requestEstimate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setEstimating(true);
     setEstimate(null);
