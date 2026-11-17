@@ -49,7 +49,7 @@ export default function PerformancePage() {
       {data && <>
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric label="Paper equity" value={usd(data.account.equityUsd)} />
-          <Metric label="Net realized P&L" value={usd(data.scorecard.netPnlUsd)} tone={sign(data.scorecard.netPnlUsd)} />
+          <Metric label={data.coverage.truncated ? "Net realized P&L in window" : "Net realized P&L"} value={usd(data.scorecard.netPnlUsd)} tone={sign(data.scorecard.netPnlUsd)} />
           <Metric label="Unrealized P&L" value={usd(data.account.unrealizedPnlUsd)} tone={sign(data.account.unrealizedPnlUsd)} />
           <Metric label="Win rate" value={data.scorecard.winRate === null ? 'Not enough trades' : pct(data.scorecard.winRate * 100)} />
           <Metric label="Closed trades analyzed" value={data.scorecard.trades.toLocaleString()} />
