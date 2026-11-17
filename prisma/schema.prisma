@@ -39,6 +39,7 @@ model User {
   trialStartedAt  DateTime?    // 30-day trial flag (informational; no billing)
   taxAckAt        DateTime?    // tax-responsibility acknowledgment (no tax IDs are collected)
   communityMessages CommunityMessage[]
+  verificationRequests DeveloperVerification[]
   @@schema("app")
 }
 
@@ -369,3 +370,28 @@ model ProfitSweepPayout {
   @@schema("app")
 }
 
+
+
+/// Developer verification applications are not badges. Wallet signature proof and
+/// independent review must be added before any public verified checkmark is issued.
+model DeveloperVerification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mint        String
+  wallet      String
+  projectName String
+  evidenceUrl String?
+  statement   String
+  status      String   @default("pending") // pending | needs_evidence | rejected
+  reviewerId  String?
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, mint])
+  @@index([status, createdAt])
+  @@index([mint])
+  @@schema("app")
+}
