@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useState } from 'react';
 
 type CollectivePnl = {
@@ -27,12 +29,13 @@ function money(value: number) {
   }).format(Math.abs(value));
 }
 
-export default function CollectivePnlTicker() {
+export default function CollectivePnlTicker({ demo = false, showCommunityLink = false }: { demo?: boolean; showCommunityLink?: boolean }) {
   const [data, setData] = useState<CollectivePnl>(EMPTY);
   const [loaded, setLoaded] = useState(false);
   const [available, setAvailable] = useState(true);
 
   useEffect(() => {
+    if (demo) return;
     let stopped = false;
     async function refresh() {
       try {
@@ -62,7 +65,7 @@ export default function CollectivePnlTicker() {
       stopped = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [demo]);
 
   const signedNet = data.netProfit >= 0 ? `+${money(data.netProfit)}` : `-${money(data.netProfit)}`;
 
@@ -80,7 +83,9 @@ export default function CollectivePnlTicker() {
           Paper trading · Aggregate
         </span>
       </div>
-      {!available ? (
+      {demo ? (
+        <p className="px-4 py-4 text-sm text-white/60">Community paper results are unavailable in the public demo.</p>
+      ) : !available ? (
         <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>
       ) : !loaded ? (
         <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>
@@ -114,6 +119,7 @@ export default function CollectivePnlTicker() {
           </div>
         </>
       )}
+      {showCommunityLink && <Link href="/app/community" className="block border-t border-white/10 px-4 py-3 text-sm font-semibold text-amber-300">Open Community →</Link>}
     </section>
   );
 }

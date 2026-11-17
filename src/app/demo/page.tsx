@@ -1,3 +1,4 @@
+import TradingNetworks from '@/components/TradingNetworks';
 import Link from 'next/link';
 import PublicLiveFeed from '@/components/PublicLiveFeed';
 export const metadata = { title: 'Cletus, the golden goose (demo)' };
@@ -19,6 +20,7 @@ export default function DemoHome({ searchParams }: { searchParams: { soon?: stri
           </div>
           <div className="flex flex-wrap gap-3 mt-6">
             <Link href="/demo/chart" className="px-4 py-2 rounded-lg bg-amber-400 text-black font-semibold no-underline">Live charts</Link>
+            <Link href="/demo/community" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Community</Link>
             <Link href="/demo/brain" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Ask Cletus</Link>
             <Link href="/demo/wallet" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Wallet preview</Link>
             <Link href="/demo/dashboard" className="px-4 py-2 rounded-lg border border-amber-400 text-amber-300 font-semibold no-underline">Dashboard preview</Link>
@@ -41,6 +43,7 @@ export default function DemoHome({ searchParams }: { searchParams: { soon?: stri
         <h2 className="text-xl font-bold gold-text">Accounts: coming online soon</h2>
         <p className="text-sm text-zinc-400 mt-2">Sign-up stays closed in this public demo. You can preview the optional wallet connection (you stay in control — Cletus never holds keys) and a sample live dashboard with positions, P&amp;L, trade history and the 0.5% platform fee. Private beta accounts will open here later. Until then, this site collects no personal data.</p>
         <p className="text-sm text-zinc-400 mt-2">Owner withdrawals from the trading wallet: <span className="text-amber-300">available when the trading worker is online</span>.</p>
+        <TradingNetworks demo />
         <p className="text-sm text-zinc-400 mt-2">Read the <Link href="/whitepaper" className="text-amber-300">whitepaper and roadmap</Link>, the <Link href="/demo/disclaimer" className="text-amber-300">Terms and Risk Disclaimer</Link>, and the <Link href="/legal" className="text-amber-300">legal notice</Link>.</p>
       </section>
     </div>
