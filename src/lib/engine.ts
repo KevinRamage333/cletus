@@ -107,8 +107,10 @@ let cachedOpenPositions: Position[] = [];
 function fallbackEngineState(c: Config, err?: string): EngineStateRow {
   return {
     id: 'global',
-    killSwitch: cachedEngineState?.killSwitch ?? false,
-    killReason: cachedEngineState?.killReason ?? null,
+    // Database state is authoritative. An unavailable read must never allow entries
+    // or live execution based on a missing/stale cached kill-switch value.
+    killSwitch: true,
+    killReason: 'Engine state database unavailable; trading held until state can be verified',
     killedAt: cachedEngineState?.killedAt ?? null,
     priorityFeeLamports: cachedEngineState?.priorityFeeLamports ?? c.priorityFeeLamports,
     slippageBps: cachedEngineState?.slippageBps ?? Math.round(c.slippageTolerance * 10000),
@@ -134,7 +136,6 @@ export async function getEngineState() {
     return st;
   } catch (e) {
     const reason = (e as Error)?.message ?? 'engine state unavailable';
-    if (cachedEngineState) return cachedEngineState;
     return fallbackEngineState(c, reason);
   }
 }
@@ -533,6 +534,13 @@ async function scanTickInner(gen: number): Promise<string> {
       for (const a of accounts) {
         stage(`enter ${cand.symbol}`);
         assertCurrent(mem.scanFence, gen, 'scan');
+        // Re-read the authoritative kill switch immediately before each entry.
+        // Audits and network calls above can take long enough for an operator to pause trading.
+        const entryState = await getEngineState();
+        if (entryState.killSwitch || isPaused({ ...entryState })) {
+          scanOutcomes.set(cand.mint, { decision: 'blocked', reason: 'engine kill switch or self-heal pause' });
+          return (mem.lastScanSummary = 'trading halted before entry: engine kill switch or self-heal pause');
+        }
         if (await tryEnter(a, cand, audit, c, gen, scanOutcomes)) { opened++; scanPicked.add(cand.mint); scanOutcomes.set(cand.mint, { decision: 'picked', reason: 'entered' }); }
       }
     }
