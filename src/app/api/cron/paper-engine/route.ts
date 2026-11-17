@@ -47,8 +47,9 @@ export async function GET(req: Request) {
       const remaining = Math.floor(WORK_BUDGET_MS-(performance.now()-started));
       scanSummary = remaining>0 ? await scanTick(Math.min(scanDeadlineMs(),remaining)) : 'scan skipped: budget exhausted';
     }
-    await prisma.logEntry.create({data:{level:'info',message:`${HEARTBEAT} completed monitor=${monitorCompleted} scan=${scanSummary.slice(0,250)}`,accountId:null}});
-    return NextResponse.json({ok:true,skipped:false,mode:'simulation',monitorCompleted,monitoredAt,scanSummary,heartbeatAt:new Date().toISOString()},{headers:{'Cache-Control':'no-store'}});
+    const heartbeatAt = new Date();
+    await prisma.logEntry.create({data:{level:'info',message:`${HEARTBEAT} monitor=${monitorCompleted ? 'completed' : 'incomplete'}`,accountId:null,createdAt:heartbeatAt}});
+    return NextResponse.json({ok:true,skipped:false,mode:'simulation',monitorCompleted,monitoredAt,scanSummary,heartbeatAt:heartbeatAt.toISOString()},{headers:{'Cache-Control':'no-store'}});
   } catch(e) {
     const message=e instanceof Error?e.message:'Unknown error';
     try { await prisma.logEntry.create({data:{level:'error',message:`PAPER_WORKER_ERROR ${message.slice(0,450)}`,accountId:null}}); } catch { /* preserve failure */ }
