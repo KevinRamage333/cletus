@@ -1,0 +1,46 @@
+/** Pure helpers for the live charts (unit-tested). Real data only; nothing here invents prices or P&L. */
+export const CHART_RANGES = ['1H', '4H', '1D', '1W'] as const;
+export type ChartRange = (typeof CHART_RANGES)[number];
+export const CHART_REFRESH_MS: Record<ChartRange, number> = { '1H': 15_000, '4H': 20_000, '1D': 30_000, '1W': 120_000 };
+export const GAIN = '#22c55e';
+export const LOSS = '#ef4444';
+
+export const normRange = (r: string | null | undefined): ChartRange => {
+  const u = String(r ?? '').toUpperCase();
+  return (CHART_RANGES as readonly string[]).includes(u) ? (u as ChartRange) : '1H';
+};
+
+/** Symbol query guard for the public chart endpoint: short ticker-like text only. */
+export const SYMBOL_QUERY = /^[A-Za-z0-9$._-]{1,20}$/;
+
+export interface PnlPoint { time: number; value: number }
+
+/** Closed trades -> cumulative realized P&L, one point per bucket (default one day, UTC). */
+export function cumulativePnlSeries(rows: Array<{ closedAt: Date | string | null | undefined; pnlUsd: number | null | undefined }>, bucketSec = 86_400): PnlPoint[] {
+  const byBucket = new Map<number, number>();
+  for (const r of rows) {
+    if (!r.closedAt || r.pnlUsd == null || !Number.isFinite(r.pnlUsd)) continue;
+    const t = Math.floor(new Date(r.closedAt).getTime() / 1000);
+    if (!Number.isFinite(t)) continue;
+    const b = Math.floor(t / bucketSec) * bucketSec;
+    byBucket.set(b, (byBucket.get(b) ?? 0) + r.pnlUsd);
+  }
+  let run = 0;
+  return [...byBucket.entries()].sort((a, b) => a[0] - b[0]).map(([time, v]) => { run += v; return { time, value: Math.round(run * 100) / 100 }; });
+}
+
+/** Most-traded token by number of positions (ties: most recent symbol order kept stable by mint). */
+export function mostTradedToken(rows: Array<{ mint: string; symbol: string | null | undefined; network?: string | null }>, network = 'solana'): { mint: string; symbol: string; trades: number } | null {
+  const counts = new Map<string, { symbol: string; trades: number }>();
+  for (const r of rows) {
+    if (!r.mint || (r.network ?? 'solana').toLowerCase() !== network) continue;
+    const c = counts.get(r.mint) ?? { symbol: r.symbol || r.mint.slice(0, 4), trades: 0 };
+    c.trades += 1; counts.set(r.mint, c);
+  }
+  let best: { mint: string; symbol: string; trades: number } | null = null;
+  for (const [mint, c] of counts) if (!best || c.trades > best.trades || (c.trades === best.trades && mint < best.mint)) best = { mint, ...c };
+  return best;
+}
+
+/** Up/down tone for a change value: gains green, losses red. */
+export const toneOf = (n: number | null | undefined): 'up' | 'down' | 'flat' => (n == null || !Number.isFinite(n) || n === 0 ? 'flat' : n > 0 ? 'up' : 'down');
