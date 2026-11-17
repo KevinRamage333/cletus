@@ -261,7 +261,7 @@ export function buildConfig(rawEnv: Env = process.env): Config {
     enableRecoveryMode: bool(env.ENABLE_RECOVERY_MODE, true),
     recoveryMultiplier: num(env.RECOVERY_MODE_AGGRESSION_MULTIPLIER, 0.5),
     recoveryExitWins: num(env.RECOVERY_MODE_EXIT_WINS, 5),
-    enableDynamicWeights: bool(env.ENABLE_DYNAMIC_SIGNAL_WEIGHTING, true),
+    enableDynamicWeights: bool(env.ENABLE_DYNAMIC_SIGNAL_WEIGHTING, false),
     signalWeightSet: parseSignalWeightSet(env.SIGNAL_WEIGHT_SET),
     initialWeights,
     winAmplify: num(env.WIN_SIGNAL_AMPLIFY_FACTOR, 1.15),
