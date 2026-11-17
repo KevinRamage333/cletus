@@ -2,6 +2,7 @@
  * Read-only "self-awareness" functions the Brain can call. None of these can
  * place, modify, or cancel trades — the Brain is advisory only.
  */
+import { readExchangeSpot } from '../exchange-spot-data';
 import { prisma } from '../db';
 import { getOperationsReport } from '../agents/operations';
 import { getConfig, publicConfig } from '../config';
@@ -28,6 +29,7 @@ export const TOOL_DECLARATIONS: ToolDecl[] = [
   { name: 'get_blocks', description: 'Recent pre-trade security audit failures and compliance-gate blocks (why tokens were NOT traded).', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_config', description: 'Active configuration/preset: thresholds, exits, sizing tiers, schedule, compliance limits.' },
   { name: 'get_scan_candidates', description: 'Latest scanner results: tokens in the market-cap band ranked by volume/market-cap with composite scores, signals and audit results.', parameters: { type: 'OBJECT', properties: limitParam } },
+  { name: 'get_exchange_spot_reference', description: 'Compare recent OKX and Bybit USDT spot prices for an exchange symbol. Reference data only. It cannot identify on-chain tokens, certify liquidity, or quote an executable fill.', parameters: { type: 'OBJECT', properties: { symbol: { type: 'STRING', description: 'Base exchange symbol, such as SOL or ETH. Do not include USDT.' } }, required: ['symbol'] } },
   { name: 'get_base_market_candidates', description: 'Fetch current read-only Base-chain token market snapshots (USD price, 24h volume, liquidity, FDV, 24h move, DEX and pair link). These are discovery candidates, not buy signals; Base paper trading and execution are disabled.', parameters: { type: 'OBJECT', properties: limitParam } },
   { name: 'get_base_paper_quote', description: 'Get a read-only Base Uniswap v3 quote and a non-persistent adverse-slippage paper-fill preview for one ERC-20 token versus native USDC. Requires tokenAddress, side (buy or sell), and amountIn. Reports L2 fee estimate only; Base L1 data fee is not included. Never places or broadcasts trades.', parameters: { type: 'OBJECT', properties: { tokenAddress: { type: 'STRING', description: 'Base ERC-20 token contract address' }, side: { type: 'STRING', description: 'buy or sell', enum: ['buy', 'sell'] }, amountIn: { type: 'STRING', description: 'Buy: USDC input amount. Sell: token input amount.' }, slippageBps: { type: 'INTEGER', description: 'Adverse paper-fill slippage in basis points; default 50, maximum 300.' } }, required: ['tokenAddress', 'side', 'amountIn'] } },
   { name: 'get_world_briefing', description: 'The latest rolling world briefing (crypto, macro, Fed, world news) plus SOL price and DexScreener trending tokens.' },
@@ -106,6 +108,8 @@ export async function runTool(name: string, args: Record<string, unknown> | unde
       const quote = await getBasePaperQuote({ tokenAddress, side, amountIn, slippageBps });
       return { quote, paperFillPreview: simulateBasePaperFill(quote), safety: 'No wallet, order, database write, account balance change, signing, or broadcast. L1 data fee is omitted, so total fee and net profitability are unknown.' };
     }
+    case 'get_exchange_spot_reference':
+      return readExchangeSpot(args?.symbol);
     case 'get_base_market_candidates': {
       const { fetchBaseMarketSnapshot } = await import('../base-market-data');
       const rows = await fetchBaseMarketSnapshot(Math.min(25, lim(args, 10)));
