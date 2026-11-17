@@ -8,7 +8,6 @@ import { getSessionSecret } from './session';
 
 export const OWNER_COOKIE = 'cletus_owner';
 export const OWNER_COOKIE_TTL_SEC = 60 * 60 * 24 * 7;
-export const DEFAULT_OWNER_WALLET = 'GJwtCupMcNGbhGX1vapg2ueK2pedx2tgMkzGjhugnxaA';
 
 export interface OwnerSession {
   typ: 'owner';
@@ -55,9 +54,11 @@ export function addressesEqual(a?: string | null, b?: string | null): boolean {
   return Boolean(x && y && x === y);
 }
 
-/** OWNER_WALLET, else PAYOUT_WALLET, else the registered Jupiter payout address. */
+/** Use only the configured owner or payout address. */
 export function resolveOwnerWallet(env: Record<string, string | undefined> = process.env): string {
-  return canonicalAddress(env.OWNER_WALLET) ?? canonicalAddress(env.PAYOUT_WALLET) ?? DEFAULT_OWNER_WALLET;
+  return env.OWNER_WALLET?.trim()
+    ? canonicalAddress(env.OWNER_WALLET) ?? ''
+    : canonicalAddress(env.PAYOUT_WALLET) ?? '';
 }
 
 export function isOwnerWallet(address: string | null | undefined, env: Record<string, string | undefined> = process.env): boolean {
@@ -83,7 +84,7 @@ export async function signOwnerSession(addr: string, secret = getSessionSecret()
   return `${body}.${sig}`;
 }
 
-export async function verifyOwnerSession(token: string | undefined | null, secret = getSessionSecret(), now = Math.floor(Date.now() / 1000)): Promise<OwnerSession | null> {
+export async function verifyOwnerSession(token: string | undefined | null, secret = getSessionSecret(), now = Math.floor(Date.now() / 1000), env: Record<string, string | undefined> = process.env): Promise<OwnerSession | null> {
   if (!token || !token.includes('.')) return null;
   const [body, sig] = token.split('.');
   const expected = b64url(await hmac(body, secret));
@@ -94,7 +95,7 @@ export async function verifyOwnerSession(token: string | undefined | null, secre
   try {
     const claims = JSON.parse(new TextDecoder().decode(fromB64url(body))) as OwnerSession;
     if (claims.typ !== 'owner' || !claims.addr || claims.exp < now) return null;
-    if (!canonicalAddress(claims.addr)) return null;
+    if (!isOwnerWallet(claims.addr, env)) return null;
     return claims;
   } catch {
     return null;
