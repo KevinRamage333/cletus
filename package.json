@@ -39,6 +39,7 @@
     "@solana/wallet-adapter-react": "^0.15.40",
     "@solana/wallet-adapter-solflare": "^0.6.34",
     "@solana/web3.js": "^1.99.0",
+    "@tanstack/react-query": "^5.108.0",
     "bs58": "^6.0.0",
     "fast-xml-parser": "^5.12.0",
     "https-proxy-agent": "^7.0.6",
@@ -50,9 +51,12 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0",
     "tweetnacl": "^1.0.3",
+    "viem": "^2.58.0",
+    "wagmi": "^2.19.5",
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.65",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
