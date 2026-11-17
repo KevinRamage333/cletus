@@ -425,3 +425,43 @@ model WithdrawConfirmNonce {
   @@index([expiresAt])
   @@schema("app")
 }
+
+/// Cletus Verified: automated developer verification records (display only; never read by the engine).
+model CletusVerification {
+  id        String    @id
+  network   String
+  token     String
+  name      String?
+  symbol    String?
+  wallet    String
+  role      String?
+  status    String    // verified | not_verified
+  reasons   Json
+  checks    Json
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([network, token, createdAt])
+  @@index([status, expiresAt])
+  @@schema("app")
+}
+
+/// Token Boost: paid/owner-granted promotion on the Signals board (display only; never read by the engine).
+model TokenBoost {
+  id        String   @id
+  network   String
+  token     String
+  tier      String   // 12h | 24h | 7d
+  startsAt  DateTime
+  expiresAt DateTime
+  source    String   // owner_grant | paid
+  status    String   @default("active") // active | cancelled
+  createdBy String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([network, token, expiresAt])
+  @@index([expiresAt])
+  @@schema("app")
+}

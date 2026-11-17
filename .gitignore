@@ -28,3 +28,6 @@ data/weight-sets/
 # Playwright
 /test-results/
 /playwright-report/
+
+# Cletus Verified / Token Boost file store (no-DB fallback)
+data/listings/

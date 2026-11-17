@@ -29,7 +29,7 @@ const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/api/live', '/
 PUBLIC_PREFIXES.push('/whitepaper', '/cletus-whitepaper.pdf');
 
 /** Corporate site (cletustechnology.dev) pages and the public read-only market-data API. Always public, also before the age gate. */
-export const SITE_PUBLIC_PREFIXES = ['/about', '/technology', '/features', '/roadmap', '/sponsors', '/developers', '/contact', '/legal', '/api/market/'];
+export const SITE_PUBLIC_PREFIXES = ['/about', '/technology', '/features', '/roadmap', '/sponsors', '/developers', '/contact', '/legal', '/api/market/', '/api/verified', '/api/boost', '/api/listings'];
 PUBLIC_PREFIXES.push(...SITE_PUBLIC_PREFIXES);
 export function isSitePublic(pathname: string): boolean {
   if (pathname === '/') return true;
@@ -92,7 +92,7 @@ const DEMO_PUBLIC = ['/onboarding/age', '/api/onboarding/age', '/demo', '/live',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf', ...SITE_PUBLIC_PREFIXES);
 /** App screens that work without a database (public market data, local paper trading, connect-only wallets). Exact paths. */
-export const DEMO_APP_ROUTES = ['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet', '/app/feed'];
+export const DEMO_APP_ROUTES = ['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet', '/app/feed', '/app/verified', '/app/boost'];
 export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
 export function demoGateDecision(pathname: string): DemoDecision {
   if (pathname === '/') return { action: 'next' };
