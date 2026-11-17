@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { PageHeader, Refreshed, StateBox, Stat } from '@/components/app/ui';
 import { useMovers } from '@/components/market/useMovers';
 import { COMMUNITY_NETWORKS } from '@/lib/community-overview';
+import CommunityCharts from '@/components/charts/CommunityCharts';
+import type { PnlPoint } from '@/lib/live-chart';
 
-type Overview = { connected: true; updatedAt: string; participants: number; activeNow: number; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number; lossesUsd: number; closedTrades: number }; tokensPerNetwork: Record<string, number> };
+type Overview = { connected: true; updatedAt: string; participants: number; activeNow: number; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number; lossesUsd: number; closedTrades: number }; tokensPerNetwork: Record<string, number>; pnlSeries?: PnlPoint[]; mostTraded?: { mint: string; symbol: string; trades: number } | null };
 type Status = { kind: 'loading' } | { kind: 'ok'; data: Overview } | { kind: 'signin' } | { kind: 'not-connected'; reason: string } | { kind: 'error'; reason: string };
 const usd = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 
@@ -44,6 +46,11 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
         <Stat label="Tokens traded (all networks)" value={d ? Object.values(d.tokensPerNetwork).reduce((a, b) => a + b, 0).toLocaleString('en-US') : na} sub={d ? 'Distinct tokens with paper trades' : naSub} testId="stat-tokens" />
         <Stat label="Tokens scanned now" value={scanning == null ? (boardState === 'loading' ? '…' : '—') : scanning.toLocaleString('en-US')} sub="Live Solana board (DexScreener)" testId="stat-scanned" />
       </div>
+
+      <CommunityCharts
+        data={d ? { pnlSeries: d.pnlSeries ?? [], mostTraded: d.mostTraded ?? null, suppressed: d.collectivePnl.suppressed, minContributors: d.collectivePnl.suppressed ? d.collectivePnl.minContributors : undefined } : null}
+        statusNote={s.kind === 'ok' ? null : s.kind === 'loading' ? 'Loading community data…' : s.kind === 'signin' ? 'Sign in to see the community P&L curve.' : s.kind === 'not-connected' ? `${s.reason} No curve is drawn rather than guessing.` : `Community data could not load (${s.reason}).`}
+      />
 
       <h3 className="mb-3 mt-8 text-sm font-bold uppercase tracking-[.16em] text-[#e3c06a]">Network coverage</h3>
       <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm" data-testid="network-coverage">
