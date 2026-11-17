@@ -6,7 +6,7 @@ import { PageHeader, Refreshed, StateBox, TokenAvatar, useNow } from '@/componen
 import { MOVER_SORTS, formatAge, formatPct, formatPrice, formatUsdCompact, freshness, sortMovers, type MoverCard, type MoverSort } from '@/lib/movers';
 
 function Change({ label, v }: { label: string; v: number | null }) {
-  const cls = v == null ? 'text-[#8a8478] border-white/10' : v >= 0 ? 'text-emerald-300 border-emerald-400/30 bg-emerald-400/5' : 'text-red-300 border-red-400/30 bg-red-400/5';
+  const cls = v == null ? 'text-[#8a8478] border-white/10' : v >= 0 ? 'text-green-300 border-green-400/30 bg-green-400/5' : 'text-red-300 border-red-400/30 bg-red-400/5';
   return <span className={`num inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}><span className="text-[9px] opacity-70">{label}</span>{formatPct(v)}</span>;
 }
 

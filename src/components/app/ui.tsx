@@ -11,7 +11,7 @@ export function PageHeader({ eyebrow, title, children, actions }: { eyebrow: str
 }
 
 export function Stat({ label, value, sub, tone, testId }: { label: string; value: ReactNode; sub?: ReactNode; tone?: 'up' | 'down' | 'muted'; testId?: string }) {
-  const color = tone === 'up' ? 'text-emerald-400' : tone === 'down' ? 'text-red-400' : tone === 'muted' ? 'text-[#8a8478]' : 'text-[#f6f1e4]';
+  const color = tone === 'up' ? 'text-green-400' : tone === 'down' ? 'text-red-400' : tone === 'muted' ? 'text-[#8a8478]' : 'text-[#f6f1e4]';
   return (
     <div className="panel p-4" data-testid={testId}>
       <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#8a8478]">{label}</p>
@@ -60,7 +60,7 @@ export function Refreshed({ at, stale, label = 'Updated' }: { at: string | numbe
   const now = useNow(5000);
   return (
     <span className={`inline-flex items-center gap-1.5 text-[11px] ${stale ? 'text-[#f3dc95]' : 'text-[#8a8478]'}`} data-testid="refreshed">
-      <span className={`h-1.5 w-1.5 rounded-full ${stale ? 'bg-[#e3c06a]' : at ? 'bg-emerald-400' : 'bg-white/30'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${stale ? 'bg-[#e3c06a]' : at ? 'bg-green-400' : 'bg-white/30'}`} />
       {stale ? 'Stale · ' : ''}{label} {ago(at ?? null, now)}
     </span>
   );

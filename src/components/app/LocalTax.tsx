@@ -30,7 +30,7 @@ export default function LocalTax() {
           {lots.length === 0 ? <StateBox kind="empty" title="No realized trades yet">Close a position on the Paper Trading desk and it will appear here.</StateBox> : (
             <div className="overflow-x-auto"><table className="num w-full min-w-[640px] text-left text-xs" data-testid="tax-table">
               <thead><tr className="border-b border-[rgba(212,175,55,.25)] text-[10px] uppercase tracking-[.14em] text-[#c9a24a]"><th className="py-2">Sold</th><th>Asset</th><th>Acquired</th><th>Proceeds</th><th>Cost basis</th><th>Gain/loss</th><th>Term</th></tr></thead>
-              <tbody>{[...lots].reverse().map((l, i) => <tr key={i} className="border-b border-white/5"><td className="py-2">{new Date(l.date).toLocaleString()}</td><td>{l.symbol}</td><td>{l.acquired ? new Date(l.acquired).toLocaleDateString() : '—'}</td><td>{usd(l.proceedsUsd)}</td><td>{usd(l.costBasisUsd)}</td><td className={l.gainUsd >= 0 ? 'text-emerald-300' : 'text-red-300'}>{usd(l.gainUsd)}</td><td>{l.term}</td></tr>)}</tbody>
+              <tbody>{[...lots].reverse().map((l, i) => <tr key={i} className="border-b border-white/5"><td className="py-2">{new Date(l.date).toLocaleString()}</td><td>{l.symbol}</td><td>{l.acquired ? new Date(l.acquired).toLocaleDateString() : '—'}</td><td>{usd(l.proceedsUsd)}</td><td>{usd(l.costBasisUsd)}</td><td className={l.gainUsd >= 0 ? 'text-green-300' : 'text-red-300'}>{usd(l.gainUsd)}</td><td>{l.term}</td></tr>)}</tbody>
             </table></div>
           )}
         </>

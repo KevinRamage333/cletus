@@ -21,7 +21,7 @@ export default function LiveMarketStrip() {
             <span key={t.mint} className="num flex shrink-0 items-center gap-2 whitespace-nowrap">
               <span className="font-bold text-[#f2ede2]">{t.symbol}</span>
               <span className="text-[#8a8478]">{formatUsdCompact(t.marketCapUsd)}</span>
-              <span className={(t.change5mPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}>{formatPct(t.change5mPct)}</span>
+              <span className={(t.change5mPct ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}>{formatPct(t.change5mPct)}</span>
             </span>
           ))}
         </div>

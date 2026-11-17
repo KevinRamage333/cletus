@@ -35,8 +35,8 @@ export default function ContactForm({ email }: { email: string }) {
       <div className="flex flex-wrap gap-3"><button type="submit" className="btn-gold">Send message</button><button type="button" className="btn-line" onClick={copy} disabled={!valid}>Copy message</button></div>
       <div role="status" aria-live="polite" className="text-sm">
         {status === 'invalid' && <p className="text-red-300">Please add your name, a valid email and a message of at least 10 characters.</p>}
-        {status === 'opened' && <p className="text-emerald-300">Your email app should open with the message ready to send.</p>}
-        {status === 'copied' && <p className="text-emerald-300">Message copied.</p>}
+        {status === 'opened' && <p className="text-green-300">Your email app should open with the message ready to send.</p>}
+        {status === 'copied' && <p className="text-green-300">Message copied.</p>}
         {status === 'no-inbox' && <p className="text-[#e3c06a]" data-testid="contact-not-connected">The public contact inbox is not connected yet, so nothing was sent. Use “Copy message” and keep it until the inbox is published here.</p>}
       </div>
     </form>

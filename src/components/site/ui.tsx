@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { STATUS_LABEL, type BuildStatus } from '@/lib/site-content';
 
 const STATUS_STYLE: Record<BuildStatus, string> = {
-  built: 'border-emerald-400/40 text-emerald-300 bg-emerald-400/5',
+  built: 'border-green-400/40 text-green-300 bg-green-400/5',
   'in-progress': 'border-[#e3c06a]/45 text-[#e3c06a] bg-[#e3c06a]/5',
   future: 'border-sky-300/35 text-sky-200 bg-sky-300/5',
 };

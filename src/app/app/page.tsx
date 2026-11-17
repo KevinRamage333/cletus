@@ -47,12 +47,12 @@ export default function DashboardPage() {
             <Link key={t.mint} href={`/app/audit?mint=${t.mint}`} className="panel flex items-center gap-3 p-3 hover:border-[rgba(212,175,55,.45)]">
               <TokenAvatar src={t.imageUrl} symbol={t.symbol} size={40} />
               <div className="min-w-0 flex-1"><p className="truncate font-semibold text-[#f6f1e4]">{t.symbol}</p><p className="num text-xs text-[#8a8478]">mcap {formatUsdCompact(t.marketCapUsd)}</p></div>
-              <div className="num text-right text-xs"><p className={(t.change5mPct ?? 0) >= 0 ? 'text-emerald-300' : 'text-red-300'}>5m {formatPct(t.change5mPct)}</p><p className={(t.change1hPct ?? 0) >= 0 ? 'text-emerald-300' : 'text-red-300'}>1h {formatPct(t.change1hPct)}</p></div>
+              <div className="num text-right text-xs"><p className={(t.change5mPct ?? 0) >= 0 ? 'text-green-300' : 'text-red-300'}>5m {formatPct(t.change5mPct)}</p><p className={(t.change1hPct ?? 0) >= 0 ? 'text-green-300' : 'text-red-300'}>1h {formatPct(t.change1hPct)}</p></div>
             </Link>))}</div>}
         </section>
         <aside className="space-y-4">
           <div className="panel p-4"><p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#8a8478]">Safety status</p>
-            <ul className="mt-3 space-y-2 text-sm"><li className="flex justify-between"><span>Mode</span><span className="font-semibold text-[#e3c06a]">Paper</span></li><li className="flex justify-between"><span>Live trading</span><span className="font-semibold text-red-300">Disabled</span></li><li className="flex justify-between"><span>Custody</span><span className="font-semibold text-emerald-300">Non-custodial</span></li></ul></div>
+            <ul className="mt-3 space-y-2 text-sm"><li className="flex justify-between"><span>Mode</span><span className="font-semibold text-[#e3c06a]">Paper</span></li><li className="flex justify-between"><span>Live trading</span><span className="font-semibold text-red-300">Disabled</span></li><li className="flex justify-between"><span>Custody</span><span className="font-semibold text-green-300">Non-custodial</span></li></ul></div>
           <div className="panel p-4"><p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#8a8478]">Wallets</p>
             <ul className="mt-3 space-y-2 text-sm"><li className="flex justify-between gap-2"><span>Solana</span><span className="num truncate text-xs">{connected && publicKey ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}` : <span className="text-[#8a8478]">not connected</span>}</span></li><li className="flex justify-between gap-2"><span>EVM</span><span className="num truncate text-xs">{evmConnected && address ? `${address.slice(0, 6)}…${address.slice(-4)}` : <span className="text-[#8a8478]">not connected</span>}</span></li></ul>
             <Link href="/app/wallet" className="btn-line mt-3 w-full !py-2">Manage wallets</Link></div>

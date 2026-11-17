@@ -51,9 +51,9 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
         <tbody>{COMMUNITY_NETWORKS.map((n) => (
           <tr key={n.id} className="border-b border-white/5">
             <td className="py-2.5 pr-3 font-semibold text-[#f6f1e4]">{n.name} <span className="text-xs text-[#8a8478]">{n.symbol}</span></td>
-            <td className="py-2.5 pr-3">{n.walletConnect ? <span className="text-emerald-300">● Ready</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
-            <td className="py-2.5 pr-3">{n.marketData ? <span className="text-emerald-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
-            <td className="py-2.5 pr-3">{n.paperTrading ? <span className="text-emerald-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
+            <td className="py-2.5 pr-3">{n.walletConnect ? <span className="text-green-300">● Ready</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
+            <td className="py-2.5 pr-3">{n.marketData ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
+            <td className="py-2.5 pr-3">{n.paperTrading ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
             <td className="num py-2.5">{d ? d.tokensPerNetwork[n.id] ?? 0 : <span className="text-[#8a8478]" title={naSub}>—</span>}</td>
           </tr>
         ))}</tbody>

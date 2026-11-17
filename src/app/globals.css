@@ -144,3 +144,4 @@ input,textarea,select { border-radius:5px; border-color:#665032; }
 .cx .live-dot { width:7px; height:7px; border-radius:99px; background:#22c55e; animation:cx-pulse 1.6s infinite; display:inline-block; }
 @keyframes cx-shimmer { 0% { background-position:-200px 0 } 100% { background-position:200px 0 } }
 .cx .skeleton { background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(212,175,55,.08),rgba(255,255,255,.03)); background-size:400px 100%; animation:cx-shimmer 1.3s infinite linear; border-radius:3px; }
+.cx .grid > * { min-width: 0; }

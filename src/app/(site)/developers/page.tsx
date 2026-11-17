@@ -16,7 +16,7 @@ export default function DevelopersPage() {
       <PageHero eyebrow="Developers" title={<>Build with <span className="metal">verifiable data.</span></>}>Public endpoints are read-only and return market data with explicit freshness. Missing values are null, never zero.</PageHero>
       <Section>
         <SectionHead eyebrow="Public API" title="Read-only endpoints" />
-        <div className="space-y-3">{ENDPOINTS.map((e) => <Card key={e.p} className="!p-4"><div className="flex flex-wrap items-center gap-3"><span className="border border-emerald-400/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300">{e.m}</span><code className="num break-all text-sm text-[#e3c06a]">{e.p}</code></div><p className="mt-2 text-sm text-[#a39c8f]">{e.d}</p></Card>)}</div>
+        <div className="space-y-3">{ENDPOINTS.map((e) => <Card key={e.p} className="!p-4"><div className="flex flex-wrap items-center gap-3"><span className="border border-green-400/40 px-2 py-0.5 text-[10px] font-bold text-green-300">{e.m}</span><code className="num break-all text-sm text-[#e3c06a]">{e.p}</code></div><p className="mt-2 text-sm text-[#a39c8f]">{e.d}</p></Card>)}</div>
         <pre className="panel num mt-6 overflow-x-auto p-4 text-xs text-[#d8d2c5]">{`curl -s https://app.cletustechnology.dev/api/market/movers | jq '.tokens[0]'`}</pre>
       </Section>
       <div className="border-y border-[rgba(212,175,55,.12)] bg-[#08080a]"><Section>

@@ -7,7 +7,7 @@ import { formatPct, formatPrice, formatUsdCompact, type MoverCard } from '@/lib/
 import { BASE58_MINT, type CheckState, type HolderFacts, type PublicAuditCheck } from '@/lib/public-audit';
 
 type Audit = { mint: string; auditedAt: string; facts: { mintAuthority: string | null; freezeAuthority: string | null; decimals: number; supplyUi: number; program: string } | null; holders: HolderFacts | null; market: MoverCard | null; checks: PublicAuditCheck[]; verdict: { label: string; state: CheckState }; errors: string[]; sources: string[]; disclaimer: string };
-const STATE: Record<CheckState, string> = { pass: 'text-emerald-300 border-emerald-400/40', warn: 'text-[#f3dc95] border-[#e3c06a]/50', fail: 'text-red-300 border-red-400/50', unknown: 'text-sky-200 border-sky-300/40' };
+const STATE: Record<CheckState, string> = { pass: 'text-green-300 border-green-400/40', warn: 'text-[#f3dc95] border-[#e3c06a]/50', fail: 'text-red-300 border-red-400/50', unknown: 'text-sky-200 border-sky-300/40' };
 const LABEL: Record<CheckState, string> = { pass: 'Pass', warn: 'Caution', fail: 'Risk', unknown: 'Unverified' };
 const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 

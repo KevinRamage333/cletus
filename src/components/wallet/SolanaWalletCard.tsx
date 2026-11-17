@@ -51,7 +51,7 @@ export default function SolanaWalletCard() {
             <a className="btn-line !py-2" href={`https://solscan.io/account/${publicKey.toBase58()}`} target="_blank" rel="noreferrer">Solscan ↗</a>
             <button className="btn-line !py-2" onClick={() => disconnect().catch(() => undefined)} data-testid="sol-disconnect">Disconnect</button>
           </div>
-          {proof && <p className="text-xs text-emerald-300" role="status">{proof}</p>}
+          {proof && <p className="text-xs text-green-300" role="status">{proof}</p>}
         </div>
       ) : (
         <div className="mt-4 space-y-2">

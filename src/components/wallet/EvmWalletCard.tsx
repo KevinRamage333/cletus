@@ -63,7 +63,7 @@ export default function EvmWalletCard() {
             {supported && <a className="btn-line !py-2" href={`${EVM_CHAIN_META[chainId!].explorer}${address}`} target="_blank" rel="noreferrer">Explorer ↗</a>}
             <button className="btn-line !py-2" onClick={() => disconnect()} data-testid="evm-disconnect">Disconnect</button>
           </div>
-          {proof && <p className="text-xs text-emerald-300" role="status" data-testid="evm-proof">{proof}</p>}
+          {proof && <p className="text-xs text-green-300" role="status" data-testid="evm-proof">{proof}</p>}
         </div>
       ) : (
         <div className="mt-4 space-y-2">
