@@ -24,6 +24,17 @@ Left (*the high count went up only because npm re-rated parents of the same two 
 All are browser-side wallet libraries. The only fix is wagmi 3 / WalletConnect major upgrades,
 which change the wallet connector API; do that as its own stage with the wallet E2E suite.
 
+### Re-check after the PR #98 integration (2026-11-17, afternoon)
+No dependency changes (package.json / lockfile untouched by the integration). `npm audit --omit=dev`
+now reports 0 critical / 36 high / 20 moderate. The increase from 19 is one new advisory plus re-rated parents:
+- `picomatch` ReDoS GHSA-fc5q-39xc-vjpf, affected range `*` (no fixed release, so no override is possible).
+  Arrives only through `react-native`/`metro`/`jest-util` and `tinyglobby` (pulled in by
+  `@solana-mobile/wallet-adapter-mobile`) and WalletConnect `unstorage`/`anymatch`. None of these glob
+  untrusted input in the web app; metro is a React Native bundler that never runs on the server.
+- Everything else is the same zod / decode-uri-component chain listed above (fixed by wagmi 3 / WalletConnect).
+Semgrep re-run (src, scripts, e2e, prisma): 0 high/critical, 15 WARNING, all in the accepted categories above,
+0 secrets, nothing new from the integration.
+
 ## Code (Semgrep): 0 high/critical, 17 medium (WARNING), 0 secrets
 - `bypass-tls-verification` (2 in src/lib/market-data.ts, flow-collector.ts; 11 in scripts/):
   Postgres pool falls back to `rejectUnauthorized:false` when `PG_SSL_CA` is unset, for the
