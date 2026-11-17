@@ -1,4 +1,5 @@
 'use client';
+import ShadowStrategyList from '@/components/ShadowStrategyList';
 /**
  * Real-time token chart: native candlesticks (TradingView lightweight-charts) fed by GeckoTerminal OHLCV through
  * /api/tokens/chart (server-cached + rate-limited), with Cletus's own buy/sell markers; plus GeckoTerminal and
@@ -125,6 +126,7 @@ export default function TokenChart({ address, pool: poolHint, height = 420, comp
           <div className="px-4 py-1.5 text-[10px] text-white/30">Candles: GeckoTerminal OHLCV (auto-refresh {Math.round((REFRESH[range] ?? 30000) / 1000)}s, cached server-side). Arrows: your Cletus {data?.markers?.length ? `trades (${data.markers.length})` : 'trades (none in range)'}. Circles: whale swaps {data?.whaleMarkers?.length ? `(${data.whaleMarkers.length}, Helius)` : '(none tracked)'}{data?.whaleMarkers?.length ? <> · <a className="underline" href={data.whaleMarkers[data.whaleMarkers.length - 1].solscan} target="_blank" rel="noreferrer">latest on Solscan</a></> : null}.</div>
         </>
       )}
+      {!compact && <ShadowStrategyList strategies={data?.shadowStrategies} />}
       {view !== 'native' && data?.embeds && (
         <iframe key={view} title={`${view} chart`} src={view === 'gecko' ? data.embeds.geckoterminal : data.embeds.dexscreener} style={{ height: height + 80 }} className="w-full border-0" allow="clipboard-write" allowFullScreen />
       )}
