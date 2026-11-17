@@ -58,7 +58,7 @@ export async function brainChat(opts: { userId: string; accountId: string; isAdm
   const order = providerOrder({ BRAIN_PROVIDER: process.env.BRAIN_PROVIDER, hasGeminiKey: Boolean(key), hasXaiKey: Boolean(xaiKey), enableAiBrain: getConfig().enableAiBrain });
   // Never present canned mock responses as live Cletus/Charlotte intelligence in production.
   // Keep mock mode explicitly available only for demo/test configurations.
-  const allowMock = process.env.CLETUS_DEMO === '1' || process.env.CLETUS_DEMO === 'true' || process.env.NODE_ENV === 'test';
+  const allowMock = process.env.NODE_ENV === 'test';
   const enabledProviders = allowMock ? order : order.filter((provider) => provider !== 'mock');
   if (enabledProviders.length === 0) throw new Error('Cletus AI is unavailable: no configured live provider');
   let system: string | null = null;
