@@ -17,24 +17,30 @@ function parseSignals(raw: string): Record<string, unknown> {
 export async function GET() {
   try {
     const { a, c } = await appContext();
-    const [equity, closedCount, closed, daily] = await Promise.all([
+    const paperTrades = { accountId: a.id, status: 'closed', simulated: true };
+    const [equity, allClosed, newestClosed, daily] = await Promise.all([
       accountEquity(a),
-      prisma.position.count({ where: { accountId: a.id, status: 'closed' } }),
+      prisma.position.aggregate({ where: paperTrades, _sum: { pnlUsd: true }, _count: { _all: true } }),
       prisma.position.findMany({
-        where: { accountId: a.id, status: 'closed', simulated: true },
-        orderBy: { closedAt: 'asc' },
+        where: paperTrades,
+        orderBy: [{ closedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
         take: 5000,
         select: { id: true, symbol: true, mint: true, network: true, sizeUsd: true, entryPrice: true, exitPrice: true, feesUsd: true, pnlUsd: true, pnlPct: true, openedAt: true, closedAt: true, exitReason: true, simulated: true, signals: true },
       }),
       prisma.position.aggregate({
-        where: { accountId: a.id, status: 'closed', simulated: true, closedAt: { gte: new Date(Date.now() - 86_400_000) } },
+        where: { ...paperTrades, closedAt: { gte: new Date(Date.now() - 86_400_000) } },
         _sum: { pnlUsd: true, feesUsd: true }, _count: { _all: true },
       }),
     ]);
 
+    const closed = [...newestClosed].reverse();
+    const closedCount = allClosed._count._all;
+    const truncated = closedCount > closed.length;
+    const analyzedPnl = closed.reduce((sum, trade) => sum + (trade.pnlUsd ?? 0), 0);
+    const openingEquity = a.startingBalance + (truncated ? (allClosed._sum.pnlUsd ?? 0) - analyzedPnl : 0);
     const scorecard = computeScorecard(
-      closed.map(t => ({ pnlUsd: t.pnlUsd ?? 0, pnlPct: t.pnlPct ?? 0, closedAt: t.closedAt ?? new Date() })),
-      a.startingBalance,
+      closed.map(t => ({ pnlUsd: t.pnlUsd ?? 0, pnlPct: t.pnlPct ?? 0, closedAt: t.closedAt ?? t.openedAt })),
+      openingEquity,
     );
     const strategies = new Map<string, { trades: number; wins: number; pnlUsd: number; feesUsd: number }>();
     for (const trade of closed) {
@@ -51,7 +57,7 @@ export async function GET() {
     }
 
     const curve = [];
-    let running = a.startingBalance;
+    let running = openingEquity;
     for (const trade of closed) {
       running += trade.pnlUsd ?? 0;
       curve.push({ at: (trade.closedAt ?? trade.openedAt).toISOString(), equity: Number(running.toFixed(2)), pnlUsd: trade.pnlUsd ?? 0 });
@@ -62,21 +68,24 @@ export async function GET() {
       unrealizedPnlUsd: p.tokenAmount * p.lastPrice - p.sizeUsd - p.feesUsd,
       unrealizedPnlPct: p.entryPrice > 0 ? (p.lastPrice / p.entryPrice - 1) * 100 : 0,
     }));
-    const recent = [...closed].reverse().slice(0, 50).map(t => ({
+    const recent = newestClosed.slice(0, 50).map(t => ({
       id: t.id, symbol: t.symbol, network: t.network, mint: t.mint, sizeUsd: t.sizeUsd,
       entryPrice: t.entryPrice, exitPrice: t.exitPrice, feesUsd: t.feesUsd, pnlUsd: t.pnlUsd ?? 0,
       pnlPct: t.pnlPct ?? 0, openedAt: t.openedAt.toISOString(), closedAt: t.closedAt?.toISOString() ?? null,
       exitReason: t.exitReason, simulated: t.simulated,
     }));
 
+    const stride = Math.max(1, Math.ceil((curve.length - 1) / 119));
+    const equityCurve = curve.filter((_, index) => index % stride === 0 || index === curve.length - 1);
+
     return NextResponse.json({
       mode: c.mode, generatedAt: new Date().toISOString(),
       account: { startingBalance: a.startingBalance, cashUsd: a.cashUsd, equityUsd: equity.equity, realizedPnlUsd: a.realizedPnl,
         unrealizedPnlUsd: open.reduce((sum, p) => sum + p.unrealizedPnlUsd, 0) },
-      coverage: { closedTradesAvailable: closedCount, analyzedTrades: closed.length, truncated: closedCount > closed.length, recentTradesReturned: recent.length },
+      coverage: { closedTradesAvailable: closedCount, analyzedTrades: closed.length, truncated, recentTradesReturned: recent.length },
       scorecard, last24h: { trades: daily._count._all, pnlUsd: daily._sum.pnlUsd ?? 0, feesUsd: daily._sum.feesUsd ?? 0 },
       strategyAttribution: [...strategies.entries()].map(([signal, v]) => ({ signal, ...v, winRate: v.trades ? v.wins / v.trades : 0 })).sort((x, y) => y.pnlUsd - x.pnlUsd),
-      equityCurve: curve.filter((_, i) => i % Math.max(1, Math.ceil(curve.length / 120)) === 0).slice(-120),
+      equityCurve,
       openPositions: open, recentTrades: recent,
     });
   } catch (error) { return errorResponse(error); }
