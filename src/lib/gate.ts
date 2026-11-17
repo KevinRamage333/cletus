@@ -55,6 +55,8 @@ export function gateDecision(
   currentAgeVersion = '2026-11-16.1',
 ): GateDecision {
   if (PUBLIC_PREFIXES.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  // Machine-to-machine endpoint. The route validates the cron bearer secret.
+  if (pathname === '/api/cron/paper-engine') return { action: 'next' };
   const step = requiredStep(s, currentTermsVersion, currentRiskVersion, currentFinancialConsentVersion, currentAgeVersion);
   const reached = STEP_ORDER.indexOf(step);
   const isApi = pathname.startsWith('/api/');
