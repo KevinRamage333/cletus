@@ -1,0 +1,44 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+
+type Finding = { name: string; passed: boolean; detail: string };
+type Intelligence = {
+  mint: string; fetchedAt: string; compositeScore: number | null;
+  identity: { name: string | null; symbol: string | null; mintAuthority: string | null; freezeAuthority: string | null };
+  market: { priceUsd: number | null; marketCapUsd: number | null; liquidityUsd: number | null; pairUrl: string | null } | null;
+  signals: Record<string, number> | null;
+  security: { audit: { passed: boolean; checks: Finding[] } | null; auditError: string | null; authorityDataAvailable: boolean; holderConcentration: { owner: string; pct: number }[]; warnings: string[]; sources: string[] };
+};
+const fmt = (n: number | null | undefined) => n == null ? 'Unavailable' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
+const addressPattern = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+export default function AuditorPage() {
+  const [mint, setMint] = useState('');
+  const [data, setData] = useState<Intelligence | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function inspect() {
+    const value = mint.trim();
+    setError(''); setData(null);
+    if (!addressPattern.test(value)) { setError('Enter a valid Solana token mint address.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch('/api/tokens/intelligence?mint=' + encodeURIComponent(value), { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Token inspection failed');
+      setData(result as Intelligence);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Token inspection unavailable'); }
+    finally { setBusy(false); }
+  }
+  return <main className="min-h-screen bg-black px-4 py-7 text-white"><div className="mx-auto max-w-5xl space-y-6">
+    <header className="space-y-2"><Link href="/app" className="text-sm text-[#E5C76B]">← Command Center</Link><h1 className="text-3xl font-black">CLETUS <span className="text-[#D4AF37]">AUDITOR</span></h1><p className="text-sm text-white/55">Inspect a coin, review developer-wallet evidence and understand Cletus grading. Read-only research; no trade is submitted.</p></header>
+    <div className="grid gap-3 sm:grid-cols-3"><Link href="/app/dev-wallet" className="rounded-xl border border-[#D4AF37]/30 bg-[#121212] p-4 text-sm font-semibold text-[#E5C76B]">Dev wallet inspection →<p className="mt-1 text-xs font-normal text-white/50">Holdings, activity and wallet risk</p></Link><Link href="/app/discover" className="rounded-xl border border-[#D4AF37]/30 bg-[#121212] p-4 text-sm font-semibold text-[#E5C76B]">Scanned coins →<p className="mt-1 text-xs font-normal text-white/50">Scores, price signals and charts</p></Link><Link href="/app/community" className="rounded-xl border border-[#D4AF37]/30 bg-[#121212] p-4 text-sm font-semibold text-[#E5C76B]">Community audits →<p className="mt-1 text-xs font-normal text-white/50">Discuss findings, not allegations</p></Link></div>
+    <section className="rounded-2xl border border-white/10 bg-[#121212] p-4 space-y-3"><h2 className="text-lg font-semibold">Coin inspection</h2><div className="flex gap-2"><input aria-label="Token mint" value={mint} onChange={e=>setMint(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')void inspect()}} placeholder="Solana token mint address" className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 font-mono text-sm"/><button disabled={busy} onClick={()=>void inspect()} className="rounded-lg bg-[#D4AF37] px-4 py-2 font-bold text-black disabled:opacity-50">{busy?'Checking…':'Grade coin'}</button></div>{error&&<p role="alert" className="text-sm text-rose-400">{error}</p>}</section>
+    {data&&<section className="space-y-4" aria-live="polite"><div className="rounded-2xl border border-[#D4AF37]/30 bg-[#121212] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">{data.identity.name || data.identity.symbol || 'Unknown token'}</h2><p className="break-all font-mono text-xs text-white/50">{data.mint}</p></div><div className="text-right"><div className="text-3xl font-black text-[#E5C76B]">{data.compositeScore == null?'Not graded':data.compositeScore+'/100'}</div><div className="text-xs text-white/50">Cletus market-signal grade</div></div></div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3"><div>Price <strong className="block">{fmt(data.market?.priceUsd)}</strong></div><div>Market cap <strong className="block">{fmt(data.market?.marketCapUsd)}</strong></div><div>Liquidity <strong className="block">{fmt(data.market?.liquidityUsd)}</strong></div></div><div className="mt-3 flex flex-wrap gap-3 text-xs"><Link href={`/app/chart?address=${encodeURIComponent(data.mint)}`} className="text-[#E5C76B] underline">Open chart</Link>{data.market?.pairUrl&&<a href={data.market.pairUrl} target="_blank" rel="noreferrer" className="text-[#E5C76B] underline">Market source</a>}</div></div>
+      <div className="rounded-2xl border border-white/10 bg-[#121212] p-4 space-y-3"><h3 className="font-bold">Verification and security checks</h3><p className="text-sm text-white/70"><span className="mr-2 text-amber-300">◇</span><strong>Developer verification: Not verified</strong></p><p className="text-xs text-white/50">A green verification checkmark must be issued only after a separate authorized human review of developer identity and supporting evidence. Passing automated checks never awards verification.</p><div className="grid gap-2 text-sm sm:grid-cols-2"><p>Mint authority: <strong className={data.security.authorityDataAvailable?(data.identity.mintAuthority?'text-rose-400':'text-emerald-400'):'text-amber-300'}>{!data.security.authorityDataAvailable?'Unknown':data.identity.mintAuthority?'Enabled':'Revoked'}</strong></p><p>Freeze authority: <strong className={data.security.authorityDataAvailable?(data.identity.freezeAuthority?'text-rose-400':'text-emerald-400'):'text-amber-300'}>{!data.security.authorityDataAvailable?'Unknown':data.identity.freezeAuthority?'Enabled':'Revoked'}</strong></p><p>Pre-trade audit: <strong>{data.security.audit?(data.security.audit.passed?'Passed checks':'Flagged checks'):'Unavailable'}</strong></p><p>Observed holders: <strong>{data.security.holderConcentration.length}</strong></p></div>{data.security.auditError&&<p className="text-xs text-amber-300">Audit limitation: {data.security.auditError}</p>}{data.security.audit?.checks.map((check,i)=><p key={i} className="text-xs"><span className={check.passed?'text-emerald-400':'text-rose-400'}>{check.passed?'✓':'⚠'}</span> {check.name}: <span className="text-white/60">{check.detail}</span></p>)}</div>
+      {data.signals&&<div className="rounded-2xl border border-white/10 bg-[#121212] p-4"><h3 className="mb-3 font-bold">Cletus signal breakdown</h3><div className="grid gap-3 sm:grid-cols-2">{Object.entries(data.signals).map(([name,value])=><div key={name}><div className="flex justify-between text-xs"><span>{name.replace(/([A-Z])/g,' $1')}</span><span>{value}/100</span></div><div className="mt-1 h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-[#D4AF37]" style={{width:Math.max(0,Math.min(100,value))+'%'}}/></div></div>)}</div></div>}
+      <p className="text-xs text-white/45">Checked {new Date(data.fetchedAt).toLocaleString()}. Sources: {data.security.sources.join(', ')||'unavailable'}. Heuristic grades and security checks are not guarantees of legitimacy or returns.</p>
+    </section>}
+  </div></main>;
+}
