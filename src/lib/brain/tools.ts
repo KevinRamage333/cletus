@@ -3,6 +3,7 @@
  * place, modify, or cancel trades — the Brain is advisory only.
  */
 import { prisma } from '../db';
+import { getOperationsReport } from '../agents/operations';
 import { getConfig, publicConfig } from '../config';
 import { accountEquity, getEngineState, mem, periodPnl } from '../engine';
 import { tierFor } from '../sizing';
@@ -18,6 +19,7 @@ export interface ToolDecl { name: string; description: string; parameters?: Sche
 const limitParam = { limit: { type: 'INTEGER', description: 'max items (default 10, max 50)' } };
 
 export const TOOL_DECLARATIONS: ToolDecl[] = [
+  { name: 'get_operations_report', description: 'Owner-only Operations Steward report on app database health, scheduled paper-worker heartbeats and position checks, and scanner freshness. Call before answering an owner question about service uptime or the paper worker.' },
   { name: 'get_status', description: 'Overall live status: trading mode, preset, kill switch, schedule, account equity/PnL, win rate, sizing tier, recovery/pause state, last scan summary.' },
   { name: 'get_positions', description: 'Currently open positions with entry, last price, unrealized PnL and entry composite score.' },
   { name: 'get_recent_trades', description: 'Recently closed trades with PnL, exit reason and the entry signal breakdown.', parameters: { type: 'OBJECT', properties: limitParam } },
@@ -43,6 +45,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export async function runTool(name: string, args: Record<string, unknown> | undefined, ctx: ToolContext): Promise<unknown> {
   const c = getConfig();
   switch (name) {
+    case 'get_operations_report':
+      return ctx.isAdmin ? getOperationsReport(c) : { error: 'The operations report is available to app admins only.' };
     case 'get_status': {
       const a = await prisma.account.findUniqueOrThrow({ where: { id: ctx.accountId } });
       const [st, eq, pnl] = await Promise.all([getEngineState(), accountEquity(a), periodPnl(a.id, c.timezone)]);

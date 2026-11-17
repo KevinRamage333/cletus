@@ -5,7 +5,7 @@
  * receive only the capabilities listed here. No agent receives trade execution,
  * wallet signing, custody, payment, staking, token-minting, or secret access.
  */
-export type AgentId = "signal-allocator" | "charlotte" | "defender";
+export type AgentId = "signal-allocator" | "charlotte" | "defender" | "operations";
 
 export type AgentCapability =
   | "read:market-data"
@@ -97,6 +97,15 @@ export const AGENT_DEFINITIONS: readonly AgentDefinition[] = [
       "Merge code or deploy",
       "Clear an emergency stop after incident review",
     ],
+  },
+  {
+    id: "operations",
+    name: "Operations Steward",
+    purpose: "Check the paper worker, scan freshness, and database health, and flag problems for the owner.",
+    capabilities: ["read:service-health"],
+    operatingMode: "read_only_monitor",
+    mayActWithoutOwner: ["Read operational health records", "Report unavailable or stale checks"],
+    requiresOwnerApproval: ["Change worker settings", "Restart or deploy a service"],
   },
 ] as const;
 
