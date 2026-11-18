@@ -6,9 +6,9 @@ import { COMMUNITY_NETWORKS } from '@/lib/community-overview';
 import CommunityCharts from '@/components/charts/CommunityCharts';
 import type { PnlPoint } from '@/lib/live-chart';
 
-type Overview = { connected: true; updatedAt: string; participants: number | null; activeNow: number | null; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number; lossesUsd: number; closedTrades: number }; tokensPerNetwork: Record<string, number> | null; pnlSeries?: PnlPoint[]; mostTraded?: { mint: string; symbol: string; trades: number } | null };
+type Overview = { connected: true; updatedAt: string; participants: number | null; activeNow: number | null; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number | null; lossesUsd: number | null; winningTrades: number | null; losingTrades: number | null; closedTrades: number }; tokensPerNetwork: Record<string, number> | null; pnlSeries?: PnlPoint[]; mostTraded?: { mint: string; symbol: string; trades: number } | null };
 type Status = { kind: 'loading' } | { kind: 'ok'; data: Overview } | { kind: 'signin' } | { kind: 'not-connected'; reason: string } | { kind: 'error'; reason: string };
-const usd = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
+const usd = (n: number | null) => n === null ? 'hidden (needs 5+ people)' : `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 
 export default function CommunityStats({ demo }: { demo: boolean }) {
   const [s, setS] = useState<Status>({ kind: 'loading' });
@@ -24,7 +24,7 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
       setS({ kind: 'ok', data: j });
     } catch (e) { setS({ kind: 'error', reason: e instanceof Error ? e.message : 'unavailable' }); }
   }, [demo]);
-  useEffect(() => { void load(); const t = window.setInterval(() => void load(), 60_000); return () => window.clearInterval(t); }, [load]);
+  useEffect(() => { void load(); const t = window.setInterval(() => void load(), 5 * 60_000); return () => window.clearInterval(t); }, [load]);
 
   const d = s.kind === 'ok' ? s.data : null;
   const pnl = d?.collectivePnl;
@@ -37,7 +37,7 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
   return (
     <div>
       <PageHeader eyebrow="Gold community" title="Who Cletus trades for" actions={d ? <Refreshed at={d.updatedAt} /> : undefined}>
-        Aggregated figures from the recorded paper trades of members who opted in to the community. Individual accounts are never shown, and every count and P&amp;L figure stays hidden until at least five members are behind it.
+        Aggregated figures from the recorded paper trades of members who opted in to the community. Individual accounts are never shown, and every count and P&amp;L figure stays hidden until at least five members are behind it. P&amp;L is in whole dollars and updates a day at a time.
       </PageHeader>
       {s.kind === 'not-connected' && <div className="mb-4"><StateBox kind="not-connected" title="Community data not yet connected">{s.reason} Figures below show “—” instead of guessing.</StateBox></div>}
       {s.kind === 'signin' && <div className="mb-4"><StateBox kind="info" title="Sign in to see community figures">Community aggregates are available to members who completed onboarding.</StateBox></div>}

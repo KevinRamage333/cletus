@@ -45,7 +45,9 @@ export function combinedWallets(
   const kolSol = kol?.sol ?? null;
   const mainUsd = main.equityUsd ?? null;
   const kolUsd = kol?.usd ?? null;
-  const add = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
+  // With a KOL desk present, a combined figure needs both sides; a missing side is unknown, not $0.
+  // Without a desk (kol null/undefined) the combined figure is the main wallet alone.
+  const add = (a: number | null, b: number | null) => (a == null ? null : kol ? (b == null ? null : a + b) : a);
   // Unknown main-wallet P&L stays unknown in the combined figures (no $0 or realized-only stand-in).
   const kolRealized = kol?.totals.pnlUsd ?? 0;
   const realized = main.realizedPnl == null ? null : main.realizedPnl + kolRealized;
@@ -54,7 +56,7 @@ export function combinedWallets(
   const openPositions = (main.openAll?.length ?? (main.open ? 1 : 0)) + (kol?.open.length ?? 0);
   return {
     sol: add(mainSol, kolSol),
-    usd: add(mainUsd, kolUsd) == null ? null : Math.round(((mainUsd ?? 0) + (kolUsd ?? 0)) * 100) / 100,
+    usd: (() => { const v = add(mainUsd, kolUsd); return v == null ? null : Math.round(v * 100) / 100; })(),
     realizedPnl: realized === null ? null : Math.round(realized * 100) / 100,
     totalPnl: mainTotal === null || unrealized === null ? null : Math.round((mainTotal + kolRealized + unrealized) * 100) / 100,
     openPositions,

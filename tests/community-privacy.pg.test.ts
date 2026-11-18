@@ -9,12 +9,14 @@ vi.mock('@/lib/auth', async (orig) => {
 
 import { GET } from '@/app/api/community/collective-pnl/route';
 import { GET as OVERVIEW } from '@/app/api/community/overview/route';
+import { ERASED_POST_BODY, anonymiseCommunityMember } from '@/lib/community-erasure';
 
 const enabled = process.env.PAPER_SETTLEMENT_PG_TEST === '1';
 const TAG = 'ci-community-privacy';
 
-async function member(n: number, opts: { optedIn?: boolean; banned?: boolean; closedPnl?: Array<number | null>; open?: number; mint?: string } = {}) {
-  const user = await prisma.user.create({ data: { email: `${TAG}-${n}-${Date.now()}@example.test`, banned: opts.banned ?? false } });
+async function member(n: number, opts: { optedIn?: boolean; banned?: boolean; closedPnl?: Array<number | null>; open?: number; mint?: string; joinedDaysAgo?: number; closedAt?: Date } = {}) {
+  // Members only count once their account is a week old (COMMUNITY_MIN_MEMBER_AGE_DAYS), so test members default to 30 days.
+  const user = await prisma.user.create({ data: { email: `${TAG}-${n}-${Date.now()}@example.test`, banned: opts.banned ?? false, createdAt: new Date(Date.now() - (opts.joinedDaysAgo ?? 30) * 86_400_000) } });
   await prisma.communityOptIn.create({ data: { userId: user.id, optedIn: opts.optedIn ?? true } });
   const account = await prisma.account.create({ data: { userId: user.id, name: `${TAG}-${n}`, startingBalance: 100, cashUsd: 100, peakEquity: 100 } });
   for (const pnl of opts.closedPnl ?? []) {
@@ -22,7 +24,7 @@ async function member(n: number, opts: { optedIn?: boolean; banned?: boolean; cl
       data: {
         accountId: account.id, mint: opts.mint ?? `mint-${n}`, symbol: 'TEST', status: 'closed', simulated: true,
         entryPrice: 1, sizeUsd: 10, tokenAmount: 10, highestPrice: 1, lastPrice: 1, compositeScore: 0, signals: '{}',
-        closedAt: new Date(), exitPrice: 1, pnlUsd: pnl,
+        closedAt: opts.closedAt ?? new Date(), exitPrice: 1, pnlUsd: pnl,
       },
     });
   }
@@ -78,10 +80,11 @@ describe.skipIf(!enabled)('collective P&L privacy threshold with PostgreSQL', ()
     const body = await (await GET()).json();
     expect(body.suppressed).toBe(false);
     expect(body.totalGains).toBe(20);
-    expect(body.totalLosses).toBe(4);
+    // Only one person lost: that side of the split stays hidden (L-103a).
+    expect(body.totalLosses).toBeNull();
+    expect(body.losingTrades).toBeNull();
     expect(body.netProfit).toBe(16);
     expect(body.winningTrades).toBe(5);
-    expect(body.losingTrades).toBe(1);
     expect(body.activeUsers).toBe(5);
   });
 });
@@ -127,9 +130,63 @@ describe.skipIf(!enabled)('community overview privacy with PostgreSQL', () => {
     const body = await (await OVERVIEW()).json();
     expect(body.participants).toBe(5);
     expect(body.activeNow).toBeNull(); // only three opted-in members hold open positions
-    expect(body.collectivePnl).toMatchObject({ suppressed: false, netUsd: 16, gainsUsd: 20, lossesUsd: -4, closedTrades: 6 });
+    expect(body.collectivePnl).toMatchObject({ suppressed: false, netUsd: 16, gainsUsd: 20, winningTrades: 5, lossesUsd: null, losingTrades: null, closedTrades: 6 });
     expect(body.tokensPerNetwork.solana).toBe(1);
     expect(body.mostTraded).toMatchObject({ mint: 'shared-mint' });
+  });
+});
+
+describe.skipIf(!enabled)('community P&L differencing and sybil floor with PostgreSQL (L-103a)', () => {
+  beforeEach(cleanup);
+  afterAll(async () => { await cleanup(); });
+
+  it('publishes totals from the same buckets as the chart, so a lone later trade is never isolated', async () => {
+    const day1 = new Date(Date.now() - 3 * 86_400_000);
+    const viewer = await member(0, { closedPnl: [10], closedAt: day1 });
+    for (let i = 1; i < 5; i++) await member(i, { closedPnl: [10], closedAt: day1 });
+    await member(5, { closedPnl: [-37.5] }); // one member closes today, alone
+    auth.userId = viewer.id;
+    const overview = await (await OVERVIEW()).json();
+    expect(overview.pnlSeries.map((p: { value: number }) => p.value)).toEqual([50]);
+    expect(overview.collectivePnl.netUsd).toBe(50);
+    expect(overview.collectivePnl.netUsd - overview.pnlSeries.at(-1).value).toBe(0);
+    expect(overview.collectivePnl.closedTrades).toBe(5);
+    const ticker = await (await GET()).json();
+    expect(ticker.netProfit).toBe(50); // same figure on both endpoints: no cross-endpoint differencing
+    expect(ticker.totalLosses).toBeNull();
+  });
+
+  it('does not count members whose account is younger than a week', async () => {
+    const viewer = await member(0, { closedPnl: [1] });
+    for (let i = 1; i < 4; i++) await member(i, { closedPnl: [1] });
+    await member(7, { closedPnl: [1], joinedDaysAgo: 1 }); // a fresh account cannot fill the floor
+    auth.userId = viewer.id;
+    expect((await (await GET()).json()).suppressed).toBe(true);
+    const overview = await (await OVERVIEW()).json();
+    expect(overview.participants).toBeNull();
+    expect(overview.collectivePnl.suppressed).toBe(true);
+  });
+});
+
+describe.skipIf(!enabled)('member erasure (L-103b) with PostgreSQL', () => {
+  afterAll(async () => { await prisma.$disconnect(); });
+
+  it('anonymises a member with moderated posts and drops them from every aggregate, keeping the moderation trail', async () => {
+    const user = await prisma.user.create({ data: { email: `ci-erasure-${Date.now()}@example.test`, displayName: 'Real Name', bio: 'about me', walletPublicKey: 'WalletPubkey111', createdAt: new Date(Date.now() - 30 * 86_400_000) } });
+    await prisma.communityOptIn.create({ data: { userId: user.id, optedIn: true } });
+    const post = await prisma.communityPost.create({ data: { userId: user.id, body: 'my personal story', status: 'APPROVED' } });
+    const event = await prisma.communityModerationEvent.create({ data: { postId: post.id, moderatorUserId: 'mod', action: 'APPROVED' } });
+    const result = await anonymiseCommunityMember(user.id);
+    expect(result.posts).toBe(1);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.email).toBe(`erased-${user.id}@erased.invalid`);
+    expect(after.displayName).toBeNull();
+    expect(after.bio).toBeNull();
+    expect(after.walletPublicKey).toBeNull();
+    expect((await prisma.communityPost.findUniqueOrThrow({ where: { id: post.id } })).body).toBe(ERASED_POST_BODY);
+    expect((await prisma.communityOptIn.findUniqueOrThrow({ where: { userId: user.id } })).optedIn).toBe(false);
+    expect(await prisma.communityModerationEvent.count({ where: { id: event.id } })).toBe(1);
+    await expect(anonymiseCommunityMember(user.id)).resolves.toMatchObject({ posts: 1 }); // idempotent
   });
 });
 

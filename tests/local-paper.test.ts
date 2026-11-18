@@ -53,14 +53,45 @@ describe('local paper trading', () => {
   });
 });
 
-import { collectivePnl, tokensPerNetwork, COMMUNITY_NETWORKS } from '@/lib/community-overview';
+import { publishedCommunityPnl, tokensPerNetwork, COMMUNITY_NETWORKS } from '@/lib/community-overview';
 describe('community overview', () => {
   it('counts distinct tokens per network and covers all six networks', () => {
     expect(COMMUNITY_NETWORKS.map((n) => n.id)).toEqual(['solana', 'ethereum', 'base', 'bnb', 'polygon', 'cronos']);
     expect(tokensPerNetwork([{ network: 'solana', mint: 'a' }, { network: 'solana', mint: 'a' }, { network: 'base', mint: 'b' }, { network: 'SOLANA', mint: 'c' }])).toEqual({ solana: 2, ethereum: 0, base: 1, bnb: 0, polygon: 0, cronos: 0 });
   });
+  const D1 = '2026-11-01T12:00:00.000Z';
+  const D2 = '2026-11-02T12:00:00.000Z';
+  const row = (accountId: string, pnlUsd: number | null, closedAt = D1) => ({ accountId, pnlUsd, closedAt });
   it('suppresses collective P&L below five contributors so no individual result is inferable', () => {
-    expect(collectivePnl([10, -5], 4)).toEqual({ suppressed: true, minContributors: 5 });
-    expect(collectivePnl([10, -5, null], 5)).toEqual({ suppressed: false, netUsd: 5, gainsUsd: 10, lossesUsd: -5, closedTrades: 2 });
+    expect(publishedCommunityPnl([row('a', 10), row('b', -5), row('c', 1), row('d', 1)])).toEqual({ suppressed: true, minContributors: 5, series: [] });
+    // A missing P&L is not a contribution (never a $0 trade).
+    expect(publishedCommunityPnl([row('a', 10), row('b', -5), row('c', 1), row('d', 1), row('e', null)]).suppressed).toBe(true);
+  });
+  it('L-103a-ii: totals come from the published buckets only, so total minus last chart point is never one member', () => {
+    const rows = ['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 10)).concat([row('solo', -37.5, D2)]);
+    const p = publishedCommunityPnl(rows);
+    if (p.suppressed) throw new Error('expected figures');
+    expect(p.series.map((x) => x.value)).toEqual([50]);
+    expect(p.netUsd).toBe(50);
+    expect(p.netUsd - p.series[p.series.length - 1].value).toBe(0);
+    expect(p.closedTrades).toBe(5);
+    expect(p.contributors).toBe(5);
+    // Once four more people close on day 2 the held-back trade is released together with theirs, never alone.
+    const later = publishedCommunityPnl(rows.concat(['w', 'x', 'y', 'z'].map((id) => row(id, 1, D2))));
+    if (later.suppressed) throw new Error('expected figures');
+    expect(later.series.map((x) => x.value)).toEqual([50, 17]);
+    expect(later.closedTrades).toBe(10);
+  });
+  it('floors each side of the split at five distinct people and rounds to whole dollars', () => {
+    const oneWinner = publishedCommunityPnl([row('a', 100.4), row('b', -1), row('c', -2), row('d', -3), row('e', -4)]);
+    if (oneWinner.suppressed) throw new Error('expected figures');
+    expect(oneWinner.netUsd).toBe(90);
+    expect(oneWinner.gainsUsd).toBeNull();
+    expect(oneWinner.winningTrades).toBeNull();
+    expect(oneWinner.lossesUsd).toBeNull(); // only four losers
+    expect(oneWinner.losingTrades).toBeNull();
+    const broad = publishedCommunityPnl(['a', 'b', 'c', 'd', 'e'].flatMap((id) => [row(id, 2.6), row(id, -1.2)]));
+    if (broad.suppressed) throw new Error('expected figures');
+    expect(broad).toMatchObject({ netUsd: 7, gainsUsd: 13, lossesUsd: -6, winningTrades: 5, losingTrades: 5, closedTrades: 10 });
   });
 });

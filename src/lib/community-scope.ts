@@ -3,14 +3,21 @@ import type { Prisma } from '@prisma/client';
 /** Minimum number of distinct people behind any community figure (counts and P&L alike). */
 export const COMMUNITY_MIN_PEOPLE = 5;
 
+/** Members only count toward community figures once their account is this old (slows sybil floor-filling, L-103a). */
+export const COMMUNITY_MIN_MEMBER_AGE_DAYS = 7;
+
 /**
  * The only paper positions community aggregates may read: simulated, not a lab preset account,
- * and owned by a member who has opted in to the community and is not banned (#103 scope).
+ * and owned by a member who has opted in to the community, is not banned (#103 scope) and whose
+ * account is at least COMMUNITY_MIN_MEMBER_AGE_DAYS old.
  */
-export const COMMUNITY_PAPER_SCOPE = {
-  simulated: true,
-  account: { labPreset: null, user: { is: { banned: false, communityOptIn: { is: { optedIn: true } } } } },
-} satisfies Prisma.PositionWhereInput;
+export function communityPaperScope(now: Date = new Date()) {
+  const joinedBy = new Date(now.getTime() - COMMUNITY_MIN_MEMBER_AGE_DAYS * 86_400_000);
+  return {
+    simulated: true,
+    account: { labPreset: null, user: { is: { banned: false, createdAt: { lte: joinedBy }, communityOptIn: { is: { optedIn: true } } } } },
+  } satisfies Prisma.PositionWhereInput;
+}
 
 /** Distinct people from rows that carry the owning account's userId. */
 export function distinctPeople(rows: Array<{ account: { userId: string | null } }>): number {
