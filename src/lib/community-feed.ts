@@ -232,10 +232,15 @@ export async function submitCommunityPost(userId: string, raw: unknown, parentId
 
 export async function setCommunityOptIn(userId: string, enabled: boolean) {
   if (typeof enabled !== 'boolean') throw new HttpError(400, 'enabled must be true or false');
-  const row = await prisma.communityOptIn.upsert({
-    where: { userId },
-    create: { userId, optedIn: enabled },
-    update: { optedIn: enabled },
+  const row = await prisma.$transaction(async (tx) => {
+    const current = await tx.communityOptIn.findUnique({ where: { userId }, select: { optedIn: true, optedInAt: true } });
+    // Keep the original opt-in time while staying opted in; a fresh opt-in starts a new eligibility window.
+    const optedInAt = enabled ? (current?.optedIn && current.optedInAt ? current.optedInAt : new Date()) : null;
+    return tx.communityOptIn.upsert({
+      where: { userId },
+      create: { userId, optedIn: enabled, optedInAt },
+      update: { optedIn: enabled, optedInAt },
+    });
   });
   return { optedIn: row.optedIn, updatedAt: row.updatedAt.toISOString() };
 }

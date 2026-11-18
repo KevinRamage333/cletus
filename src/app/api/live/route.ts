@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { booksFromMaybeMixed, buildPublicBooks, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from '@/lib/public-live';
+import { PUBLIC_LIVE_POSITIONS_WHERE, booksFromMaybeMixed, buildPublicBooks, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from '@/lib/public-live';
 import { readLiveTrades } from '@/lib/live-trades';
 import { loadOwnerState, snapshotAgeMs } from '@/lib/owner-store';
 import { isDemo } from '@/lib/demo';
@@ -50,7 +50,8 @@ async function publicBooksFromBoxRecords(): Promise<{ live: PublicLiveStats; sim
     try {
       const { prisma } = await import('@/lib/db');
       const rows = await prisma.position.findMany({
-        where: { status: 'closed' },
+        // The public ticker shows the house (operator) book only, never members' trades (Audit L-103 /api/live).
+        where: PUBLIC_LIVE_POSITIONS_WHERE,
         orderBy: { closedAt: 'desc' },
         take: 200,
         include: { account: { select: { isOperator: true, user: { select: { walletPublicKey: true, displayName: true } } } } },
@@ -59,7 +60,7 @@ async function publicBooksFromBoxRecords(): Promise<{ live: PublicLiveStats; sim
         id: p.id, symbol: p.symbol, closedAt: p.closedAt, pnlUsd: p.pnlUsd, pnlPct: p.pnlPct,
         exitTx: p.exitTx, entryTx: p.entryTx, simulated: p.simulated,
         isOperator: p.account.isOperator,
-        // No opt-in column yet: never show a wallet on the public feed.
+        // Never show a wallet on the public feed.
         optedInLabel: null, showWallet: false, wallet: null,
       })));
     } catch { /* no db */ }

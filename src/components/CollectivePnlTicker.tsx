@@ -12,6 +12,8 @@ type CollectivePnl = {
   suppressed?: boolean;
 };
 
+const REFRESH_MS = 5 * 60_000;
+
 type Phase = 'loading' | 'error' | 'suppressed' | 'ready' | 'demo';
 
 function finiteOrNull(value: unknown): number | null {
@@ -29,9 +31,9 @@ function money(value: number) {
   }).format(Math.abs(value));
 }
 
-function Figure({ value, signed = false }: { value: number | null; signed?: boolean }) {
+function Figure({ value, signed = false, nullLabel = 'Unavailable' }: { value: number | null; signed?: boolean; nullLabel?: string }) {
   if (value === null || Number.isNaN(value)) {
-    return <span data-figure="unavailable">Unavailable</span>;
+    return <span data-figure="unavailable">{nullLabel}</span>;
   }
   if (value === 0) {
     return <span data-figure="zero">{signed ? '+$0.00' : '$0.00'}</span>;
@@ -76,12 +78,13 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
       }
     }
     refresh();
-    const timer = setInterval(refresh, 15_000);
+    // Figures only change when a new finished day with 5+ members is published, so a slow refresh is enough.
+    const timer = setInterval(refresh, REFRESH_MS);
     return () => { stopped = true; clearInterval(timer); };
   }, [demo]);
 
   const ageMs = data?.updatedAt ? Date.now() - new Date(data.updatedAt).getTime() : Number.POSITIVE_INFINITY;
-  const view = phase === 'ready' && (stale || ageMs > 60_000) ? 'stale' : phase;
+  const view = phase === 'ready' && (stale || ageMs > 3 * REFRESH_MS) ? 'stale' : phase;
   const refreshed = data?.updatedAt ? `Collective P&L refreshed ${new Date(data.updatedAt).toLocaleTimeString()}` : 'Collective P&L has not refreshed';
 
   return (
@@ -101,7 +104,7 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
       {view === 'stale' && <p className="px-4 py-2 text-xs text-amber-200">Showing the last collective refresh. Newer data is unavailable.</p>}
       {view === 'suppressed' && (
         <p className="px-4 py-4 text-sm text-white/55" data-figure="unavailable">
-          Collective P&L is hidden until at least five members opt in. This is not $0.
+          Collective P&L is hidden until at least five members have closed paper trades. This is not $0.
         </p>
       )}
       {(view === 'ready' || view === 'stale') && data && phase !== 'suppressed' && (
@@ -114,11 +117,11 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Total gains</div>
-            <div className="mt-1 text-sm font-mono text-emerald-400"><Figure value={data.totalGains} /></div>
+            <div className="mt-1 text-sm font-mono text-emerald-400"><Figure value={data.totalGains} nullLabel="Hidden (needs 5+ people on each side)" /></div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Total losses</div>
-            <div className="mt-1 text-sm font-mono text-red-400"><Figure value={data.totalLosses === null ? null : -Math.abs(data.totalLosses)} /></div>
+            <div className="mt-1 text-sm font-mono text-red-400"><Figure value={data.totalLosses === null ? null : -Math.abs(data.totalLosses)} nullLabel="Hidden (needs 5+ people on each side)" /></div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Active traders</div>
