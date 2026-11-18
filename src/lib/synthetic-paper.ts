@@ -39,9 +39,64 @@ export function syntheticPaperRuntimeAllowed(env: SyntheticEnv): boolean {
   return inCi || inTest;
 }
 
-/** Disposable CI and test runtimes. Vercel preview and production stay closed. */
-export function disposableRuntimeAllowed(env?: SyntheticEnv): boolean {
-  return syntheticPaperRuntimeAllowed(envFlag(env));
+const LOCAL_DB_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+
+export type CiSignupEnv = {
+  CLETUS_CI_SIGNUP?: string;
+  GITHUB_ACTIONS?: string;
+  DATABASE_URL?: string;
+  VERCEL?: string;
+  VERCEL_ENV?: string;
+  VERCEL_URL?: string;
+  VERCEL_DEPLOYMENT_ID?: string;
+  CI?: string;
+  NODE_ENV?: string;
+  VITEST?: string;
+};
+
+function signupEnv(env?: CiSignupEnv): CiSignupEnv {
+  if (env) return env;
+  return {
+    CLETUS_CI_SIGNUP: process.env.CLETUS_CI_SIGNUP,
+    GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
+    DATABASE_URL: process.env.DATABASE_URL,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+    VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
+    CI: process.env.CI,
+    NODE_ENV: process.env.NODE_ENV,
+    VITEST: process.env.VITEST,
+  };
+}
+
+function envPresent(value: string | undefined): boolean {
+  return value !== undefined && value !== '';
+}
+
+/** Host from a Postgres URL. Null when the URL is missing or not a URL. */
+export function databaseHost(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Unverified email sign-up for the disposable smoke job only.
+ * Every condition is required. CI, Vitest, or a local database alone is not enough.
+ */
+export function ciSignupAllowed(env?: CiSignupEnv): boolean {
+  const flags = signupEnv(env);
+  if (flags.CLETUS_CI_SIGNUP !== '1') return false;
+  if (flags.GITHUB_ACTIONS !== 'true') return false;
+  const host = databaseHost(flags.DATABASE_URL);
+  if (!host || !LOCAL_DB_HOSTS.has(host)) return false;
+  if (envPresent(flags.VERCEL) || envPresent(flags.VERCEL_ENV) || envPresent(flags.VERCEL_URL) || envPresent(flags.VERCEL_DEPLOYMENT_ID)) return false;
+  return true;
 }
 
 /** Test-only switch. Live mode and Vercel preview/production never enable it. */
@@ -89,33 +144,35 @@ export async function syntheticPaperFill(account: Account, side: 'buy' | 'sell')
     return { ok: true, side: 'buy' as const, simulated: true, signed: false, broadcast: false, symbol: SYNTHETIC_SYMBOL, id: position.id };
   }
   if (side !== 'sell') throw new HttpError(400, 'side must be buy or sell');
-  const open = await prisma.position.findFirst({
-    where: { accountId: account.id, status: 'open', simulated: true, symbol: SYNTHETIC_SYMBOL },
-    orderBy: { openedAt: 'desc' },
-  });
-  if (!open) throw new HttpError(400, 'No synthetic paper position to sell.');
-  const proceeds = open.tokenAmount * EXIT;
-  const remainder = proceeds - FEE - open.sizeUsd - open.feesUsd;
-  const basis = open.sizeUsd + open.partialCostUsd;
-  const pnlPct = basis > 0 ? (remainder / basis) * 100 : 0;
-  await prisma.$transaction([
-    prisma.position.update({
-      where: { id: open.id },
+  const remainder = await prisma.$transaction(async (tx) => {
+    const open = await tx.position.findFirst({
+      where: { accountId: account.id, status: 'open', simulated: true, symbol: SYNTHETIC_SYMBOL },
+      orderBy: { openedAt: 'desc' },
+    });
+    if (!open) throw new HttpError(400, 'No synthetic paper position to sell.');
+    const proceeds = open.tokenAmount * EXIT;
+    const pnl = proceeds - FEE - open.sizeUsd - open.feesUsd;
+    const basis = open.sizeUsd + open.partialCostUsd;
+    const pnlPct = basis > 0 ? (pnl / basis) * 100 : 0;
+    const closed = await tx.position.updateMany({
+      where: { id: open.id, status: 'open' },
       data: {
         status: 'closed',
         closedAt: new Date(),
         exitPrice: EXIT,
         lastPrice: EXIT,
-        pnlUsd: remainder,
+        pnlUsd: pnl,
         pnlPct,
         exitReason: 'synthetic_paper',
         feesUsd: open.feesUsd + FEE,
       },
-    }),
-    prisma.account.update({
+    });
+    if (closed.count !== 1) throw new HttpError(400, 'No synthetic paper position to sell.');
+    await tx.account.update({
       where: { id: account.id },
-      data: { cashUsd: { increment: proceeds - FEE }, realizedPnl: { increment: remainder } },
-    }),
-  ]);
+      data: { cashUsd: { increment: proceeds - FEE }, realizedPnl: { increment: pnl } },
+    });
+    return pnl;
+  });
   return { ok: true, side: 'sell' as const, simulated: true, signed: false, broadcast: false, symbol: SYNTHETIC_SYMBOL, pnlUsd: remainder };
 }

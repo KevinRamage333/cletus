@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -77,8 +77,10 @@ jobs:
       SESSION_SECRET: smoke-session-secret-at-least-32-chars
       TRADING_MODE: simulation
       BETA_MODE: "true"
-      # Actions sets CI=true. The route refuses this flag on Vercel and outside CI or the test runner.
+      # Actions sets CI=true and GITHUB_ACTIONS=true. Synthetic fills stay off on Vercel.
       CLETUS_SYNTHETIC_PAPER: "1"
+      # Unverified email sign-up stays closed unless this flag, Actions, and a localhost database are all set.
+      CLETUS_CI_SIGNUP: "1"
       COOKIE_SECURE: "false"
       SMOKE_BASE: http://127.0.0.1:3000
       SMOKE_SHOT_DIR: tests/e2e/artifacts

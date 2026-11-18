@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '@/lib/auth';
-import { assertSyntheticPaper, disposableRuntimeAllowed, syntheticPaperAllowed, syntheticPaperRuntimeAllowed } from '@/lib/synthetic-paper';
+import { assertSyntheticPaper, ciSignupAllowed, syntheticPaperAllowed, syntheticPaperRuntimeAllowed } from '@/lib/synthetic-paper';
 
 const flagged = { CLETUS_SYNTHETIC_PAPER: '1' };
 
@@ -26,12 +26,28 @@ describe('synthetic paper guard', () => {
     expect(() => assertSyntheticPaper({ ...flagged, NODE_ENV: 'test' }, 'simulation')).not.toThrow();
   });
 
-  it('keeps unverified sign-up closed outside CI and the test runner', () => {
-    expect(disposableRuntimeAllowed({ NODE_ENV: 'production' })).toBe(false);
-    expect(disposableRuntimeAllowed({ CI: 'true', NODE_ENV: 'production' })).toBe(true);
-    expect(disposableRuntimeAllowed({ NODE_ENV: 'test' })).toBe(true);
-    expect(disposableRuntimeAllowed({ CI: 'true', VERCEL: '1', VERCEL_ENV: 'preview' })).toBe(false);
-    expect(disposableRuntimeAllowed({ CI: 'true', VERCEL_ENV: 'production' })).toBe(false);
+  it('opens unverified sign-up only for the smoke job on a localhost database', () => {
+    const local = 'postgresql://postgres:postgres@127.0.0.1:5432/cletus_smoke?schema=app';
+    const open = { CLETUS_CI_SIGNUP: '1', GITHUB_ACTIONS: 'true', DATABASE_URL: local };
+    expect(ciSignupAllowed(open)).toBe(true);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/cletus_smoke' })).toBe(true);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://postgres:postgres@[::1]:5432/cletus_smoke' })).toBe(true);
+
+    expect(ciSignupAllowed({ CI: 'true', NODE_ENV: 'production' })).toBe(false);
+    expect(ciSignupAllowed({ CI: 'true' })).toBe(false);
+    expect(ciSignupAllowed({ NODE_ENV: 'test', VITEST: 'true' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, CLETUS_CI_SIGNUP: undefined })).toBe(false);
+    expect(ciSignupAllowed({ GITHUB_ACTIONS: 'true', DATABASE_URL: local })).toBe(false);
+    expect(ciSignupAllowed({ ...open, GITHUB_ACTIONS: undefined })).toBe(false);
+    expect(ciSignupAllowed({ ...open, GITHUB_ACTIONS: '1' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: undefined })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'not a url' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://user:secret@ep-example.neon.tech/cletus?sslmode=require' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, VERCEL: '1' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, VERCEL_ENV: 'preview' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, VERCEL_ENV: 'production' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, VERCEL_URL: 'cletus.vercel.app' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, VERCEL_DEPLOYMENT_ID: 'dpl_example' })).toBe(false);
   });
 
   it('refuses the flag on Vercel preview and production even when CI is set', () => {

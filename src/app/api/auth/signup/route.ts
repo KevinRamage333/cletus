@@ -4,7 +4,7 @@ import { setSessionCookie, onboardingStep } from '@/lib/auth';
 import { validEmail } from '@/lib/onboarding';
 import { createPaperAccount } from '@/lib/engine';
 import { STEP_PAGES } from '@/lib/gate';
-import { disposableRuntimeAllowed } from '@/lib/synthetic-paper';
+import { ciSignupAllowed } from '@/lib/synthetic-paper';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +12,9 @@ const UNAVAILABLE = {
   error: 'Account sign-in is temporarily unavailable while verified sign-in is being set up.',
 };
 
-/** Account access stays closed until verified identity exists. Disposable CI and test runs can still onboard. */
+/** Account access stays closed until verified identity exists. Only the smoke job's local database can onboard. */
 export async function POST(req: Request) {
-  if (!disposableRuntimeAllowed()) {
+  if (!ciSignupAllowed()) {
     return NextResponse.json(UNAVAILABLE, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
 
