@@ -1,65 +1,65 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
+import { COLLECTIVE_PRIVACY_THRESHOLD, collectiveFiguresVisible } from '@/lib/community-feed';
 export const dynamic = 'force-dynamic';
 
-/** Aggregate realized PnL for participating users' paper accounts only. No individual data is returned. */
+const HIDDEN = 'Collective financial metrics are hidden until at least five accounts opt in. Your opt-in status is still visible. No individual account, position, or wallet data is exposed.';
+const SHOWN = 'Aggregates opted-in paper accounts only. At least five participating accounts are required before cohort metrics are displayed. Individual accounts, positions, and wallet balances are never returned. Paper results are simulations, not live returns.';
+
+/** Opted-in paper accounts only. Figures are null until five accounts have opted in. */
 export async function GET() {
   try {
-    await requireOnboardedUser();
-    const paperUserAccount = {
-      account: { userId: { not: null }, labPreset: null },
+    const user = await requireOnboardedUser();
+    const [optedInAccounts, mine] = await Promise.all([
+      prisma.communityOptIn.count({ where: { optedIn: true } }),
+      prisma.communityOptIn.findUnique({ where: { userId: user.id }, select: { optedIn: true } }),
+    ]);
+    const updatedAt = new Date().toISOString();
+    const base = {
+      mode: 'paper' as const,
+      privacyThreshold: COLLECTIVE_PRIVACY_THRESHOLD,
+      optedIn: mine?.optedIn === true,
+      updatedAt,
+    };
+    if (!collectiveFiguresVisible(optedInAccounts)) {
+      return NextResponse.json({
+        ...base,
+        suppressed: true,
+        netProfit: null,
+        totalGains: null,
+        totalLosses: null,
+        winningTrades: null,
+        losingTrades: null,
+        activeUsers: null,
+        methodology: HIDDEN,
+      }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
+    }
+    const optedInPaper = {
+      account: { userId: { not: null }, labPreset: null, user: { communityOptIn: { is: { optedIn: true } } } },
       simulated: true,
     };
-    const closedPaperTrade = { ...paperUserAccount, status: 'closed' };
-    const [g, l, contributors, active] = await Promise.all([
-      prisma.position.aggregate({
-        where: { ...closedPaperTrade, pnlUsd: { gt: 0 } },
-        _sum: { pnlUsd: true },
-        _count: true,
-      }),
-      prisma.position.aggregate({
-        where: { ...closedPaperTrade, pnlUsd: { lt: 0 } },
-        _sum: { pnlUsd: true },
-        _count: true,
-      }),
+    const [gains, losses, active] = await Promise.all([
+      prisma.position.aggregate({ where: { ...optedInPaper, status: 'closed', pnlUsd: { gt: 0 } }, _sum: { pnlUsd: true }, _count: true }),
+      prisma.position.aggregate({ where: { ...optedInPaper, status: 'closed', pnlUsd: { lt: 0 } }, _sum: { pnlUsd: true }, _count: true }),
       prisma.position.findMany({
-        where: closedPaperTrade,
-        distinct: ['accountId'],
-        select: { accountId: true },
-      }),
-      prisma.position.findMany({
-        where: {
-          ...paperUserAccount,
-          openedAt: { gte: new Date(Date.now() - 7 * 86_400_000) },
-        },
+        where: { ...optedInPaper, openedAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
         distinct: ['accountId'],
         select: { accountId: true },
       }),
     ]);
-    // A single account's realized results must not be inferable from a community aggregate.
-    // A seven-day activity count is not the same as the number of P&L contributors.
-    if (contributors.length < 5) return NextResponse.json({
-      suppressed: true,
-      minContributors: 5,
-      mode: 'paper',
-      period: 'all_time_realized',
-      updatedAt: new Date().toISOString(),
-    }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
-    const gains = g._sum.pnlUsd ?? 0;
-    const losses = Math.abs(l._sum.pnlUsd ?? 0);
+    const totalGains = gains._sum.pnlUsd ?? 0;
+    const totalLosses = Math.abs(losses._sum.pnlUsd ?? 0);
     return NextResponse.json({
-      netProfit: gains - losses,
-      totalGains: gains,
-      totalLosses: losses,
-      winningTrades: g._count,
-      losingTrades: l._count,
-      activeUsers: active.length,
-      mode: 'paper',
-      period: 'all_time_realized',
+      ...base,
       suppressed: false,
-      contributors: contributors.length,
-      updatedAt: new Date().toISOString(),
+      netProfit: totalGains - totalLosses,
+      totalGains,
+      totalLosses,
+      winningTrades: gains._count,
+      losingTrades: losses._count,
+      activeUsers: active.length,
+      methodology: SHOWN,
     }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (e) {
     return errorResponse(e);
