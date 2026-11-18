@@ -95,6 +95,13 @@ describe('Community safety + trial', () => {
     expect(looksSecret('note this phrase ' + 'abandon '.repeat(12) + 'and ignore it')).toBe(true);
     expect(looksSecret('[' + Array(64).fill(1).join(',') + ']')).toBe(true);
     expect(looksSecret('gm everyone, BONK looks heated today')).toBe(false);
+    // Only runs of 12+ BIP-39 words count; numbered or comma-separated phrases still do.
+    const phrase = 'legal winner thank year wave sausage worth useful legal winner thank yellow';
+    expect(looksSecret(phrase)).toBe(true);
+    expect(looksSecret(phrase.split(' ').map((w, i) => `${i + 1}. ${w}`).join(' '))).toBe(true);
+    expect(looksSecret(phrase.split(' ').join(', '))).toBe(true);
+    expect(looksSecret(phrase.split(' ').slice(0, 11).join(' '))).toBe(false);
+    expect(looksSecret('This coin looks great and the team seems legit but price action today was weird')).toBe(false);
     expect(cleanText('hi\u0000 there', 5)).toBe('hi th');
   });
   it('30-day trial countdown', () => {
@@ -106,15 +113,15 @@ describe('Community safety + trial', () => {
 
 import { demoGateDecision } from '@/lib/gate';
 describe('demo gate (public preview, no DB)', () => {
-  it('sends / and /signup to the demo landing', () => {
-    expect(demoGateDecision('/')).toEqual({ action: 'redirect', to: '/demo' });
-    expect(demoGateDecision('/signup')).toEqual({ action: 'redirect', to: '/demo' });
+  it('serves the corporate home and sends /signup to the read-only app', () => {
+    expect(demoGateDecision('/')).toEqual({ action: 'next' });
+    expect(demoGateDecision('/signup')).toEqual({ action: 'redirect', to: '/app' });
   });
   it('allows demo pages, legal, demo APIs and assets', () => {
     for (const p of ['/demo', '/demo/chart', '/demo/wallet', '/demo/dashboard', '/legal', '/api/demo/chart', '/api/health', '/cletus-logo.png', '/_next/static/x.js']) expect(demoGateDecision(p)).toEqual({ action: 'next' });
   });
   it('account pages say coming soon; account APIs answer 503', () => {
-    expect(demoGateDecision('/app/config')).toEqual({ action: 'redirect', to: '/demo?soon=%2Fapp%2Fconfig' });
+    expect(demoGateDecision('/app/config')).toEqual({ action: 'redirect', to: '/app?soon=%2Fapp%2Fconfig' });
     expect(demoGateDecision('/api/auth/signup')).toEqual({ action: 'soon' });
     expect(demoGateDecision('/api/protected/trade/start')).toEqual({ action: 'soon' });
     expect(demoGateDecision('/api/tokens/chart')).toEqual({ action: 'soon' });

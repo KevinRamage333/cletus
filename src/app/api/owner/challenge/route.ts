@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { PublicKey } from '@solana/web3.js';
 import { getSessionSecret } from '@/lib/session';
 import { allowedSiwsHost, issueSiwsChallenge, originFromRequest } from '@/lib/siws';
-import { canonicalAddress, isOwnerWallet } from '@/lib/owner-auth';
+import { canonicalAddress } from '@/lib/owner-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +36,5 @@ export async function GET(req: Request) {
     expiresAt: issued.expiresAt,
     statement: issued.fields.statement,
     purpose: 'authentication_only',
-    ownerExpected: isOwnerWallet(address),
   });
 }

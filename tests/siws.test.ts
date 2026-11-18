@@ -77,6 +77,11 @@ describe('SIWS host allowlist', () => {
     expect(allowedSiwsHost('cletus-autonomous-trader.vercel.app')).toBe(true);
     expect(allowedSiwsHost('cletus-autonomous-trader-abc123-cletus1.vercel.app')).toBe(true);
     expect(allowedSiwsHost('cletusai.xyz')).toBe(true);
+    expect(allowedSiwsHost('cletustechnology.dev')).toBe(true);
+    expect(allowedSiwsHost('www.cletustechnology.dev')).toBe(true);
+    expect(allowedSiwsHost('app.cletustechnology.dev')).toBe(true);
+    expect(allowedSiwsHost('cletus-redesign-preview-plrx5t91e-cletus1.vercel.app')).toBe(true);
+    expect(allowedSiwsHost('app.cletustechnology.dev', { NEXT_PUBLIC_APP_URL: 'https://app.cletustechnology.dev' })).toBe(true);
     expect(allowedSiwsHost('evil.example.com')).toBe(false);
     expect(allowedSiwsHost('not-our-app.vercel.app')).toBe(false);
   });

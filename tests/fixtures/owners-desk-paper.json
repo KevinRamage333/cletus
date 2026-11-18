@@ -1,0 +1,16 @@
+{
+  "cashUsd": 90.5,
+  "closedCount": 2,
+  "open": [
+    {
+      "chain": "base",
+      "symbol": "STAR",
+      "entryPrice": 1,
+      "last": 1.1,
+      "units": 20,
+      "costLeft": 20,
+      "sizeUsd": 20,
+      "openedAt": "2026-11-17T16:00:00.000Z"
+    }
+  ]
+}

@@ -120,26 +120,6 @@ function acquireFlock(lockPath: string, script: string, pid: number, timeoutMs =
   return { lockPath, release: () => h.release() };
 }
 
-function acquirePidLock(lockPath: string, pid: number, cmd: string, entryHint: string): WorkerLock | null {
-  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-  for (let i = 0; i < 3; i++) {
-    try {
-      const fd = fs.openSync(lockPath, 'wx');
-      try { fs.writeSync(fd, `${pid} ${cmd}\n`); } finally { fs.closeSync(fd); }
-      const h: Holder = { lockPath, released: false, release() { releaseHolder(h); try { fs.unlinkSync(lockPath); } catch { /* ignore */ } } };
-      installReleaseHooks(h);
-      return { lockPath, release: () => h.release() };
-    } catch (e) {
-      const err = e as NodeJS.ErrnoException;
-      if (err.code !== 'EEXIST') throw e;
-      const holder = lockHolderPid(lockPath);
-      if (holder && pidHoldsLiveWorker(holder, entryHint)) return null;
-      try { fs.unlinkSync(lockPath); } catch { /* retry */ }
-    }
-  }
-  return null;
-}
-
 /** Try to take the exclusive live-worker lock. Returns null if another live worker holds it. */
 export function tryAcquireLiveWorkerLock(opts: {
   lockPath: string;
@@ -171,7 +151,9 @@ export function tryAcquireLiveWorkerLock(opts: {
     }
     return null;
   }
-  return acquirePidLock(opts.lockPath, pid, cmd, entryHint);
+  // The pid-file fallback (open wx + unlink stale) raced: two processes could
+  // unlink each other's newly created lock and both start. The flock helper is required.
+  return null;
 }
 
 /** Take the lock or exit(0) before any trading init. */

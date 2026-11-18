@@ -1,0 +1,2 @@
+{"event":"close","network":"bnb","token":"Jacket","pnlUsd":15.2,"pnlPct":23.5,"sizeUsd":20,"ts":"2026-11-17T16:20:00.000Z","reason":"take-profit"}
+{"event":"close","network":"base","token":"Fizz","pnlUsd":-4.1,"pnlPct":-8.2,"sizeUsd":20,"ts":"2026-11-17T16:22:00.000Z","reason":"stop"}

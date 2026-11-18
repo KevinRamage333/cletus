@@ -6,7 +6,9 @@ import { AGE_ATTESTATION_VERSION } from '@/lib/age';
 import { FINANCIAL_CONSENT_VERSION } from '@/lib/financial-consent';
 import { validateWalletSetup } from '@/lib/onboarding';
 import { getSessionSecret } from '@/lib/session';
-import { verifySiwsResponse } from '@/lib/siws';
+import { parseSiwsMessage, verifySiwsResponse } from '@/lib/siws';
+import { consumeNonce } from '@/lib/withdraw-nonce';
+import { walletConnectEnabled } from '@/lib/wallet-flag';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +29,7 @@ export async function POST(req: Request) {
   );
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
+  if (v.source === 'connected' && !walletConnectEnabled()) return NextResponse.json({ error: 'wallet connect is disabled; continue in paper mode' }, { status: 403 });
   if (v.source === 'connected') {
     const err = await verifySiwsResponse({
       message: String(body.message),
@@ -37,6 +40,9 @@ export async function POST(req: Request) {
       secret: getSessionSecret(),
     });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
+    const f = parseSiwsMessage(String(body.message));
+    const fresh = f ? await consumeNonce('onboarding-siws', f.nonce, u.id, Date.parse(f.expirationTime)) : false;
+    if (!fresh) return NextResponse.json({ error: 'sign-in challenge was already used; request a new one' }, { status: 400 });
   }
 
   const now = new Date();

@@ -6,6 +6,7 @@
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { PublicKey } from '@solana/web3.js';
+import { SITE_HOST, APP_HOST } from './site';
 
 export const SIWS_VERSION = '1';
 export const SIWS_CHAIN = 'mainnet';
@@ -198,6 +199,9 @@ export async function verifySiwsResponse(opts: {
   if (fields.address !== opts.address) return 'sign-in message address does not match the wallet';
   if (fields.nonce !== claims.nonce) return 'sign-in message nonce does not match the challenge';
   if (fields.domain !== claims.domain) return 'sign-in message domain does not match the challenge';
+  if (fields.uri !== claims.uri) return 'sign-in message URI does not match the challenge';
+  const iat = Date.parse(fields.issuedAt);
+  if (!Number.isFinite(iat) || Math.abs(Math.floor(iat / 1000) - claims.iat) > 5) return 'sign-in message issue time does not match the challenge';
   if (fields.statement !== SIWS_STATEMENT) return 'sign-in message statement was altered';
   if (fields.version !== SIWS_VERSION || fields.chainId !== SIWS_CHAIN) return 'unsupported sign-in message version';
   const exp = Date.parse(fields.expirationTime);
@@ -210,8 +214,14 @@ export async function verifySiwsResponse(opts: {
 export function allowedSiwsHost(host: string, env: Record<string, string | undefined> = process.env): boolean {
   const raw = host.trim().toLowerCase().replace(/:\d+$/, '');
   if (!raw) return false;
-  const allowed = new Set<string>(['localhost', '127.0.0.1', 'cletusai.xyz', 'www.cletusai.xyz', 'cletusdefi.xyz', 'www.cletusdefi.xyz', 'cletus-autonomous-trader.vercel.app']);
-  for (const key of ['NEXT_PUBLIC_SITE_URL', 'VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_URL']) {
+  const allowed = new Set<string>([
+    'localhost', '127.0.0.1',
+    SITE_HOST, `www.${SITE_HOST}`, APP_HOST,
+    'cletusai.xyz', 'www.cletusai.xyz',
+    'cletusdefi.xyz', 'www.cletusdefi.xyz',
+    'cletus-autonomous-trader.vercel.app',
+  ]);
+  for (const key of ['NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_APP_URL', 'VERCEL_PROJECT_PRODUCTION_URL', 'VERCEL_URL']) {
     const v = env[key]?.trim();
     if (!v) continue;
     try { allowed.add(new URL(v.includes('://') ? v : `https://${v}`).host.toLowerCase()); } catch { allowed.add(v.toLowerCase()); }
@@ -219,7 +229,7 @@ export function allowedSiwsHost(host: string, env: Record<string, string | undef
   for (const d of (env.SIWS_ALLOWED_HOSTS ?? '').split(',')) if (d.trim()) allowed.add(d.trim().toLowerCase());
   if (allowed.has(raw)) return true;
   // Vercel preview / alias hostnames for this project only.
-  if (/^cletus-autonomous-trader[a-z0-9-]*-cletus1\.vercel\.app$/.test(raw)) return true;
+  if (/^(cletus-autonomous-trader|cletus-redesign-preview)[a-z0-9-]*-cletus1\.vercel\.app$/.test(raw)) return true;
   return false;
 }
 

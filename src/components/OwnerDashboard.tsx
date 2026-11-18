@@ -6,6 +6,7 @@ import OwnerFundsPanel from './OwnerFundsPanel';
 import OwnerKolPanel from './OwnerKolPanel';
 import ScanningNowPanel from './ScanningNowPanel';
 import type { OwnerStatusPayload } from '@/lib/owner-status';
+import OwnersDesk from './OwnersDesk';
 import { KOL_TRADING_WALLET } from '@/lib/owner-withdraw-queue';
 
 const usd = (n: number | null | undefined, d = 2) => (n == null ? '—' : `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })}`);
@@ -63,12 +64,14 @@ export default function OwnerDashboard({ onSignOut }: { onSignOut: () => void })
       <div className="flex flex-wrap items-center gap-2">
         <img src="/cletus-logo.png" alt="" className="w-8 h-8 rounded-full" />
         <div>
-          <div className="gold-text font-bold text-xl leading-none">Owner desk</div>
+          <div className="gold-text font-bold text-xl leading-none">The Owner&apos;s Desk</div>
           <div className="text-[11px] text-white/45 font-mono">Main {short(o.tradingWallet)} · KOL {short(kolWallet)} · source {data.source}{data.snapshotAgeMs != null ? ` · snapshot ${Math.round(data.snapshotAgeMs / 1000)}s` : ''}</div>
         </div>
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-300">OWNER</span>
         <button type="button" className="btn small ml-auto" onClick={async () => { await fetch('/api/owner/logout', { method: 'POST', credentials: 'include' }); onSignOut(); }}>Sign out</button>
       </div>
+
+      <OwnersDesk onAuthLost={onSignOut} />
 
       {hasSim && (
         <div>

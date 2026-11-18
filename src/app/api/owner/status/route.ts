@@ -6,7 +6,7 @@ import { buildOwnerStatus } from '@/lib/owner-status';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const sess = await verifyOwnerSession(cookies().get(OWNER_COOKIE)?.value);
+  const sess = await verifyOwnerSession((await cookies()).get(OWNER_COOKIE)?.value);
   if (!sess) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   try {
     const payload = await buildOwnerStatus();

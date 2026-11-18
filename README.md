@@ -6,6 +6,10 @@ Cletus scans Solana micro-caps on live market data, scores them with 8 self-lear
 
 > Not financial advice. Micro-cap tokens are extremely risky, and losses can be total. Nothing here promises or projects returns.
 
+## Roadmap
+See [ROADMAP.md](./ROADMAP.md) for what is shipped, in progress, next, and the longer vision. Live trading is not enabled; the project is simulation-first.
+
+
 ## Stack
 Next.js 14 (App Router) + TypeScript · @solana/web3.js · Helius RPC + WebSocket + DAS (FluxRPC backup with automatic failover) · Jupiter Swap API V2 (Meta-Aggregator `/order` + `/execute`) and Price API V3 · DexScreener · RugCheck · Prisma on PostgreSQL 17 (self-hosted, SSL-only; SQLite optional for dev; see docs/DATABASE_PLAN.md) · Brain: Gemini by Google (default) → Grok by xAI → offline mock.
 

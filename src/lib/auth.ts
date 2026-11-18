@@ -24,7 +24,7 @@ export async function setSessionCookie(res: NextResponse, u: User) {
 }
 
 export async function getSessionUser(): Promise<User | null> {
-  const claims = await verifySession(cookies().get(SESSION_COOKIE)?.value);
+  const claims = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!claims) return null;
   return prisma.user.findUnique({ where: { id: claims.uid } });
 }

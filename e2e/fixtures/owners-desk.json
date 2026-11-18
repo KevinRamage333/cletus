@@ -1,0 +1,48 @@
+{
+  "title": "The Owner's Desk",
+  "latestProgress": {
+    "id": 1,
+    "savedAt": "2026-11-17T16:00:00.000Z",
+    "workstream": "redesign",
+    "gitRef": "redesign/gold-ecosystem",
+    "summary": "Security audit complete. Paper trading starts at $150. Live trading stays off."
+  },
+  "progress": [
+    {
+      "id": 1,
+      "savedAt": "2026-11-17T16:00:00.000Z",
+      "workstream": "redesign",
+      "gitRef": "redesign/gold-ecosystem",
+      "summary": "Security audit complete. Paper trading starts at $150. Live trading stays off."
+    }
+  ],
+  "paper": {
+    "startingCapitalUsd": 150,
+    "equityUsd": 163.4,
+    "cashUsd": 113.4,
+    "realizedPnlUsd": 11.1,
+    "unrealizedPnlUsd": 2.3,
+    "pnlVsStartUsd": 13.4,
+    "pnlVsStartPct": 8.9333333333,
+    "openCount": 1,
+    "closedCount": 2,
+    "winCount": 1,
+    "winRatePct": 50,
+    "trades": [
+      {"source": "fixture", "network": "bnb", "token": "Jacket", "status": "closed", "pnlUsd": 15.2, "pnlPct": 23.5, "sizeUsd": 20, "openedAt": "2026-11-17T15:00:00.000Z", "closedAt": "2026-11-17T15:40:00.000Z", "exitReason": "take-profit"},
+      {"source": "fixture", "network": "base", "token": "Fizz", "status": "closed", "pnlUsd": -4.1, "pnlPct": -8.2, "sizeUsd": 20, "openedAt": "2026-11-17T15:10:00.000Z", "closedAt": "2026-11-17T15:42:00.000Z", "exitReason": "stop"},
+      {"source": "fixture", "network": "base", "token": "STAR", "status": "open", "pnlUsd": 2.3, "pnlPct": 10, "sizeUsd": 20, "openedAt": "2026-11-17T16:00:00.000Z", "closedAt": null, "exitReason": null}
+    ],
+    "source": "synced_files",
+    "publishedAt": "2026-11-17T16:30:00.000Z",
+    "empty": false,
+    "emptyMessage": "No paper trades yet. The $150 simulation book is waiting for its first real trade."
+  },
+  "docs": [
+    {"path": "/workspace/kr-cletus/docs/SECURITY_AUDIT.md", "workstream": "docs", "sizeBytes": 2381, "sha256": "abc", "modifiedAt": "2026-11-17T16:00:00.000Z", "syncedAt": "2026-11-17T16:30:00.000Z"},
+    {"path": "/workspace/plans/redesign-progress.md", "workstream": "plans", "sizeBytes": 1194, "sha256": "def", "modifiedAt": "2026-11-17T16:00:00.000Z", "syncedAt": "2026-11-17T16:30:00.000Z"}
+  ],
+  "images": [
+    {"path": "/workspace/kr-cletus/screenshots/redesign/desktop-home.png", "workstream": "screenshots", "contentType": "image/png", "sizeBytes": 100, "sha256": "ghi", "hasImage": true, "modifiedAt": null, "syncedAt": "2026-11-17T16:30:00.000Z", "src": "/api/owner/desk/image?path=%2Fworkspace%2Fkr-cletus%2Fscreenshots%2Fredesign%2Fdesktop-home.png"}
+  ]
+}

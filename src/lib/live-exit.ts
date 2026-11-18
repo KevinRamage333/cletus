@@ -10,24 +10,27 @@
 /** Exits that protect capital: widen slippage on each failed attempt so the position actually gets out. */
 export const PROTECTIVE_EXIT_REASONS = new Set(['stop_loss', 'kill_switch', 'stale_price', 'break_even', 'trailing_stop', 'time_exit', 'stale_exit', 'dev_dump', 'whale_exit']);
 
-export const DEFAULT_EXIT_SLIPPAGE_LADDER = [300, 800, 1500, 3000];
+/** Hard ceiling on stop-sell / protective-exit slippage (15%). A fast dump must not fill with unbounded slippage. */
+export const MAX_EXIT_SLIPPAGE_BPS = 1500;
 
-export function parseLadder(raw: string | undefined, fallback = DEFAULT_EXIT_SLIPPAGE_LADDER): number[] {
-  if (!raw) return fallback;
-  const v = raw.split(',').map((x) => Math.round(Number(x.trim()))).filter((x) => Number.isFinite(x) && x > 0);
-  return v.length ? v : fallback;
+export const DEFAULT_EXIT_SLIPPAGE_LADDER = [300, 800, 1500];
+
+export function parseLadder(raw: string | undefined, fallback = DEFAULT_EXIT_SLIPPAGE_LADDER, maxBps = MAX_EXIT_SLIPPAGE_BPS): number[] {
+  if (!raw) return fallback.map((x) => Math.min(x, maxBps));
+  const v = raw.split(',').map((x) => Math.round(Number(x.trim()))).filter((x) => Number.isFinite(x) && x > 0 && x <= maxBps);
+  return v.length ? v : fallback.map((x) => Math.min(x, maxBps));
 }
 
 /**
  * Slippage for a live sell. Protective exits climb the ladder by failed-attempt count
  * (attempt 0 = first try). Other exits (take profit) use the normal slippage, but still
- * widen along the ladder once they have failed.
+ * widen along the ladder once they have failed. Always capped at maxBps.
  */
-export function exitSlippageBps(reason: string, failedAttempts: number, baseBps: number, ladder = DEFAULT_EXIT_SLIPPAGE_LADDER): number {
+export function exitSlippageBps(reason: string, failedAttempts: number, baseBps: number, ladder = DEFAULT_EXIT_SLIPPAGE_LADDER, maxBps = MAX_EXIT_SLIPPAGE_BPS): number {
   const protective = PROTECTIVE_EXIT_REASONS.has(reason) || reason.startsWith('flow_') || reason.includes('whale') || reason.includes('dev');
   const step = ladder[Math.min(Math.max(0, failedAttempts), ladder.length - 1)];
-  if (protective) return Math.max(baseBps, step);
-  return failedAttempts === 0 ? baseBps : Math.max(baseBps, step);
+  const raw = protective || failedAttempts > 0 ? Math.max(baseBps, step) : baseBps;
+  return Math.min(Math.max(0, raw), maxBps);
 }
 
 export function isNoRouteError(msg: string): boolean {

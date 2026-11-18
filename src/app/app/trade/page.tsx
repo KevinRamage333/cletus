@@ -11,6 +11,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import TokenChart from '@/components/TokenChart';
+import CletusPaperBook from '@/components/paper/CletusPaperBook';
+import { pnlClass, toNumOrNull } from '@/lib/display-number';
 import { Money, ScreenStatus } from '@/components/ScreenStatus';
 import { refreshedLabel, screenState } from '@/lib/figure';
 
@@ -255,6 +257,7 @@ export default function ActiveTradingPage() {
 
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-2xl mx-auto space-y-4">
+          <CletusPaperBook variant="compact" />
           <ScreenStatus
             state={actionError ? 'error' : screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
             error={actionError ?? error}
@@ -380,7 +383,7 @@ export default function ActiveTradingPage() {
                   {session.mode === 'paper'
                     ? 'Paper trades are simulated and have no on-chain transactions. Every fill, fee and exit reason is in the engine log and in your trade-history CSV (Tax Center).'
                     : 'Live trades record their Solana transaction signatures; open them on Solscan to verify each swap.'}{' '}
-                  <a href="/tax" className="text-emerald-400 hover:underline">Export trades</a>
+                  <a href="/app/tax" className="text-emerald-400 hover:underline">Export trades</a>
                 </p>
               </div>
             </div>
@@ -499,20 +502,11 @@ export default function ActiveTradingPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div
-                          className={`font-mono font-bold ${
-                            p.pnlUsd >= 0 ? 'text-emerald-400' : 'text-red-400'
-                          }`}
-                        >
-                          {formatUsd(p.pnlUsd, true)}
+                        <div className={`font-mono font-bold ${pnlClass(p.pnlUsd)}`}>
+                          {formatUsd(Number.isFinite(p.pnlUsd) ? p.pnlUsd : null, true)}
                         </div>
-                        <div
-                          className={`text-xs font-mono ${
-                            p.pnlPercent >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'
-                          }`}
-                        >
-                          {p.pnlPercent >= 0 ? '+' : ''}
-                          {p.pnlPercent.toFixed(2)}%
+                        <div className={`text-xs font-mono ${pnlClass(p.pnlPercent)}`}>
+                          {toNumOrNull(p.pnlPercent) == null ? '—' : `${p.pnlPercent >= 0 ? '+' : ''}${p.pnlPercent.toFixed(2)}%`}
                         </div>
                         <button
                           type="button"

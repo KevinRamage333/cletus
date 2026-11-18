@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { HttpError } from '@/lib/auth';
 import {
+  anonLabelKey,
   anonymousAuthorLabel,
   collectiveFiguresVisible,
   commitPost,
@@ -52,6 +53,8 @@ const author = 'user_alice';
 const other = 'user_bob';
 
 describe('community feed rules', () => {
+  beforeAll(() => { process.env.COMMUNITY_ANON_SALT = 'test-only-anon-label-key-0123456789'; });
+
   it('keeps a new post out of the public feed until it is approved', async () => {
     const tx = new MemoryTx();
     const created = await commitPost(tx, author, 'Hello from the paper desk', null);
@@ -82,7 +85,25 @@ describe('community feed rules', () => {
     expect(tx.posts).toHaveLength(0);
   });
 
-  it('hides collective figures below five opted-in accounts', () => {
+  it('does not let a moderator review their own post', async () => {
+    const tx = new MemoryTx();
+    const created = await commitPost(tx, 'mod', 'my own announcement', null);
+    await expect(commitReview(tx, 'mod', created.id, 'APPROVED', null)).rejects.toMatchObject({ status: 403 });
+    expect(tx.events).toHaveLength(0);
+    expect(tx.posts[0].status).toBe('PENDING');
+  });
+
+  it('keys the anonymous label with a server secret and uses 8 hex chars', () => {
+    const a = anonymousAuthorLabel(author, 'first-server-secret-0123456789');
+    const b = anonymousAuthorLabel(author, 'second-server-secret-0123456789');
+    expect(a).toMatch(/^Member [0-9a-f]{8}$/);
+    expect(a).not.toBe(b);
+    expect(anonymousAuthorLabel(author, 'first-server-secret-0123456789')).toBe(a);
+    expect(() => anonLabelKey({} as NodeJS.ProcessEnv)).toThrow(HttpError);
+    expect(anonLabelKey({ SESSION_SECRET: 'session-secret-fallback-0123456789' } as unknown as NodeJS.ProcessEnv)).toBe('session-secret-fallback-0123456789');
+  });
+
+  it('hides collective figures below five contributors', () => {
     expect(collectiveFiguresVisible(4)).toBe(false);
     expect(collectiveFiguresVisible(5)).toBe(true);
   });
@@ -102,10 +123,20 @@ describe('community feed rules', () => {
     expect(sanitizePostBody('gm everyone')).toBe('gm everyone');
   });
 
+  it('allows ordinary long sentences that are not BIP-39 phrases', () => {
+    const ordinary = [
+      'This coin looks great and the team seems legit but price action today was weird',
+      'I think the market is going to keep moving sideways for a while before anything happens here',
+      'took profit on half the bag, letting the rest ride with a stop under the last higher low',
+    ];
+    for (const text of ordinary) expect(sanitizePostBody(text)).toBe(text);
+  });
+
   it('keeps thread links inside the app shell for mobile navigation', () => {
     expect(threadHref('post 1')).toBe(`${COMMUNITY_FEED_HREF}/post%201`);
-    const nav = readFileSync('src/components/BottomNav.tsx', 'utf8');
+    // The gold app shell carries the mobile tab bar and the "More" menu that links Community.
+    const nav = readFileSync('src/components/app/AppShell.tsx', 'utf8');
     expect(nav).toContain("href: '/app/community'");
-    expect(nav).toContain('md:hidden');
+    expect(nav).toContain('lg:hidden');
   });
 });

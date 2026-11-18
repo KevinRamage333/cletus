@@ -28,6 +28,24 @@ const PUBLIC_PREFIXES = ['/signup', '/api/auth/', '/api/health', '/api/live', '/
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
 PUBLIC_PREFIXES.push('/whitepaper', '/cletus-whitepaper.pdf');
 
+/** Corporate site (cletustechnology.dev) pages and the public read-only market-data API. Always public, also before the age gate. */
+export const SITE_PUBLIC_PREFIXES = ['/about', '/technology', '/features', '/roadmap', '/sponsors', '/developers', '/contact', '/legal', '/api/market/', '/api/verified', '/api/boost', '/api/listings'];
+PUBLIC_PREFIXES.push(...SITE_PUBLIC_PREFIXES);
+export function isSitePublic(pathname: string): boolean {
+  if (pathname === '/') return true;
+  return SITE_PUBLIC_PREFIXES.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p || pathname.startsWith(p + '/')));
+}
+
+/** Exact match, or a path segment under the prefix ("/owner" matches /owner, /owner/x and /owner.ext, never /ownerx). Prefixes ending in "/" match anything below; file names match exactly. */
+export function matchesPublicPrefix(pathname: string, list: readonly string[]): boolean {
+  return list.some((p) => {
+    if (p.endsWith('/')) return pathname === p.slice(0, -1) || pathname.startsWith(p);
+    if (/\.[a-z0-9]+$/i.test(p)) return pathname === p;
+    return pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '.');
+  });
+}
+export const isPublicPath = (pathname: string): boolean => matchesPublicPrefix(pathname, PUBLIC_PREFIXES);
+
 export function requiredStep(
   s: SessionClaims | null,
   currentTermsVersion: string,
@@ -56,7 +74,7 @@ export function gateDecision(
 ): GateDecision {
   if (pathname === '/' && !s) return { action: 'next' };
   if (pathname === '/demo' || pathname === '/demo/') return { action: 'next' };
-  if (PUBLIC_PREFIXES.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  if (isPublicPath(pathname)) return { action: 'next' };
   // Machine-to-machine endpoint. The route validates the cron bearer secret.
   if (pathname === '/api/cron/paper-engine') return { action: 'next' };
   const step = requiredStep(s, currentTermsVersion, currentRiskVersion, currentFinancialConsentVersion, currentAgeVersion);
@@ -82,12 +100,16 @@ export function gateDecision(
 /** Demo-mode gate (public preview without a database). Pure; unit-tested. */
 const DEMO_PUBLIC = ['/onboarding/age', '/api/onboarding/age', '/demo', '/live', '/owner', '/legal', '/api/demo/', '/api/live', '/api/owner', '/api/internal/owner-snapshot', '/api/health', '/_next/', '/favicon', '/icon', '/robots.txt',
   '/cletus-hero.jpg', '/cletus-avatar.png', '/cletus-logo.png', '/og-image.jpg', '/apple-touch-icon.png'];
-DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf');
+DEMO_PUBLIC.push('/whitepaper', '/cletus-whitepaper.pdf', ...SITE_PUBLIC_PREFIXES);
+/** App screens that work without a database (public market data, local paper trading, connect-only wallets). Exact paths. */
+export const DEMO_APP_ROUTES = ['/app', '/app/signals', '/app/paper', '/app/portfolio', '/app/tax', '/app/audit', '/app/community', '/app/wallet', '/app/feed', '/app/verified', '/app/boost'];
 export type DemoDecision = { action: 'next' } | { action: 'redirect'; to: string } | { action: 'soon' };
 export function demoGateDecision(pathname: string): DemoDecision {
-  if (pathname === '/' || pathname === '/signup') return { action: 'redirect', to: '/demo' };
-  if (DEMO_PUBLIC.some((p) => pathname === p.replace(/\/$/, '') || pathname.startsWith(p))) return { action: 'next' };
+  if (pathname === '/') return { action: 'next' };
+  if (pathname === '/signup') return { action: 'redirect', to: '/app' };
+  if (DEMO_APP_ROUTES.includes(pathname.replace(/\/$/, '') || '/')) return { action: 'next' };
+  if (matchesPublicPrefix(pathname, DEMO_PUBLIC)) return { action: 'next' };
   if (/\.(png|jpe?g|svg|webp|ico|txt|xml|webmanifest|pdf)$/.test(pathname)) return { action: 'next' };
   if (pathname.startsWith('/api/')) return { action: 'soon' };
-  return { action: 'redirect', to: `/demo?soon=${encodeURIComponent(pathname)}` };
+  return { action: 'redirect', to: `/app?soon=${encodeURIComponent(pathname)}` };
 }

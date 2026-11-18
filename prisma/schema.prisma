@@ -292,7 +292,8 @@ model CommunityOptIn {
 model CommunityPost {
   id               String   @id @default(cuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Restrict: deleting a member must not erase posts that carry moderation history.
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   parentId         String?
   parent           CommunityPost?  @relation("CommunityThread", fields: [parentId], references: [id], onDelete: Cascade)
   replies          CommunityPost[] @relation("CommunityThread")
@@ -313,11 +314,12 @@ model CommunityPost {
   @@schema("app")
 }
 
-/// Append-only moderation decisions. A post's status change and its event are written together.
+/// Append-only moderation decisions (enforced by trigger in migration 20261118090000). A post's status change and its event are written together.
 model CommunityModerationEvent {
   id               String        @id @default(cuid())
   postId           String
-  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  /// Restrict: a post with a moderation decision cannot be deleted. A DB trigger also blocks UPDATE/DELETE on events.
+  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Restrict)
   moderatorUserId  String
   action           String // APPROVED | REJECTED
   reason           String?
@@ -478,5 +480,55 @@ model DeveloperVerificationEvent {
   reason String
   createdAt DateTime @default(now())
   @@index([applicationId, createdAt])
+  @@schema("app")
+}
+
+model WithdrawConfirmNonce {
+  id        String   @id // sha256 of the confirmation nonce
+  uid       String
+  expiresAt DateTime
+  usedAt    DateTime @default(now())
+
+  @@index([expiresAt])
+  @@schema("app")
+}
+
+/// Cletus Verified: automated developer verification records (display only; never read by the engine).
+model CletusVerification {
+  id        String    @id
+  network   String
+  token     String
+  name      String?
+  symbol    String?
+  wallet    String
+  role      String?
+  status    String    // verified | not_verified
+  reasons   Json
+  checks    Json
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([network, token, createdAt])
+  @@index([status, expiresAt])
+  @@schema("app")
+}
+
+/// Token Boost: paid/owner-granted promotion on the Signals board (display only; never read by the engine).
+model TokenBoost {
+  id        String   @id
+  network   String
+  token     String
+  tier      String   // 12h | 24h | 7d
+  startsAt  DateTime
+  expiresAt DateTime
+  source    String   // owner_grant | paid
+  status    String   @default("active") // active | cancelled
+  createdBy String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([network, token, expiresAt])
+  @@index([expiresAt])
   @@schema("app")
 }
