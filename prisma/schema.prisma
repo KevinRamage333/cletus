@@ -292,7 +292,8 @@ model CommunityOptIn {
 model CommunityPost {
   id               String   @id @default(cuid())
   userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Restrict: deleting a member must not erase posts that carry moderation history.
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   parentId         String?
   parent           CommunityPost?  @relation("CommunityThread", fields: [parentId], references: [id], onDelete: Cascade)
   replies          CommunityPost[] @relation("CommunityThread")
@@ -313,11 +314,12 @@ model CommunityPost {
   @@schema("app")
 }
 
-/// Append-only moderation decisions. A post's status change and its event are written together.
+/// Append-only moderation decisions (enforced by trigger in migration 20261118090000). A post's status change and its event are written together.
 model CommunityModerationEvent {
   id               String        @id @default(cuid())
   postId           String
-  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  /// Restrict: a post with a moderation decision cannot be deleted. A DB trigger also blocks UPDATE/DELETE on events.
+  post             CommunityPost @relation(fields: [postId], references: [id], onDelete: Restrict)
   moderatorUserId  String
   action           String // APPROVED | REJECTED
   reason           String?

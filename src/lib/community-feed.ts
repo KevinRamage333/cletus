@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { HttpError } from './auth';
@@ -56,12 +56,21 @@ export const POST_WINDOW_MS = 10 * 60 * 1000;
 export const POST_GAP_MS = 3000;
 export const REPORT_FLAG_THRESHOLD = 3;
 
-export function collectiveFiguresVisible(optedInAccounts: number): boolean {
-  return Number.isFinite(optedInAccounts) && optedInAccounts >= COLLECTIVE_PRIVACY_THRESHOLD;
+/** `contributors` is the number of distinct people whose closed trades are in the aggregate, not the opt-in count. */
+export function collectiveFiguresVisible(contributors: number): boolean {
+  return Number.isFinite(contributors) && contributors >= COLLECTIVE_PRIVACY_THRESHOLD;
 }
 
-export function anonymousAuthorLabel(userId: string): string {
-  const hex = createHash('sha256').update(`cletus-community-anon-v1:${userId}`).digest('hex').slice(0, 4);
+/** Server secret for anonymous labels. COMMUNITY_ANON_SALT, else SESSION_SECRET (always set where sessions work). */
+export function anonLabelKey(env: NodeJS.ProcessEnv = process.env): string {
+  const key = String(env.COMMUNITY_ANON_SALT || env.SESSION_SECRET || '');
+  if (key.length < 16) throw new HttpError(503, 'Community labels are not configured on this server.');
+  return key;
+}
+
+/** Keyed (HMAC-SHA256) so a known user id cannot be checked against a label; 8 hex chars keeps collisions rare. */
+export function anonymousAuthorLabel(userId: string, key = anonLabelKey()): string {
+  const hex = createHmac('sha256', key).update(`cletus-community-anon-v2:${userId}`).digest('hex').slice(0, 8);
   return `Member ${hex}`;
 }
 
@@ -140,6 +149,7 @@ export async function commitReview(tx: CommunityTx, moderatorId: string, postId:
   const post = await tx.lockPost(postId);
   if (!post) throw new HttpError(404, 'Post not found.');
   if (post.status !== 'PENDING') throw new HttpError(409, 'This post has already been reviewed.');
+  if (post.userId === moderatorId) throw new HttpError(403, 'Moderators cannot review their own posts.');
   await tx.writeDecision({ postId, moderatorId, action, reason, at: now });
 }
 
@@ -230,6 +240,9 @@ export async function setCommunityOptIn(userId: string, enabled: boolean) {
   return { optedIn: row.optedIn, updatedAt: row.updatedAt.toISOString() };
 }
 
+/** replyCount only counts APPROVED replies, so pending or rejected replies are not revealed. */
+const COUNTS = { _count: { select: { replies: { where: { status: 'APPROVED' } }, reports: true } } } satisfies Prisma.CommunityPostInclude;
+
 async function withCounts(rows: Array<{ id: string; userId: string; parentId: string | null; body: string; status: string; moderationReason: string | null; createdAt: Date; flagged: boolean; _count?: { replies: number; reports: number } }>): Promise<PostRecord[]> {
   return rows.map((row) => ({
     id: row.id,
@@ -252,13 +265,13 @@ export async function loadCommunityFeed(user: { id: string; isAdmin: boolean; ba
       where: { status: 'APPROVED', parentId: null },
       orderBy: { createdAt: 'desc' },
       take: 30,
-      include: { _count: { select: { replies: true, reports: true } } },
+      include: COUNTS,
     }),
     prisma.communityPost.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       take: 30,
-      include: { _count: { select: { replies: true, reports: true } } },
+      include: COUNTS,
     }),
   ]);
   const approved = (await withCounts(roots)).map((row) => toFeedPost(row, user.id)).filter((row): row is FeedPost => Boolean(row));
@@ -272,14 +285,14 @@ export async function loadCommunityFeed(user: { id: string; isAdmin: boolean; ba
 }
 
 export async function loadThread(user: { id: string }, postId: string) {
-  const rootRow = await prisma.communityPost.findUnique({ where: { id: postId }, include: { _count: { select: { replies: true, reports: true } } } });
+  const rootRow = await prisma.communityPost.findUnique({ where: { id: postId }, include: COUNTS });
   if (!rootRow || rootRow.parentId) throw new HttpError(404, 'Thread not found.');
   const root = toFeedPost((await withCounts([rootRow]))[0], user.id);
   if (!root) throw new HttpError(404, 'Thread not found.');
   const replyRows = await prisma.communityPost.findMany({
     where: { parentId: postId, OR: [{ status: 'APPROVED' }, { userId: user.id }] },
     orderBy: { createdAt: 'asc' },
-    include: { _count: { select: { replies: true, reports: true } } },
+    include: COUNTS,
   });
   const replies = (await withCounts(replyRows)).map((row) => toFeedPost(row, user.id)).filter((row): row is FeedPost => Boolean(row));
   const [opt, account] = await Promise.all([
@@ -310,7 +323,7 @@ export async function listModerationQueue(moderator: { id: string; isAdmin: bool
     where: { status: 'PENDING' },
     orderBy: { createdAt: 'asc' },
     take: 50,
-    include: { _count: { select: { replies: true, reports: true } } },
+    include: COUNTS,
   });
   return { posts: (await withCounts(rows)).map(toQueuePost) };
 }
@@ -320,7 +333,8 @@ export async function reportCommunityPost(userId: string, postId: string, reason
   const note = cleanText(reason, 300);
   if (!note) throw new HttpError(400, 'Say what is wrong with the post.');
   const post = await prisma.communityPost.findUnique({ where: { id: postId }, select: { id: true, userId: true, status: true } });
-  if (!post || post.status === 'REJECTED') throw new HttpError(404, 'Post not found.');
+  // Only approved posts are visible to members, so only approved posts can be reported.
+  if (!post || post.status !== 'APPROVED') throw new HttpError(404, 'Post not found.');
   if (post.userId === user.id) throw new HttpError(400, 'You cannot report your own post.');
   const result = await prisma.$transaction(async (tx) => {
     const adapter = prismaTx(tx);
