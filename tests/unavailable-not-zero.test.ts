@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isolateLiveWatch, liveWatchFromAccountStatus, numOrNull, sumKnown } from '@/lib/live-watch';
+import { isolateLiveWatch, liveWatchFromAccountStatus, numOrNull, sumKnown, sumTodayPnl } from '@/lib/live-watch';
 import { combinedWallets, emptyKolDesk } from '@/lib/owner-kol';
 
 vi.mock('@/lib/live-trades', async (orig) => ({ ...(await orig<typeof import('@/lib/live-trades')>()), readLiveTrades: () => [] }));
-import { applyLogAndChain } from '@/lib/owner-status';
+import { applyLogAndChain, emptyWatch } from '@/lib/owner-status';
 import { buildSnapshot } from '@/lib/paper-snapshot';
 
 describe('missing figures stay unavailable, never $0 (Audit N5/N8)', () => {
@@ -91,5 +91,32 @@ describe('missing sell P&L keeps realized unknown (Audit N8 residuals)', () => {
     const c = combinedWallets({ sol: 1, equityUsd: 100, realizedPnl: null, totalPnl: null, openAll: [] }, emptyKolDesk());
     expect(c.realizedPnl).toBeNull();
     expect(c.totalPnl).toBeNull();
+  });
+});
+
+describe('owner-only leftovers stay unknown, never $0 (Audit rereview3 N8 a-c)', () => {
+  const now = new Date('2026-11-18T18:00:00.000Z'); // midday America/Chicago
+
+  it("today's P&L is null when a sell closed today has no P&L, and ignores earlier days", () => {
+    expect(sumTodayPnl([{ pnlUsd: 2, at: '2026-11-18T16:00:00.000Z' }, { pnlUsd: null, at: '2026-11-18T17:00:00.000Z' }], now)).toBeNull();
+    expect(sumTodayPnl([{ pnlUsd: 2, at: '2026-11-18T16:00:00.000Z' }, { pnlUsd: null, at: '2026-11-10T17:00:00.000Z' }], now)).toBe(2);
+    expect(sumTodayPnl([], now)).toBe(0);
+  });
+
+  it('combined USD and SOL are unknown when the KOL desk exists but its balance is missing', () => {
+    const c = combinedWallets({ sol: 1, equityUsd: 100, realizedPnl: 1, totalPnl: 1, openAll: [] }, emptyKolDesk());
+    expect(c.usd).toBeNull();
+    expect(c.sol).toBeNull();
+    const mainOnly = combinedWallets({ sol: 1, equityUsd: 100, realizedPnl: 1, totalPnl: 1, openAll: [] }, null);
+    expect(mainOnly.usd).toBe(100);
+    expect(mainOnly.sol).toBe(1);
+  });
+
+  it('the empty owner watch (no snapshot, no log) reports P&L as unknown', () => {
+    const w = emptyWatch('live', null);
+    expect(w.realizedPnl).toBeNull();
+    expect(w.unrealizedPnl).toBeNull();
+    expect(w.totalPnl).toBeNull();
+    expect(w.todayPnl).toBeNull();
   });
 });

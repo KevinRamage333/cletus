@@ -331,11 +331,13 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
   }, recordedFromLiveEvents(events, true), onchain?.equityUsd ?? watch.equityUsd ?? null), kol, halt);
 }
 
-function emptyWatch(mode: 'simulation' | 'live', onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {
+/** @internal Exported for tests. */
+export function emptyWatch(mode: 'simulation' | 'live', onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {
   return {
     asOf: new Date().toISOString(), mode, scope: 'owner', label: 'Cletus (house)',
     equityUsd: onchain?.equityUsd ?? null, sol: onchain?.sol ?? null, solPriceUsd: onchain?.solPriceUsd ?? null,
-    realizedPnl: 0, unrealizedPnl: 0, totalPnl: 0, todayPnl: 0, winRate: null, wins: 0, losses: 0, closedTrades: 0,
+    // No snapshot and no trade log: P&L is unknown, not $0.
+    realizedPnl: null, unrealizedPnl: null, totalPnl: null, todayPnl: null, winRate: null, wins: 0, losses: 0, closedTrades: 0,
     open: null, openAll: [], feed: [], equityCurve: onchain?.equityUsd != null ? [{ t: new Date().toISOString(), equityUsd: onchain.equityUsd }] : [],
     halted: false, paused: false, haltReason: null, chartApiBase: '/api/owner/chart', simulatedBadge: mode !== 'live',
   };

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
-import { collectivePnl, tokensPerNetwork } from '@/lib/community-overview';
-import { COMMUNITY_PAPER_SCOPE, distinctPeople, flooredCount } from '@/lib/community-scope';
-import { MIN_ACCOUNTS_PER_POINT, cumulativePnlSeries } from '@/lib/live-chart';
+import { publishedCommunityPnl, tokensPerNetwork } from '@/lib/community-overview';
+import { communityPaperScope, distinctPeople, flooredCount, ELIGIBILITY_SELECT, pnlRows } from '@/lib/community-scope';
+import { MIN_ACCOUNTS_PER_POINT } from '@/lib/live-chart';
 export const dynamic = 'force-dynamic';
 
-const scope = COMMUNITY_PAPER_SCOPE;
+type Scope = ReturnType<typeof communityPaperScope>;
 
-async function communityMostTraded(top: Array<{ mint: string; _count: { _all: number } }>) {
+async function communityMostTraded(scope: Scope, top: Array<{ mint: string; _count: { _all: number } }>) {
   const best = top[0];
   if (!best) return null;
   const [members, sym] = await Promise.all([
@@ -23,32 +23,35 @@ async function communityMostTraded(top: Array<{ mint: string; _count: { _all: nu
  * Aggregate community figures from recorded paper trades of opted-in, non-banned members only
  * (the same scope as /api/community/collective-pnl). Every count and P&L figure needs at least
  * five distinct people behind it; below that it is null (hidden), never a small number or $0.
+ * P&L figures are whole dollars from finished UTC days only and change only when a new finished day with 5+ members is published.
  */
 export async function GET() {
   try {
     await requireOnboardedUser();
+    const scope = communityPaperScope();
     const person = { account: { select: { userId: true } } } as const;
     const [participantRows, activeRows, closed, tokenRows, recent] = await Promise.all([
       prisma.position.findMany({ where: scope, distinct: ['accountId'], select: person }),
       prisma.position.findMany({ where: { ...scope, status: 'open' }, distinct: ['accountId'], select: person }),
-      prisma.position.findMany({ where: { ...scope, status: 'closed', pnlUsd: { not: null } }, select: { pnlUsd: true, accountId: true, closedAt: true, account: { select: { userId: true } } } }),
+      prisma.position.findMany({ where: { ...scope, status: 'closed', pnlUsd: { not: null } }, select: { pnlUsd: true, accountId: true, closedAt: true, account: { select: ELIGIBILITY_SELECT } } }),
       prisma.position.findMany({ where: scope, distinct: ['network', 'mint'], select: { network: true, mint: true } }),
       // Exact counts over the scoped paper positions (no take cap), most traded Solana token first.
       prisma.position.groupBy({ by: ['mint'], where: { ...scope, network: 'solana' }, _count: { _all: true }, orderBy: { _count: { mint: 'desc' } }, take: 1 }),
     ]);
     const participants = distinctPeople(participantRows);
-    const contributors = distinctPeople(closed);
-    const pnl = collectivePnl(closed.map((c) => c.pnlUsd), contributors);
+    // Totals, split and chart all come from the same published buckets (L-103a).
+    const pnl = publishedCommunityPnl(pnlRows(closed));
     return NextResponse.json({
       connected: true, mode: 'paper', updatedAt: new Date().toISOString(),
       participants: flooredCount(participants),
       activeNow: flooredCount(distinctPeople(activeRows)),
-      collectivePnl: pnl,
-      // Same privacy floor as the total: no curve until enough members contribute.
-      // Each daily point must cover >= MIN_ACCOUNTS_PER_POINT distinct members (quiet days roll forward).
-      pnlSeries: pnl.suppressed ? [] : cumulativePnlSeries(closed, 86_400, MIN_ACCOUNTS_PER_POINT),
+      collectivePnl: pnl.suppressed
+        ? { suppressed: true, minContributors: pnl.minContributors }
+        : { suppressed: false, netUsd: pnl.netUsd, gainsUsd: pnl.gainsUsd, lossesUsd: pnl.lossesUsd, winningTrades: pnl.winningTrades, losingTrades: pnl.losingTrades, closedTrades: pnl.closedTrades },
+      // Each daily point covers >= 5 distinct members (quiet days roll forward); the last point equals netUsd.
+      pnlSeries: pnl.series,
       // Hidden with the totals, and only shown when enough distinct members traded it.
-      mostTraded: pnl.suppressed ? null : await communityMostTraded(recent as Array<{ mint: string; _count: { _all: number } }>),
+      mostTraded: pnl.suppressed ? null : await communityMostTraded(scope, recent as Array<{ mint: string; _count: { _all: number } }>),
       // Token counts are only published once the group itself is large enough.
       tokensPerNetwork: participants >= MIN_ACCOUNTS_PER_POINT ? tokensPerNetwork(tokenRows) : null,
     }, { headers: { 'Cache-Control': 'no-store' } });

@@ -221,6 +221,9 @@ export function recordedFromLiveEvents(events: LiveTradeEvent[], house = true): 
   }));
 }
 
+/** Closed positions the public /live feed may read: the operator's house account only, never members' trades. */
+export const PUBLIC_LIVE_POSITIONS_WHERE = { status: 'closed', account: { isOperator: true } } as const;
+
 export function recordedFromClosedPositions(rows: Array<{
   id: string; symbol: string; closedAt?: Date | string | null; pnlUsd?: number | null; pnlPct?: number | null;
   exitTx?: string | null; entryTx?: string | null; simulated?: boolean; isOperator?: boolean;

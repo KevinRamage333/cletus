@@ -68,7 +68,8 @@ export interface LiveWatchModel {
   /** null when any open position's P&L is missing from the payload. */
   unrealizedPnl: number | null;
   totalPnl: number | null;
-  todayPnl: number;
+  /** null when a sell closed today has no recorded P&L. */
+  todayPnl: number | null;
   winRate: number | null;
   wins: number;
   losses: number;
@@ -130,13 +131,15 @@ export function chicagoDay(iso: string, timeZone = 'America/Chicago'): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 }
 
-export function sumTodayPnl(closed: Array<{ pnlUsd?: number | null; closedAt?: string | null; at?: string }>, now = new Date(), timeZone = 'America/Chicago'): number {
+export function sumTodayPnl(closed: Array<{ pnlUsd?: number | null; closedAt?: string | null; at?: string }>, now = new Date(), timeZone = 'America/Chicago'): number | null {
   const day = chicagoDay(now.toISOString(), timeZone);
   let sum = 0;
   for (const t of closed) {
     const at = t.closedAt ?? t.at;
-    if (t.pnlUsd === null || t.pnlUsd === undefined || !at) continue;
-    if (chicagoDay(at, timeZone) === day) sum += t.pnlUsd;
+    if (!at || chicagoDay(at, timeZone) !== day) continue;
+    // A sell closed today without a recorded P&L makes today's figure unknown, not $0 for that trade.
+    if (t.pnlUsd === null || t.pnlUsd === undefined || !Number.isFinite(t.pnlUsd)) return null;
+    sum += t.pnlUsd;
   }
   return Math.round(sum * 100) / 100;
 }

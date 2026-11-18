@@ -284,6 +284,8 @@ model CommunityOptIn {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   optedIn   Boolean  @default(false)
+  /// When the member (last) opted in; null while opted out. Community P&L only counts trades closed after this (and after the account-age gate).
+  optedInAt DateTime?
   updatedAt DateTime @updatedAt
   @@schema("app")
 }
