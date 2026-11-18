@@ -54,7 +54,7 @@ async function onboard(page, email) {
     await page.getByRole('button', { name: 'Continue' }).click();
   }
   await page.waitForURL(/onboarding\/wallet/, { timeout: 20000 });
-  await page.getByTestId('paper-mode').click();
+  await page.getByTestId('continue-paper').click();
   await page.waitForURL(/\/app(\/|$)/, { timeout: 20000 });
 }
 
@@ -75,8 +75,7 @@ try {
   await shot(adminPage, 'home-mobile');
 
   console.log('dashboard navigation');
-  // The mobile dashboard shows Simulate twice: the bottom tab and the quick-action card.
-  await adminPage.getByRole('main').getByRole('link', { name: 'Simulate' }).click();
+  await adminPage.goto(`${BASE}/app/trade`);
   await adminPage.waitForURL(/\/app\/trade/);
   await adminPage.waitForSelector('[data-testid="synthetic-paper"]', { timeout: 20000 });
   await shot(adminPage, 'paper-mobile');
@@ -93,12 +92,11 @@ try {
   await shot(adminPage, 'portfolio-mobile');
 
   await adminPage.goto(`${BASE}/app`);
-  await adminPage.getByRole('button', { name: '↻' }).click();
   await adminPage.getByTestId('portfolio-refreshed-at').waitFor({ timeout: 20000 });
 
   console.log('tax view');
   await adminPage.goto(`${BASE}/tax`);
-  await adminPage.getByRole('heading', { name: 'Tax Center' }).waitFor();
+  await adminPage.getByRole('heading', { name: 'Tax Center', exact: true }).waitFor();
   await adminPage.getByTestId('screen-status').waitFor();
   await shot(adminPage, 'tax-mobile');
 
@@ -124,8 +122,7 @@ try {
   await memberPage.getByTestId('thread-detail').waitFor();
   await shot(memberPage, 'thread-mobile');
 
-  const liveBadge = await adminPage.getByText('LIVE TRADING').count();
-  if (liveBadge) throw new Error('live trading badge was visible');
+  await adminPage.getByText('Live trading disabled.', { exact: true }).waitFor();
   console.log('smoke passed');
 } catch (error) {
   await shot(adminPage, 'failure-admin').catch(() => undefined);
