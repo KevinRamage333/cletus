@@ -78,7 +78,7 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
       }
     }
     refresh();
-    // Figures only change when a new day of 5+ members is published, so a slow refresh is enough.
+    // Figures only change when a new finished day with 5+ members is published, so a slow refresh is enough.
     const timer = setInterval(refresh, REFRESH_MS);
     return () => { stopped = true; clearInterval(timer); };
   }, [demo]);
@@ -117,11 +117,11 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Total gains</div>
-            <div className="mt-1 text-sm font-mono text-emerald-400"><Figure value={data.totalGains} nullLabel="Hidden (needs 5+ people)" /></div>
+            <div className="mt-1 text-sm font-mono text-emerald-400"><Figure value={data.totalGains} nullLabel="Hidden (needs 5+ people on each side)" /></div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Total losses</div>
-            <div className="mt-1 text-sm font-mono text-red-400"><Figure value={data.totalLosses === null ? null : -Math.abs(data.totalLosses)} nullLabel="Hidden (needs 5+ people)" /></div>
+            <div className="mt-1 text-sm font-mono text-red-400"><Figure value={data.totalLosses === null ? null : -Math.abs(data.totalLosses)} nullLabel="Hidden (needs 5+ people on each side)" /></div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-white/40">Active traders</div>

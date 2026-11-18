@@ -82,6 +82,40 @@ describe('community overview', () => {
     expect(later.series.map((x) => x.value)).toEqual([50, 17]);
     expect(later.closedTrades).toBe(10);
   });
+  it('split is all-or-nothing: 5 winners and 1 loser hides both sides, so net minus gains reveals nobody', () => {
+    // Audit's case: gains 50 and net 13 would give 13 - 50 = -37 for the lone loser.
+    const p = publishedCommunityPnl(['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 10)).concat([row('loser', -37.4)]));
+    if (p.suppressed) throw new Error('expected figures');
+    expect(p.netUsd).toBe(13);
+    expect(p.closedTrades).toBe(6);
+    expect(p.gainsUsd).toBeNull();
+    expect(p.lossesUsd).toBeNull();
+    expect(p.winningTrades).toBeNull();
+    expect(p.losingTrades).toBeNull();
+  });
+  it('publishes finished UTC days only, so a later close the same day never moves the figures', () => {
+    const now = new Date('2026-11-03T15:00:00.000Z');
+    const today = '2026-11-03T09:00:00.000Z';
+    const base = ['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 13, D2));
+    const before = publishedCommunityPnl(base.concat(['f', 'g', 'h', 'i', 'j'].map((id) => row(id, 2, today))), 86_400, 5, now);
+    const after = publishedCommunityPnl(base.concat(['f', 'g', 'h', 'i', 'j'].map((id) => row(id, 2, today)), [row('late', -22, '2026-11-03T14:00:00.000Z')]), 86_400, 5, now);
+    if (before.suppressed || after.suppressed) throw new Error('expected figures');
+    expect(before.netUsd).toBe(65);
+    expect(after.netUsd).toBe(65); // today's bucket (5+ accounts) is still not published
+    expect(after.series.map((x) => x.time)).toEqual([Date.parse('2026-11-02T00:00:00.000Z') / 1000]);
+    // Next day, today's whole bucket is released at once (six people), never a single trade.
+    const tomorrow = publishedCommunityPnl(base.concat(['f', 'g', 'h', 'i', 'j'].map((id) => row(id, 2, today)), [row('late', -22, '2026-11-03T14:00:00.000Z')]), 86_400, 5, new Date('2026-11-04T01:00:00.000Z'));
+    if (tomorrow.suppressed) throw new Error('expected figures');
+    expect(tomorrow.netUsd).toBe(53);
+  });
+  it('ignores trades closed before the member became eligible, so a newly eligible member never changes past days', () => {
+    const base = ['a', 'b', 'c', 'd', 'e'].map((id) => row(id, 13, D1));
+    const late = { ...row('late', 80, D1), eligibleFrom: '2026-11-02T00:00:00.000Z' };
+    const p = publishedCommunityPnl(base.concat([late]));
+    if (p.suppressed) throw new Error('expected figures');
+    expect(p.netUsd).toBe(65);
+    expect(publishedCommunityPnl([...base, { ...row('x', 5, D1), eligibleFrom: null }])).toMatchObject({ suppressed: false, closedTrades: 5 });
+  });
   it('floors each side of the split at five distinct people and rounds to whole dollars', () => {
     const oneWinner = publishedCommunityPnl([row('a', 100.4), row('b', -1), row('c', -2), row('d', -3), row('e', -4)]);
     if (oneWinner.suppressed) throw new Error('expected figures');
@@ -93,5 +127,15 @@ describe('community overview', () => {
     const broad = publishedCommunityPnl(['a', 'b', 'c', 'd', 'e'].flatMap((id) => [row(id, 2.6), row(id, -1.2)]));
     if (broad.suppressed) throw new Error('expected figures');
     expect(broad).toMatchObject({ netUsd: 7, gainsUsd: 13, lossesUsd: -6, winningTrades: 5, losingTrades: 5, closedTrades: 10 });
+  });
+});
+
+import { memberEligibleFrom } from '@/lib/community-scope';
+describe('community eligibility window', () => {
+  it('starts at the later of account age + 7 days and the opt-in time, and never without an opt-in time', () => {
+    const created = new Date('2026-11-01T00:00:00.000Z');
+    expect(memberEligibleFrom(created, new Date('2026-11-02T00:00:00.000Z'))?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+    expect(memberEligibleFrom(created, new Date('2026-11-20T00:00:00.000Z'))?.toISOString()).toBe('2026-11-20T00:00:00.000Z');
+    expect(memberEligibleFrom(created, null)).toBeNull();
   });
 });

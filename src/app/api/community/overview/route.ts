@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
 import { publishedCommunityPnl, tokensPerNetwork } from '@/lib/community-overview';
-import { communityPaperScope, distinctPeople, flooredCount } from '@/lib/community-scope';
+import { communityPaperScope, distinctPeople, flooredCount, ELIGIBILITY_SELECT, pnlRows } from '@/lib/community-scope';
 import { MIN_ACCOUNTS_PER_POINT } from '@/lib/live-chart';
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +23,7 @@ async function communityMostTraded(scope: Scope, top: Array<{ mint: string; _cou
  * Aggregate community figures from recorded paper trades of opted-in, non-banned members only
  * (the same scope as /api/community/collective-pnl). Every count and P&L figure needs at least
  * five distinct people behind it; below that it is null (hidden), never a small number or $0.
- * P&L figures are whole dollars and only change when a new bucket of 5+ members is published.
+ * P&L figures are whole dollars from finished UTC days only and change only when a new finished day with 5+ members is published.
  */
 export async function GET() {
   try {
@@ -33,14 +33,14 @@ export async function GET() {
     const [participantRows, activeRows, closed, tokenRows, recent] = await Promise.all([
       prisma.position.findMany({ where: scope, distinct: ['accountId'], select: person }),
       prisma.position.findMany({ where: { ...scope, status: 'open' }, distinct: ['accountId'], select: person }),
-      prisma.position.findMany({ where: { ...scope, status: 'closed', pnlUsd: { not: null } }, select: { pnlUsd: true, accountId: true, closedAt: true } }),
+      prisma.position.findMany({ where: { ...scope, status: 'closed', pnlUsd: { not: null } }, select: { pnlUsd: true, accountId: true, closedAt: true, account: { select: ELIGIBILITY_SELECT } } }),
       prisma.position.findMany({ where: scope, distinct: ['network', 'mint'], select: { network: true, mint: true } }),
       // Exact counts over the scoped paper positions (no take cap), most traded Solana token first.
       prisma.position.groupBy({ by: ['mint'], where: { ...scope, network: 'solana' }, _count: { _all: true }, orderBy: { _count: { mint: 'desc' } }, take: 1 }),
     ]);
     const participants = distinctPeople(participantRows);
     // Totals, split and chart all come from the same published buckets (L-103a).
-    const pnl = publishedCommunityPnl(closed);
+    const pnl = publishedCommunityPnl(pnlRows(closed));
     return NextResponse.json({
       connected: true, mode: 'paper', updatedAt: new Date().toISOString(),
       participants: flooredCount(participants),
