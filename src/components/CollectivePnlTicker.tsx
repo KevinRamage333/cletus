@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type CollectivePnl = {
   netProfit: number | null;
@@ -13,6 +13,12 @@ type CollectivePnl = {
 };
 
 type Phase = 'loading' | 'error' | 'suppressed' | 'ready' | 'demo';
+
+function finiteOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
 
 function money(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -37,6 +43,9 @@ function Figure({ value, signed = false }: { value: number | null; signed?: bool
 export default function CollectivePnlTicker({ demo = false, showCommunityLink = false }: { demo?: boolean; showCommunityLink?: boolean }) {
   const [data, setData] = useState<CollectivePnl | null>(null);
   const [phase, setPhase] = useState<Phase>(demo ? 'demo' : 'loading');
+  const [stale, setStale] = useState(false);
+  // Tracks whether any data has loaded, so the error path never calls setState inside a setData updater.
+  const hasData = useRef(false);
 
   useEffect(() => {
     if (demo) return;
@@ -48,17 +57,22 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
         const payload = await response.json();
         if (stopped) return;
         const next: CollectivePnl = {
-          netProfit: payload.netProfit === null || payload.netProfit === undefined ? null : Number(payload.netProfit),
-          totalGains: payload.totalGains === null || payload.totalGains === undefined ? null : Number(payload.totalGains),
-          totalLosses: payload.totalLosses === null || payload.totalLosses === undefined ? null : Number(payload.totalLosses),
-          activeUsers: payload.activeUsers === null || payload.activeUsers === undefined ? null : Number(payload.activeUsers),
+          netProfit: finiteOrNull(payload.netProfit),
+          totalGains: finiteOrNull(payload.totalGains),
+          totalLosses: finiteOrNull(payload.totalLosses),
+          activeUsers: finiteOrNull(payload.activeUsers),
           updatedAt: payload.updatedAt || null,
           suppressed: Boolean(payload.suppressed),
         };
+        hasData.current = true;
         setData(next);
+        setStale(false);
         setPhase(next.suppressed || next.netProfit === null ? 'suppressed' : 'ready');
       } catch {
-        if (!stopped) setPhase('error');
+        if (!stopped) {
+          if (hasData.current) setStale(true);
+          else setPhase('error');
+        }
       }
     }
     refresh();
@@ -66,6 +80,8 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
     return () => { stopped = true; clearInterval(timer); };
   }, [demo]);
 
+  const ageMs = data?.updatedAt ? Date.now() - new Date(data.updatedAt).getTime() : Number.POSITIVE_INFINITY;
+  const view = phase === 'ready' && (stale || ageMs > 60_000) ? 'stale' : phase;
   const refreshed = data?.updatedAt ? `Collective P&L refreshed ${new Date(data.updatedAt).toLocaleTimeString()}` : 'Collective P&L has not refreshed';
 
   return (
@@ -73,21 +89,22 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
       aria-label="Community collective paper trading performance"
       className="rounded-2xl border border-[#D4AF37]/25 bg-[#0d0d0d] overflow-hidden"
       data-testid="collective-pnl-ticker"
-      data-state={phase}
+      data-state={view}
     >
       <div className="px-4 py-2.5 border-b border-[#D4AF37]/15 flex items-center justify-between gap-3">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">Community collective P&L</span>
         <span className="text-[10px] uppercase tracking-wider text-[#E5C76B]/90">Paper trading · Aggregate</span>
       </div>
       {phase === 'demo' && <p className="px-4 py-4 text-sm text-white/60">Community paper results are unavailable in the public demo.</p>}
-      {phase === 'loading' && <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>}
-      {phase === 'error' && <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>}
-      {phase === 'suppressed' && (
+      {view === 'loading' && <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>}
+      {view === 'error' && <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>}
+      {view === 'stale' && <p className="px-4 py-2 text-xs text-amber-200">Showing the last collective refresh. Newer data is unavailable.</p>}
+      {view === 'suppressed' && (
         <p className="px-4 py-4 text-sm text-white/55" data-figure="unavailable">
           Collective P&L is hidden until at least five members opt in. This is not $0.
         </p>
       )}
-      {phase === 'ready' && data && (
+      {(view === 'ready' || view === 'stale') && data && phase !== 'suppressed' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
           <div className="col-span-2 sm:col-span-1">
             <div className="text-[10px] uppercase tracking-wider text-white/40">Net result</div>

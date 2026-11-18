@@ -19,17 +19,19 @@ import CollectivePnlTicker from '@/components/CollectivePnlTicker';
 import ApprovalQueue from '@/components/ApprovalQueue';
 import LivePortfolio, { type PortfolioPosition, type PortfolioTrade } from '@/components/LivePortfolio';
 import ConnectWallet from '@/components/ConnectWallet';
+import { ScreenStatus } from '@/components/ScreenStatus';
 import type { ApprovalRecord } from '@/lib/approvals';
+import { moneyText, parseFigure, refreshedLabel, screenState } from '@/lib/figure';
 
 type UserStats = {
-  pnl24h: number;
-  pnl24hPercent: number;
-  winRate: number;
-  activePositions: number;
-  totalTrades: number;
-  bestTrade: number;
-  worstTrade: number;
-  sharpeRatio: number;
+  pnl24h: number | null;
+  pnl24hPercent: number | null;
+  winRate: number | null;
+  activePositions: number | null;
+  totalTrades: number | null;
+  bestTrade: number | null;
+  worstTrade: number | null;
+  sharpeRatio: number | null;
   trialActive?: boolean;
   daysRemaining?: number;
   winRateKnown?: boolean;
@@ -37,54 +39,19 @@ type UserStats = {
   maxPositions?: number;
   bestSymbol?: string | null;
   worstSymbol?: string | null;
-  equity?: number;
-  cash?: number;
-  startingBalance?: number;
-  realizedPnl?: number;
-  unrealized?: number;
-  totalPnl?: number;
+  equity?: number | null;
+  cash?: number | null;
+  startingBalance?: number | null;
+  realizedPnl?: number | null;
+  unrealized?: number | null;
+  totalPnl?: number | null;
   operatorFeeBps?: number;
+  refreshedAt?: string | null;
   open?: PortfolioPosition[];
   closed?: PortfolioTrade[];
   approvals?: ApprovalRecord[];
   wallet?: { address: string | null; source: string | null; connected: boolean };
 };
-
-const EMPTY_STATS: UserStats = {
-  pnl24h: 0,
-  pnl24hPercent: 0,
-  winRate: 0,
-  activePositions: 0,
-  totalTrades: 0,
-  bestTrade: 0,
-  worstTrade: 0,
-  sharpeRatio: 0,
-  trialActive: false,
-  daysRemaining: 0,
-  equity: 0,
-  cash: 0,
-  startingBalance: 0,
-  realizedPnl: 0,
-  unrealized: 0,
-  totalPnl: 0,
-  operatorFeeBps: 50,
-  open: [],
-  closed: [],
-  approvals: [],
-  wallet: { address: null, source: 'paper', connected: false },
-};
-
-function formatUsd(n: number, showSign = false) {
-  const abs = Math.abs(n);
-  const formatted = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(abs);
-  if (!showSign) return n < 0 ? `-${formatted}` : formatted;
-  return `${n >= 0 ? '+' : '-'}${formatted}`;
-}
 
 function StatCard({
   label,
@@ -93,6 +60,7 @@ function StatCard({
   positive,
   neutral,
   icon,
+  unavailable = value === 'Unavailable',
 }: {
   label: string;
   value: string;
@@ -100,22 +68,26 @@ function StatCard({
   positive?: boolean;
   neutral?: boolean;
   icon: string;
+  /** A missing figure is dimmed so it never reads like a real value. */
+  unavailable?: boolean;
 }) {
-  const valueColor = neutral
+  const valueColor = unavailable
+    ? 'text-white/35 italic font-medium'
+    : neutral
     ? 'text-sky-400'
     : positive
     ? 'text-emerald-400'
     : 'text-red-400';
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#121212] p-4 flex flex-col gap-2">
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-[#121212] p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-white/40 uppercase tracking-wider font-medium">
           {label}
         </span>
         <span className="text-base leading-none">{icon}</span>
       </div>
-      <div className={`text-2xl font-bold font-mono tabular-nums ${valueColor}`}>
+      <div className={`min-w-0 break-words text-xl sm:text-2xl font-bold font-mono tabular-nums ${valueColor}`}>
         {value}
       </div>
       {sub && <div className="text-xs text-white/40">{sub}</div>}
@@ -124,50 +96,49 @@ function StatCard({
 }
 
 export default function AppDashboardPage() {
-  const [stats, setStats] = useState<UserStats>(EMPTY_STATS);
+  const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [identity, setIdentity] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      // Personal stats for the logged-in user only
-      // Wire: GET /api/protected/stats or /api/protected/pnl
       const res = await fetch('/api/protected/stats', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setStats({
-          pnl24h: Number(data.pnl24h) || 0,
-          pnl24hPercent: Number(data.pnl24hPercent) || 0,
-          winRate: Number(data.winRate) || 0,
-          activePositions: Number(data.activePositions) || 0,
-          totalTrades: Number(data.totalTrades) || 0,
-          bestTrade: Number(data.bestTrade) || 0,
-          worstTrade: Number(data.worstTrade) || 0,
-          sharpeRatio: Number(data.sharpeRatio) || 0,
-          trialActive: data.trialActive !== false,
-          daysRemaining: data.daysRemaining ?? 0,
-          winRateKnown: !!data.winRateKnown,
-          sharpeKnown: !!data.sharpeKnown,
-          maxPositions: Number(data.maxPositions) || 0,
-          bestSymbol: data.bestSymbol ?? null,
-          worstSymbol: data.worstSymbol ?? null,
-          equity: Number(data.equity) || 0,
-          cash: Number(data.cash) || 0,
-          startingBalance: Number(data.startingBalance) || 0,
-          realizedPnl: Number(data.realizedPnl) || 0,
-          unrealized: Number(data.unrealized) || 0,
-          totalPnl: Number(data.totalPnl) || Number(data.realizedPnl || 0) + Number(data.unrealized || 0),
-          operatorFeeBps: Number(data.operatorFeeBps) || 50,
-          open: Array.isArray(data.open) ? data.open : [],
-          closed: Array.isArray(data.closed) ? data.closed : [],
-          approvals: Array.isArray(data.approvals) ? data.approvals : [],
-          wallet: data.wallet ?? { address: null, source: 'paper', connected: false },
-        });
-        if (data.identity) setIdentity(data.identity);
-      }
-      // If 401/empty — keep zeros (new user, no trades yet)
-    } catch {
-      // keep empty personal stats
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Dashboard data is unavailable');
+      setStats({
+        pnl24h: parseFigure(data.pnl24h),
+        pnl24hPercent: parseFigure(data.pnl24hPercent),
+        winRate: parseFigure(data.winRate),
+        activePositions: parseFigure(data.activePositions),
+        totalTrades: parseFigure(data.totalTrades),
+        bestTrade: parseFigure(data.bestTrade),
+        worstTrade: parseFigure(data.worstTrade),
+        sharpeRatio: parseFigure(data.sharpeRatio),
+        trialActive: data.trialActive !== false,
+        daysRemaining: data.daysRemaining ?? 0,
+        winRateKnown: !!data.winRateKnown,
+        sharpeKnown: !!data.sharpeKnown,
+        maxPositions: parseFigure(data.maxPositions) ?? undefined,
+        bestSymbol: data.bestSymbol ?? null,
+        worstSymbol: data.worstSymbol ?? null,
+        equity: parseFigure(data.equity),
+        cash: parseFigure(data.cash),
+        startingBalance: parseFigure(data.startingBalance),
+        realizedPnl: parseFigure(data.realizedPnl),
+        unrealized: parseFigure(data.unrealized),
+        totalPnl: parseFigure(data.totalPnl),
+        operatorFeeBps: parseFigure(data.operatorFeeBps) ?? undefined,
+        refreshedAt: typeof data.refreshedAt === 'string' ? data.refreshedAt : new Date().toISOString(),
+        open: Array.isArray(data.open) ? data.open : [],
+        closed: Array.isArray(data.closed) ? data.closed : [],
+        approvals: Array.isArray(data.approvals) ? data.approvals : [],
+        wallet: data.wallet ?? { address: null, source: 'paper', connected: false },
+      });
+      if (data.identity) setIdentity(data.identity);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Dashboard data is unavailable');
     } finally {
       setLoading(false);
     }
@@ -218,8 +189,19 @@ export default function AppDashboardPage() {
           <UnifiedDashboardHub />
           <CollectivePnlTicker showCommunityLink />
           <TradingNetworks />
-          {/* Trial strip */}
-          {stats.trialActive && (
+          <ScreenStatus
+            state={screenState({
+              loading,
+              error,
+              hasData: Boolean(stats),
+              empty: Boolean(stats) && (stats?.totalTrades ?? 0) === 0 && (stats?.open?.length ?? 0) === 0,
+              refreshedAt: stats?.refreshedAt,
+            })}
+            error={error}
+            emptyLabel="No paper trades yet. Missing figures stay unavailable instead of showing $0."
+            refreshedLabel={refreshedLabel('Portfolio P&L', stats?.refreshedAt ?? null)}
+          />
+          {stats?.trialActive && (
             <div className="rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold text-[#E5C76B] uppercase tracking-wider">
@@ -240,27 +222,28 @@ export default function AppDashboardPage() {
 
           <ConnectWallet
             mode="settings"
-            currentPublicKey={stats.wallet?.address ?? null}
-            source={stats.wallet?.source ?? 'paper'}
+            currentPublicKey={stats?.wallet?.address ?? null}
+            source={stats?.wallet?.source ?? 'paper'}
             onConnected={() => load()}
             onDisconnected={() => load()}
             onPaper={() => load()}
           />
 
-          <ApprovalQueue approvals={stats.approvals ?? []} onChange={load} />
+          <ApprovalQueue approvals={stats?.approvals ?? []} onChange={load} />
 
           <LivePortfolio
-            equity={stats.equity ?? 0}
-            cash={stats.cash}
-            startingBalance={stats.startingBalance || 0}
-            realizedPnl={stats.realizedPnl ?? 0}
-            unrealizedPnl={stats.unrealized ?? 0}
-            totalPnl={stats.totalPnl ?? 0}
-            winRate={stats.winRateKnown ? stats.winRate / 100 : null}
-            closedTrades={stats.totalTrades}
-            open={stats.open ?? []}
-            closed={stats.closed ?? []}
-            operatorFeeBps={stats.operatorFeeBps}
+            equity={stats?.equity ?? null}
+            cash={stats?.cash ?? null}
+            startingBalance={stats?.startingBalance ?? null}
+            realizedPnl={stats?.realizedPnl ?? null}
+            unrealizedPnl={stats?.unrealized ?? null}
+            totalPnl={stats?.totalPnl ?? null}
+            winRate={stats?.winRateKnown && stats.winRate !== null ? stats.winRate / 100 : null}
+            closedTrades={stats?.totalTrades ?? null}
+            open={stats?.open ?? []}
+            closed={stats?.closed ?? []}
+            operatorFeeBps={stats?.operatorFeeBps}
+            refreshedAt={stats?.refreshedAt ?? null}
           />
 
           {/* 24H PERFORMANCE — personal only */}
@@ -275,30 +258,33 @@ export default function AppDashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <StatCard
                 label="24h PnL"
-                value={formatUsd(stats.pnl24h)}
-                sub={`${stats.pnl24hPercent >= 0 ? '+' : ''}${stats.pnl24hPercent.toFixed(1)}%`}
-                positive={stats.pnl24h >= 0}
+                value={moneyText(stats?.pnl24h ?? null, true).text}
+                sub={stats?.pnl24hPercent == null ? 'Unavailable' : `${stats.pnl24hPercent >= 0 ? '+' : ''}${stats.pnl24hPercent.toFixed(1)}%`}
+                positive={(stats?.pnl24h ?? 0) > 0}
+                neutral={stats?.pnl24h == null || stats.pnl24h === 0}
                 icon="💰"
               />
               <StatCard
                 label="Win Rate"
-                value={stats.winRateKnown ? `${stats.winRate.toFixed(1)}%` : '—'}
-                sub={`${stats.totalTrades} total trades`}
-                positive={stats.winRate >= 50}
+                value={stats?.winRateKnown && stats.winRate != null ? `${stats.winRate.toFixed(1)}%` : 'Unavailable'}
+                sub={stats?.totalTrades == null ? 'Unavailable' : `${stats.totalTrades} total trades`}
+                positive={(stats?.winRate ?? 0) >= 50}
+                neutral={!stats?.winRateKnown}
                 icon="🎯"
               />
               <StatCard
                 label="Active Positions"
-                value={`${stats.activePositions} of ${stats.maxPositions ?? 0}`}
+                value={stats?.activePositions == null ? 'Unavailable' : `${stats.activePositions} of ${stats.maxPositions ?? 0}`}
                 sub="open positions"
                 neutral
                 icon="📊"
               />
               <StatCard
                 label="Sharpe Ratio"
-                value={stats.sharpeKnown ? stats.sharpeRatio.toFixed(2) : '—'}
+                value={stats?.sharpeKnown && stats.sharpeRatio != null ? stats.sharpeRatio.toFixed(2) : 'Unavailable'}
                 sub="risk-adjusted return"
-                positive={stats.sharpeRatio >= 1}
+                positive={(stats?.sharpeRatio ?? 0) >= 1}
+                neutral={!stats?.sharpeKnown}
                 icon="⚡"
               />
             </div>
@@ -309,34 +295,29 @@ export default function AppDashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <StatCard
                 label="Best Trade"
-                value={formatUsd(stats.bestTrade)}
-                sub={stats.bestSymbol ?? undefined}
-                positive={stats.bestTrade >= 0}
+                value={moneyText(stats?.bestTrade ?? null).text}
+                sub={stats?.bestSymbol ?? undefined}
+                positive={(stats?.bestTrade ?? 0) > 0}
+                neutral={stats?.bestTrade == null || stats.bestTrade === 0}
                 icon="🚀"
               />
               <StatCard
                 label="Worst Trade"
-                value={formatUsd(stats.worstTrade)}
-                sub={stats.worstSymbol ?? undefined}
-                positive={stats.worstTrade >= 0}
+                value={moneyText(stats?.worstTrade ?? null).text}
+                sub={stats?.worstSymbol ?? undefined}
+                positive={(stats?.worstTrade ?? 0) > 0}
+                neutral={stats?.worstTrade == null}
                 icon="📉"
               />
               <StatCard
                 label="Total Trades"
-                value={String(stats.totalTrades)}
+                value={stats?.totalTrades == null ? 'Unavailable' : String(stats.totalTrades)}
                 sub="all time"
                 neutral
                 icon="🔢"
               />
             </div>
           </section>
-
-          {!loading && stats.totalTrades === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-[#121212] p-6 text-center text-sm text-white/45">
-              No trades yet for your account. Numbers stay at zero until you trade — then this
-              dashboard tracks <strong className="text-white/60">your</strong> PnL only.
-            </div>
-          )}
 
           {/* Quick links */}
           <section>

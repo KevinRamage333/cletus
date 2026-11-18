@@ -6,6 +6,8 @@
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ScreenStatus } from '@/components/ScreenStatus';
+import { refreshedLabel, screenState } from '@/lib/figure';
 
 type Info = { taxAckAt: string | null; trialActive: boolean; daysRemaining: number; trialDays: number; trialStartedAt: string };
 
@@ -15,8 +17,24 @@ export default function TaxCenterPage() {
   const [a2, setA2] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
 
-  const load = async () => { const r = await fetch('/api/protected/tax/ack', { cache: 'no-store' }); if (r.ok) setInfo(await r.json()); };
+  const load = async () => {
+    try {
+      const r = await fetch('/api/protected/tax/ack', { cache: 'no-store' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error ?? 'Tax details are unavailable');
+      setInfo(data);
+      setError(null);
+      setRefreshedAt(new Date().toISOString());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Tax details are unavailable');
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => { load(); }, []);
 
   const ack = async () => {
@@ -36,6 +54,13 @@ export default function TaxCenterPage() {
             <h1 className="text-2xl font-bold tracking-tight gold-text">Tax Center</h1>
             <p className="text-sm text-white/50 mt-1 text-center">Information and your own records. Cletus does not collect tax IDs or SSNs.</p>
           </div>
+
+          <ScreenStatus
+            state={screenState({ loading, error, hasData: Boolean(info), empty: Boolean(info) && !info?.taxAckAt, refreshedAt, staleMs: Infinity })}
+            error={error}
+            emptyLabel="No tax acknowledgment on file yet."
+            refreshedLabel={refreshedLabel('Tax view', refreshedAt)}
+          />
 
           <section className={`rounded-xl border p-4 ${info?.trialActive ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-white/10 bg-white/5'}`}>
             <div className="text-xs font-semibold uppercase tracking-wider text-white/50">30-day trial</div>

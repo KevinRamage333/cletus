@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ScreenStatus } from '@/components/ScreenStatus';
+import { moneyText, refreshedLabel, screenState } from '@/lib/figure';
 
 type Performance = {
   generatedAt: string;
@@ -15,7 +17,7 @@ type Performance = {
   recentTrades: { id: string; symbol: string; network: string; entryPrice: number; exitPrice: number | null; sizeUsd: number; feesUsd: number; pnlUsd: number; pnlPct: number; closedAt: string | null; exitReason: string | null }[];
 };
 
-const usd = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+const usd = (n: number | null | undefined) => moneyText(n ?? null).text;
 const pct = (n: number) => `${n.toFixed(2)}%`;
 const sign = (n: number) => n >= 0 ? 'text-emerald-400' : 'text-red-400';
 
@@ -25,14 +27,14 @@ function Metric({ label, value, tone = '' }: { label: string; value: string; ton
 
 export default function PerformancePage() {
   const [data, setData] = useState<Performance | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/protected/performance', { credentials: 'include', cache: 'no-store' });
       if (!res.ok) throw new Error('Unable to load performance data');
       setData(await res.json());
-      setError('');
+      setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : 'Performance data unavailable'); }
     finally { setLoading(false); }
   }, []);
@@ -44,8 +46,19 @@ export default function PerformancePage() {
         <div><Link href="/app/trade" className="text-xs text-amber-400 hover:underline">← Paper trading</Link><h1 className="mt-2 text-2xl font-bold">Performance & trade ledger</h1><p className="mt-1 text-sm text-white/45">Measured results from recorded fills, after recorded fees.</p></div>
         <span className="rounded-full border border-amber-400/30 px-3 py-1 text-[10px] uppercase tracking-wider text-amber-300">Paper book</span>
       </header>
-      {loading && !data && <p className="text-sm text-white/50">Loading recorded trading results…</p>}
-      {error && <p role="alert" className="rounded-xl border border-red-500/30 p-3 text-sm text-red-300">{error}</p>}
+      <ScreenStatus
+        state={screenState({
+          loading,
+          error,
+          hasData: Boolean(data),
+          empty: Boolean(data) && data!.openPositions.length === 0 && data!.recentTrades.length === 0 && data!.scorecard.trades === 0,
+          refreshedAt: data?.generatedAt,
+          staleMs: 60_000,
+        })}
+        error={error}
+        emptyLabel="No paper trades in the portfolio yet."
+        refreshedLabel={refreshedLabel('Portfolio P&L', data?.generatedAt ?? null)}
+      />
       {data && <>
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric label="Paper equity" value={usd(data.account.equityUsd)} />
