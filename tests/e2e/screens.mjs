@@ -75,7 +75,8 @@ try {
   await shot(adminPage, 'home-mobile');
 
   console.log('dashboard navigation');
-  await adminPage.getByRole('link', { name: 'Simulate' }).click();
+  // The mobile dashboard shows Simulate twice: the bottom tab and the quick-action card.
+  await adminPage.getByRole('main').getByRole('link', { name: 'Simulate' }).click();
   await adminPage.waitForURL(/\/app\/trade/);
   await adminPage.waitForSelector('[data-testid="synthetic-paper"]', { timeout: 20000 });
   await shot(adminPage, 'paper-mobile');
@@ -104,7 +105,10 @@ try {
   console.log('community opt-in and moderation', memberEmail);
   await onboard(memberPage, memberEmail);
   await memberPage.goto(`${BASE}/app/community`);
-  await memberPage.getByTestId('community-opt-in').locator('input').check();
+  // The opt-in box is controlled and only stays checked after the request returns.
+  // Playwright's check() requires the DOM state to flip during the click, so click
+  // and wait for the composer that renders once opt-in succeeds.
+  await memberPage.getByTestId('community-opt-in').locator('input').click();
   await memberPage.getByTestId('community-composer').waitFor({ timeout: 20000 });
   await memberPage.getByTestId('community-composer').locator('input').fill('Synthetic paper note from the smoke test.');
   await memberPage.getByTestId('community-composer').getByRole('button', { name: 'Post' }).click();
