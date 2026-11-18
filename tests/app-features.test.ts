@@ -92,6 +92,7 @@ describe('Inspector + dev audit', () => {
 describe('Community safety + trial', () => {
   it('blocks pasted secret keys and bare recovery phrases', () => {
     expect(looksSecret('abandon '.repeat(12).trim())).toBe(true);
+    expect(looksSecret('note this phrase ' + 'abandon '.repeat(12) + 'and ignore it')).toBe(true);
     expect(looksSecret('[' + Array(64).fill(1).join(',') + ']')).toBe(true);
     expect(looksSecret('gm everyone, BONK looks heated today')).toBe(false);
     expect(cleanText('hi\u0000 there', 5)).toBe('hi th');

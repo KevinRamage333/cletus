@@ -1,26 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-
 import { useEffect, useState } from 'react';
 
 type CollectivePnl = {
+  netProfit: number | null;
+  totalGains: number | null;
+  totalLosses: number | null;
+  activeUsers: number | null;
+  updatedAt: string | null;
   suppressed?: boolean;
-  minContributors?: number;
-  netProfit: number;
-  totalGains: number;
-  totalLosses: number;
-  activeUsers: number;
-  updatedAt: string;
 };
 
-const EMPTY: CollectivePnl = {
-  netProfit: 0,
-  totalGains: 0,
-  totalLosses: 0,
-  activeUsers: 0,
-  updatedAt: '',
-};
+type Phase = 'loading' | 'error' | 'suppressed' | 'ready' | 'demo';
 
 function money(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -31,101 +23,97 @@ function money(value: number) {
   }).format(Math.abs(value));
 }
 
+function Figure({ value, signed = false }: { value: number | null; signed?: boolean }) {
+  if (value === null || Number.isNaN(value)) {
+    return <span data-figure="unavailable">Unavailable</span>;
+  }
+  if (value === 0) {
+    return <span data-figure="zero">{signed ? '+$0.00' : '$0.00'}</span>;
+  }
+  const text = signed ? `${value >= 0 ? '+' : '-'}${money(value)}` : `${value < 0 ? '-' : ''}${money(value)}`;
+  return <span data-figure="value">{text}</span>;
+}
+
 export default function CollectivePnlTicker({ demo = false, showCommunityLink = false }: { demo?: boolean; showCommunityLink?: boolean }) {
-  const [data, setData] = useState<CollectivePnl>(EMPTY);
-  const [loaded, setLoaded] = useState(false);
-  const [suppressed, setSuppressed] = useState(false);
-  const [threshold, setThreshold] = useState(5);
-  const [available, setAvailable] = useState(true);
+  const [data, setData] = useState<CollectivePnl | null>(null);
+  const [phase, setPhase] = useState<Phase>(demo ? 'demo' : 'loading');
 
   useEffect(() => {
     if (demo) return;
     let stopped = false;
     async function refresh() {
       try {
-        const response = await fetch('/api/community/collective-pnl', {
-          credentials: 'include',
-          cache: 'no-store',
-        });
+        const response = await fetch('/api/community/collective-pnl', { credentials: 'include', cache: 'no-store' });
         if (!response.ok) throw new Error('Collective P&L unavailable');
         const payload = await response.json();
         if (stopped) return;
-        setSuppressed(payload.suppressed === true);
-        setThreshold(Number(payload.minContributors) || 5);
-        setData({
-          netProfit: Number(payload.netProfit) || 0,
-          totalGains: Number(payload.totalGains) || 0,
-          totalLosses: Number(payload.totalLosses) || 0,
-          activeUsers: Number(payload.activeUsers) || 0,
-          updatedAt: payload.updatedAt || '',
-        });
-        setAvailable(true);
-        setLoaded(true);
+        const next: CollectivePnl = {
+          netProfit: payload.netProfit === null || payload.netProfit === undefined ? null : Number(payload.netProfit),
+          totalGains: payload.totalGains === null || payload.totalGains === undefined ? null : Number(payload.totalGains),
+          totalLosses: payload.totalLosses === null || payload.totalLosses === undefined ? null : Number(payload.totalLosses),
+          activeUsers: payload.activeUsers === null || payload.activeUsers === undefined ? null : Number(payload.activeUsers),
+          updatedAt: payload.updatedAt || null,
+          suppressed: Boolean(payload.suppressed),
+        };
+        setData(next);
+        setPhase(next.suppressed || next.netProfit === null ? 'suppressed' : 'ready');
       } catch {
-        if (!stopped) setAvailable(false);
+        if (!stopped) setPhase('error');
       }
     }
     refresh();
     const timer = setInterval(refresh, 15_000);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
+    return () => { stopped = true; clearInterval(timer); };
   }, [demo]);
 
-  const signedNet = data.netProfit >= 0 ? `+${money(data.netProfit)}` : `-${money(data.netProfit)}`;
+  const refreshed = data?.updatedAt ? `Collective P&L refreshed ${new Date(data.updatedAt).toLocaleTimeString()}` : 'Collective P&L has not refreshed';
 
   return (
     <section
       aria-label="Community collective paper trading performance"
       className="rounded-2xl border border-[#D4AF37]/25 bg-[#0d0d0d] overflow-hidden"
       data-testid="collective-pnl-ticker"
+      data-state={phase}
     >
       <div className="px-4 py-2.5 border-b border-[#D4AF37]/15 flex items-center justify-between gap-3">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">
-          Community collective P&L
-        </span>
-        <span className="text-[10px] uppercase tracking-wider text-[#E5C76B]/90">
-          Paper trading · Realized aggregate
-        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-white/45">Community collective P&L</span>
+        <span className="text-[10px] uppercase tracking-wider text-[#E5C76B]/90">Paper trading · Aggregate</span>
       </div>
-      {demo ? (
-        <p className="px-4 py-4 text-sm text-white/60">Community paper results are unavailable in the public demo.</p>
-      ) : !available ? (
-        <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>
-      ) : !loaded ? (
-        <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>
-      ) : suppressed ? (
-        <p className="px-4 py-4 text-sm text-white/60">Community realized paper P&L is hidden until at least {threshold} separate accounts have closed positions. This protects individual traders' privacy.</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
-            <div className="col-span-2 sm:col-span-1">
-              <div className="text-[10px] uppercase tracking-wider text-white/40">Net result</div>
-              <div className={`mt-1 text-xl font-bold font-mono tabular-nums ${data.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {signedNet}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-white/40">Total gains</div>
-              <div className="mt-1 text-sm font-mono text-emerald-400">{money(data.totalGains)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-white/40">Total losses</div>
-              <div className="mt-1 text-sm font-mono text-red-400">-{money(data.totalLosses)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-white/40">Active traders</div>
-              <div className="mt-1 text-sm font-mono text-white/80">{data.activeUsers}</div>
+      {phase === 'demo' && <p className="px-4 py-4 text-sm text-white/60">Community paper results are unavailable in the public demo.</p>}
+      {phase === 'loading' && <p className="px-4 py-4 text-sm text-white/45">Loading community results…</p>}
+      {phase === 'error' && <p className="px-4 py-4 text-sm text-white/45">Collective results are temporarily unavailable.</p>}
+      {phase === 'suppressed' && (
+        <p className="px-4 py-4 text-sm text-white/55" data-figure="unavailable">
+          Collective P&L is hidden until at least five members opt in. This is not $0.
+        </p>
+      )}
+      {phase === 'ready' && data && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+          <div className="col-span-2 sm:col-span-1">
+            <div className="text-[10px] uppercase tracking-wider text-white/40">Net result</div>
+            <div className={`mt-1 text-xl font-bold font-mono tabular-nums ${data.netProfit !== null && data.netProfit < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+              <Figure value={data.netProfit} signed />
             </div>
           </div>
-          <div className="px-4 py-2 border-t border-white/10 flex items-center justify-between gap-3">
-            <span className="text-[10px] text-white/30">All-time realized paper P&L from closed positions only; open-position gains and losses excluded.</span>
-            <span className="text-[10px] text-white/30 whitespace-nowrap">
-              {data.updatedAt ? `Updated ${new Date(data.updatedAt).toLocaleTimeString()}` : 'Live'}
-            </span>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40">Total gains</div>
+            <div className="mt-1 text-sm font-mono text-emerald-400"><Figure value={data.totalGains} /></div>
           </div>
-        </>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40">Total losses</div>
+            <div className="mt-1 text-sm font-mono text-red-400"><Figure value={data.totalLosses === null ? null : -Math.abs(data.totalLosses)} /></div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/40">Active traders</div>
+            <div className="mt-1 text-sm font-mono text-white/80">{data.activeUsers === null ? 'Unavailable' : data.activeUsers}</div>
+          </div>
+        </div>
+      )}
+      {phase !== 'demo' && (
+        <div className="px-4 py-2 border-t border-white/10 flex items-center justify-between gap-3">
+          <span className="text-[10px] text-white/30">Opted-in paper accounts only. No individual results.</span>
+          <span className="text-[10px] text-white/30 whitespace-nowrap" data-testid="collective-refreshed-at">{refreshed}</span>
+        </div>
       )}
       {showCommunityLink && <Link href="/app/community" className="block border-t border-white/10 px-4 py-3 text-sm font-semibold text-amber-300">Open Community →</Link>}
     </section>

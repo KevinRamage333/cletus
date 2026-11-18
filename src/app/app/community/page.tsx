@@ -1,40 +1,12 @@
 'use client';
 
-/**
- * Community page — live chat + Dev Wallet Audit
- * Users converse; anyone can submit a developer wallet for audit.
- * Cletus reviews linked tokens/wallets and posts a community risk alert.
- * Black background, logo on every page.
- * Route: /app/community
- *
- * Note: Audit results are risk signals from public chain data — not legal findings.
- */
-
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import CollectivePnlTicker from '@/components/CollectivePnlTicker';
+import { CommunityFeed } from '@/components/CommunityFeed';
 
-type ChatMessage = {
-  id: string;
-  user: string;
-  text: string;
-  at: string;
-  kind?: 'user' | 'system' | 'audit';
-  userId?: string;
-  hidden?: boolean;
-  bio?: string | null;
-  isAdmin?: boolean;
-  authorBanned?: boolean;
-};
-type Me = { id: string; name: string; isAdmin: boolean; banned: boolean; displayName: string | null; bio: string | null };
-
-type AuditFinding = {
-  label: string;
-  detail: string;
-  severity: 'info' | 'watch' | 'high';
-};
-
+type AuditFinding = { label: string; detail: string; severity: 'info' | 'watch' | 'high' };
 type AuditResult = {
   wallet: string;
   status: 'clean' | 'watch' | 'high_risk' | 'unknown';
@@ -43,370 +15,105 @@ type AuditResult = {
   relatedWallets: number;
   findings: AuditFinding[];
   announced: boolean;
-  at: string;
+  pendingModeration?: boolean;
 };
 
-function shortAddr(a: string) {
-  if (!a || a.length < 12) return a || '—';
-  return `${a.slice(0, 6)}…${a.slice(-4)}`;
-}
-
-function isLikelySolanaAddress(value: string) {
-  const v = value.trim();
-  // Base58-ish length for Solana pubkeys
-  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v);
+function shortAddr(value: string) {
+  if (!value || value.length < 12) return value || '—';
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
 export default function CommunityPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
-  const [bio, setBio] = useState('');
-  const [chatError, setChatError] = useState('');
-  const [chatInput, setChatInput] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [auditWallet, setAuditWallet] = useState('');
   const [auditing, setAuditing] = useState(false);
   const [auditError, setAuditError] = useState('');
   const [lastAudit, setLastAudit] = useState<AuditResult | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Live community feed (server-side, admin-moderated)
-  const loadMessages = useCallback(async () => {
-    try {
-      const res = await fetch('/api/community/messages', { cache: 'no-store' });
-      if (!res.ok) return;
-      const d = await res.json();
-      setMessages(d.messages ?? []);
-      setMe((prev) => {
-        if (!prev) { setDisplayName(d.me?.displayName ?? ''); setBio(d.me?.bio ?? ''); }
-        return d.me;
-      });
-    } catch { /* keep the last feed */ }
-  }, []);
-  useEffect(() => { loadMessages(); const t = setInterval(loadMessages, 5_000); return () => clearInterval(t); }, [loadMessages]);
-
-  const saveProfile = async () => {
-    setChatError('');
-    const r = await fetch('/api/community/profile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: displayName.trim(), bio: bio.trim() }) });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { setChatError(d.error ?? 'Could not save profile'); return false; }
-    await loadMessages();
-    return true;
-  };
-
-  const moderate = async (body: Record<string, string>) => {
-    const r = await fetch('/api/community/moderate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) setChatError((await r.json().catch(() => ({}))).error ?? 'Moderation failed');
-    loadMessages();
-  };
-
-  const sendChat = async () => {
-    const text = chatInput.trim();
-    if (!text) return;
-    setChatError('');
-    if ((displayName.trim() || null) !== (me?.displayName ?? null) && !(await saveProfile())) return;
-    const r = await fetch('/api/community/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).catch(() => null);
-    const d = r ? await r.json().catch(() => ({})) : {};
-    if (!r?.ok) { setChatError(d.error ?? 'Message not sent'); return; }
-    setChatInput('');
-    loadMessages();
-  };
+  const [feedKey, setFeedKey] = useState(0);
 
   const runAudit = useCallback(async () => {
     const wallet = auditWallet.trim();
     setAuditError('');
-    if (!wallet) {
-      setAuditError('Paste a developer wallet address.');
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+      setAuditError('That does not look like a Solana address.');
       return;
     }
-    if (!isLikelySolanaAddress(wallet)) {
-      setAuditError('That does not look like a Solana address. Check and try again.');
-      return;
-    }
-
     setAuditing(true);
     try {
-      // Wire to backend / rugcheck / Helius / your graph:
-      // POST /api/community/dev-audit { wallet }
-      // Backend should: list tokens created, related wallets, known flags, then return structured result
       const res = await fetch('/api/community/dev-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet }),
       });
-
-      let result: AuditResult;
-
-      if (res.ok) {
-        const data = await res.json();
-        result = {
-          wallet: data.wallet ?? wallet,
-          status: data.status ?? 'unknown',
-          summary: data.summary ?? 'Audit completed.',
-          tokensCreated: data.tokensCreated ?? 0,
-          relatedWallets: data.relatedWallets ?? 0,
-          findings: Array.isArray(data.findings) ? data.findings : [],
-          announced: data.announced !== false,
-          at: data.at ?? new Date().toISOString(),
-        };
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setAuditError(d.error ?? 'Audit failed. Try again.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAuditError(data.error ?? 'Audit failed. Try again.');
         return;
       }
-
-      setLastAudit(result);
-
-      // The server posts the audit to the community feed.
-      loadMessages();
+      setLastAudit({
+        wallet: data.wallet ?? wallet,
+        status: data.status ?? 'unknown',
+        summary: data.summary ?? 'Audit completed.',
+        tokensCreated: data.tokensCreated ?? 0,
+        relatedWallets: data.relatedWallets ?? 0,
+        findings: Array.isArray(data.findings) ? data.findings : [],
+        announced: Boolean(data.announced),
+        pendingModeration: Boolean(data.pendingModeration),
+      });
+      setFeedKey((key) => key + 1);
     } catch {
       setAuditError('Audit failed. Try again.');
     } finally {
       setAuditing(false);
     }
-  }, [auditWallet, loadMessages]);
-
-  const statusColor = (s: AuditResult['status']) => {
-    if (s === 'high_risk') return 'text-red-400 border-red-500/40 bg-red-500/10';
-    if (s === 'watch') return 'text-yellow-400 border-yellow-500/40 bg-yellow-500/10';
-    if (s === 'clean') return 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10';
-    return 'text-white/70 border-white/20 bg-white/5';
-  };
+  }, [auditWallet]);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Logo on every page */}
-      <header className="border-b border-white/10 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <Link href="/app" className="flex items-center gap-3">
-            <Image
-              src="/cletus-logo.png"
-              alt="Cletus"
-              width={40}
-              height={40}
-              className="object-contain"
-              priority
-            />
-            <div>
-              <div className="font-bold text-lg tracking-tight leading-none">Cletus</div>
+    <div className="min-h-screen bg-black text-white flex flex-col pb-24 md:pb-8">
+      <header className="border-b border-white/10 px-4 sm:px-6 py-4">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <Link href="/app" className="flex items-center gap-3 min-w-0">
+            <Image src="/cletus-logo.png" alt="Cletus" width={40} height={40} className="object-contain shrink-0" priority />
+            <div className="min-w-0">
+              <div className="font-bold text-lg leading-none">Cletus</div>
               <div className="text-xs text-white/50 mt-0.5">Community</div>
             </div>
           </Link>
-          <nav className="flex items-center gap-3 text-xs">
-            <Link href="/app/signals" className="text-white/50 hover:text-white transition-colors">
-              Signals
-            </Link>
-            <Link href="/app/chart" className="text-white/50 hover:text-white transition-colors">
-              Chart
-            </Link>
-            <Link href="/app/wallet" className="text-white/50 hover:text-white transition-colors">
-              Wallet
-            </Link>
+          <nav className="flex items-center gap-3 text-xs" aria-label="Community sections">
+            <Link href="/app/signals" className="text-white/50 hover:text-white">Signals</Link>
+            <Link href="/app/chart" className="text-white/50 hover:text-white">Chart</Link>
+            <Link href="/app/wallet" className="text-white/50 hover:text-white">Wallet</Link>
           </nav>
         </div>
       </header>
-
-      <main className="flex-1 px-6 py-8">
-        <div className="max-w-5xl mx-auto space-y-8">
+      <main className="flex-1 px-4 sm:px-6 py-6">
+        <div className="max-w-5xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Community</h1>
-            <p className="text-sm text-white/50 mt-1">
-              Talk with other users on the app — and run <strong className="text-white/70">Dev Wallet Audit</strong> so
-              the whole community sees risk alerts.
-            </p>
+            <p className="text-sm text-white/50 mt-1">A moderated feed. Public posts use anonymous labels. Pending, approved, and rejected posts stay visible to their author.</p>
           </div>
-
           <CollectivePnlTicker />
-
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Chat — 3 cols */}
-            <section className="lg:col-span-3 flex flex-col rounded-xl border border-white/10 bg-[#0a0a0a] overflow-hidden min-h-[420px]">
-              <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                <span className="text-sm font-semibold">Live chat</span>
-                <span className="text-xs text-[#E5C76B]/80 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  On-site users
-                </span>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[360px]">
-                {messages.length === 0 && <p className="text-xs text-white/35 text-center py-6">No messages yet. Say hi.</p>}
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`rounded-lg px-3 py-2 text-sm ${
-                      m.hidden
-                        ? 'border border-red-500/30 bg-red-500/5 opacity-60'
-                        : m.kind === 'audit'
-                        ? 'border border-yellow-500/30 bg-yellow-500/5'
-                        : m.kind === 'system'
-                        ? 'border border-white/10 bg-white/5 text-white/70'
-                        : 'bg-white/5'
-                    }`}
-                  >
-                    <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                      <span
-                        className={`font-semibold text-xs ${
-                          m.kind === 'audit' ? 'text-yellow-400' : 'text-emerald-400/90'
-                        }`}
-                      >
-                        <span title={m.bio ?? ''}>{m.user}</span>{m.isAdmin && <span className="ml-1 text-[9px] text-emerald-400">ADMIN</span>}{m.hidden && <span className="ml-1 text-[9px] text-red-400">HIDDEN</span>}
-                      </span>
-                      <span className="text-[10px] text-white/30 font-mono">
-                        {new Date(m.at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <p className="text-white/85 leading-relaxed break-words">{m.text}</p>
-                    {me?.isAdmin && m.userId && (
-                      <div className="flex gap-3 mt-1 text-[10px] text-white/40">
-                        <button onClick={() => moderate({ messageId: m.id, action: m.hidden ? 'unhide' : 'hide' })} className="hover:text-white">{m.hidden ? 'Unhide' : 'Hide'}</button>
-                        {m.userId !== me.id && <button onClick={() => moderate({ userId: m.userId!, action: m.authorBanned ? 'unban' : 'ban' })} className="hover:text-red-400">{m.authorBanned ? 'Unmute user' : 'Mute user'}</button>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
-
-              <div className="p-3 border-t border-white/10 space-y-2">
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value.slice(0, 24))}
-                  placeholder={me ? `Display name (now: ${me.name})` : 'Display name'}
-                  className="w-full text-xs px-3 py-2 rounded-lg bg-black border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-                />
-                <div className="flex gap-2">
-                  <input type="text" value={bio} onChange={(e) => setBio(e.target.value.slice(0, 160))} placeholder="Short bio (optional)" className="flex-1 text-xs px-3 py-2 rounded-lg bg-black border border-white/10 text-white placeholder:text-white/30 focus:outline-none" />
-                  <button type="button" onClick={saveProfile} className="px-3 py-2 rounded-lg text-xs border border-white/15 text-white/70">Save profile</button>
-                </div>
-                {me?.banned && <p className="text-xs text-red-400">An admin has muted you in Community.</p>}
-                {chatError && <p className="text-xs text-red-400">{chatError}</p>}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendChat();
-                      }
-                    }}
-                    placeholder="Message the community…"
-                    className="flex-1 text-sm px-3 py-2.5 rounded-lg bg-black border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#D4AF37]/50"
-                  />
-                  <button
-                    type="button"
-                    onClick={sendChat}
-                    className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-[#D4AF37] text-black hover:bg-[#E5C76B] transition-all"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Dev Wallet Audit — 2 cols */}
+            <div className="lg:col-span-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+              <CommunityFeed key={feedKey} />
+            </div>
             <section className="lg:col-span-2 space-y-4">
               <div className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-white/90">
-                    Dev Wallet Audit
-                  </h2>
-                  <p className="text-xs text-white/50 mt-1.5 leading-relaxed">
-                    Paste any <strong className="text-white/70">developer wallet</strong>. Cletus
-                    checks tokens linked to that wallet, related addresses, and known risk
-                    patterns — then <strong className="text-white/70">announces the result in community chat</strong> so
-                    everyone on the site can see it.
-                  </p>
+                  <h2 className="text-sm font-bold uppercase tracking-wider">Dev Wallet Audit</h2>
+                  <p className="text-xs text-white/50 mt-1.5 leading-relaxed">Paste a developer wallet. If you have opted in, the result is submitted to the feed and waits for moderation.</p>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-white/40 mb-1.5">Developer wallet</label>
-                  <input
-                    type="text"
-                    value={auditWallet}
-                    onChange={(e) => {
-                      setAuditWallet(e.target.value);
-                      setAuditError('');
-                    }}
-                    placeholder="Solana address…"
-                    className="w-full text-sm font-mono px-3 py-2.5 rounded-lg bg-black border border-white/15 text-white placeholder:text-white/30 focus:outline-none focus:border-yellow-500/40"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </div>
-
-                {auditError && (
-                  <p className="text-xs text-red-400">{auditError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={runAudit}
-                  disabled={auditing}
-                  className={`w-full py-3 rounded-xl text-sm font-semibold transition-all ${
-                    auditing
-                      ? 'bg-white/10 text-white/40 cursor-wait'
-                      : 'bg-yellow-500 text-black hover:bg-yellow-400'
-                  }`}
-                >
-                  {auditing ? 'Auditing on-chain…' : 'Run audit & announce to community'}
-                </button>
-
-                <ul className="text-xs text-white/40 space-y-1 list-disc list-inside">
-                  <li>Tokens created / launched from this wallet</li>
-                  <li>Wallets ever associated (funding, authority, related)</li>
-                  <li>Public risk signals (not a court judgment)</li>
-                  <li>Result posted in community chat for all users</li>
-                </ul>
+                <input value={auditWallet} onChange={(event) => { setAuditWallet(event.target.value); setAuditError(''); }} placeholder="Solana address…" className="w-full text-sm font-mono px-3 py-2.5 rounded-lg bg-black border border-white/15" spellCheck={false} autoComplete="off" />
+                {auditError && <p className="text-xs text-red-400">{auditError}</p>}
+                <button type="button" onClick={runAudit} disabled={auditing} className="w-full py-3 rounded-xl text-sm font-semibold bg-yellow-500 text-black disabled:opacity-40">{auditing ? 'Auditing…' : 'Run audit'}</button>
               </div>
-
               {lastAudit && (
-                <div className={`rounded-xl border p-5 space-y-3 ${statusColor(lastAudit.status)}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider">
-                      Last audit
-                    </span>
-                    <span className="text-xs font-mono">{shortAddr(lastAudit.wallet)}</span>
-                  </div>
-                  <p className="text-sm leading-relaxed">{lastAudit.summary}</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                    <div className="rounded-lg bg-black/30 px-3 py-2">
-                      Tokens linked:{' '}
-                      <strong>{lastAudit.tokensCreated}</strong>
-                    </div>
-                    <div className="rounded-lg bg-black/30 px-3 py-2">
-                      Related wallets:{' '}
-                      <strong>{lastAudit.relatedWallets}</strong>
-                    </div>
-                  </div>
-                  {lastAudit.findings.length > 0 && (
-                    <ul className="space-y-2">
-                      {lastAudit.findings.map((f, i) => (
-                        <li key={i} className="text-xs border-t border-white/10 pt-2">
-                          <span className="font-semibold">{f.label}</span>
-                          <span className="text-white/60"> — {f.detail}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {lastAudit.announced && (
-                    <p className="text-xs opacity-80">Announced in community chat.</p>
-                  )}
+                <div className="rounded-xl border border-white/10 p-5 space-y-2 text-sm">
+                  <div className="flex justify-between gap-2 text-xs"><span className="uppercase tracking-wider">Last audit</span><span className="font-mono">{shortAddr(lastAudit.wallet)}</span></div>
+                  <p>{lastAudit.summary}</p>
+                  <p className="text-xs text-white/50">{lastAudit.pendingModeration ? 'Submitted for moderation.' : 'Not posted. Opt in if you want the community to review it.'}</p>
+                  {lastAudit.findings.map((finding) => <p key={finding.label} className="text-xs text-white/70"><span className="font-semibold">{finding.label}</span> — {finding.detail}</p>)}
                 </div>
               )}
-
-              <p className="text-[11px] text-white/30 leading-relaxed">
-                Audits use public blockchain data and heuristics. A “high risk” or scammer-style
-                alert is a <strong className="text-white/40">community risk signal</strong>, not a
-                legal determination. Always do your own research.
-              </p>
             </section>
           </div>
         </div>

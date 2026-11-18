@@ -13,7 +13,14 @@ export async function POST(req: Request) {
     if (!addr) throw new HttpError(400, 'paste a valid Solana address');
     const r = devAuditFrom(await inspectAddress(addr));
     let announced = false;
-    if (b.announce !== false && !u.banned) { await postMessage(u.id, `🔎 Dev audit ${addr.slice(0, 4)}…${addr.slice(-4)}: ${r.status.toUpperCase()}. ${r.summary}`, 'audit'); announced = true; }
-    return NextResponse.json({ ...r, announced });
+    if (b.announce !== false && !u.banned) {
+      try {
+        await postMessage(u.id, `Dev audit ${addr.slice(0, 4)}…${addr.slice(-4)}: ${r.status.toUpperCase()}. ${r.summary}`, 'audit');
+        announced = true;
+      } catch {
+        announced = false;
+      }
+    }
+    return NextResponse.json({ ...r, announced, pendingModeration: announced });
   } catch (e) { return errorResponse(e); }
 }
