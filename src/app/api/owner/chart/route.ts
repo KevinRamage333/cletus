@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 /** Owner-only chart: GeckoTerminal OHLCV. Allowed in demo mode so /owner works on Vercel. */
 export async function GET(req: Request) {
-  const sess = await verifyOwnerSession(cookies().get(OWNER_COOKIE)?.value);
+  const sess = await verifyOwnerSession((await cookies()).get(OWNER_COOKIE)?.value);
   if (!sess) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   const sp = new URL(req.url).searchParams;
   const address = parseAddress(sp.get('address') ?? '');

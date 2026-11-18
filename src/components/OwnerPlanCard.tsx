@@ -9,7 +9,7 @@ const short = (a: string | null | undefined) => (a && a.length > 10 ? `${a.slice
 export default function OwnerPlanCard({ plan }: { plan: any }) {
   if (!plan || !plan.enabled) return null;
   const next = plan.nextSweepTargetUsd;
-  const progress = next > 0 && plan.currentBaseUsd >= 0 ? Math.max(0, Math.min(100, ((plan.equityUsd - plan.currentBaseUsd) / Math.max(1, next - plan.currentBaseUsd)) * 100)) : 0;
+  const progress = plan.equityUsd !== null && next > 0 && plan.currentBaseUsd >= 0 ? Math.max(0, Math.min(100, ((plan.equityUsd - plan.currentBaseUsd) / Math.max(1, next - plan.currentBaseUsd)) * 100)) : 0;
   return (
     <div className="card">
       <h2>Owner money plan</h2>

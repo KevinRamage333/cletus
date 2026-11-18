@@ -1,11 +1,14 @@
 'use client';
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import type { ComponentType, PropsWithChildren } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { BackpackWalletAdapter } from '@solana/wallet-adapter-backpack';
 import { Buffer } from 'buffer';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createEvmConfig } from '@/lib/evm-wallet';
 
 const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
@@ -47,11 +50,17 @@ export default function WalletProviders({ children }: { children: React.ReactNod
     }
   }, []);
   const wallets = useMemo(() => createWalletAdapters(), []);
+  const [evmConfig] = useState(() => createEvmConfig());
+  const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } }));
   return (
-    <CompatibleConnectionProvider endpoint={endpoint}>
-      <CompatibleWalletProvider wallets={wallets} autoConnect={false} localStorageKey="cletus.wallet.adapter">
-        {children}
-      </CompatibleWalletProvider>
-    </CompatibleConnectionProvider>
+    <WagmiProvider config={evmConfig}>
+      <QueryClientProvider client={queryClient}>
+        <CompatibleConnectionProvider endpoint={endpoint}>
+          <CompatibleWalletProvider wallets={wallets} autoConnect={false} localStorageKey="cletus.wallet.adapter">
+            {children}
+          </CompatibleWalletProvider>
+        </CompatibleConnectionProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

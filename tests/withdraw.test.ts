@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import {
-  validateDestination, computeSend, issueToken, verifyToken, executeWithdraw, reserveLamports, cooldownOk,
+  validateDestination, computeSend, issueToken, verifyToken, verifyAndConsumeToken, executeWithdraw, reserveLamports, cooldownOk,
   LAMPORTS_PER_SOL, RENT_EXEMPT_MIN_LAMPORTS, BASE_FEE_LAMPORTS, type WithdrawDeps, type WithdrawPlan,
 } from '@/lib/withdraw';
 import { demoGateDecision } from '@/lib/gate';
+import { consumeWithdrawConfirmNonce } from '@/lib/withdraw-nonce';
 
 const own = Keypair.generate().publicKey.toBase58();
 const dest = Keypair.generate().publicKey.toBase58();
@@ -138,6 +139,47 @@ describe('withdraw: execution', () => {
   });
   it('on the public (Vercel demo) site the withdraw APIs are unavailable', () => {
     for (const p of ['/api/protected/withdraw/status', '/api/protected/withdraw/preview', '/api/protected/withdraw/confirm']) expect(demoGateDecision(p)).toEqual({ action: 'soon' });
-    expect(demoGateDecision('/app/wallet')).toEqual({ action: 'redirect', to: '/demo?soon=%2Fapp%2Fwallet' });
+    expect(demoGateDecision('/app/wallet/engine')).toEqual({ action: 'redirect', to: '/app?soon=%2Fapp%2Fwallet%2Fengine' });
+    // The connect-only wallet screen is public in the demo; withdrawals are not.
+    expect(demoGateDecision('/app/wallet')).toEqual({ action: 'next' });
+  });
+});
+
+
+
+describe('withdraw: persistent confirmation nonce', () => {
+  const base = { uid: 'u1', to: dest, lamports: 1000, max: false, closePositions: false, mode: 'simulation' as const };
+  it('verifyAndConsumeToken is single-use through the consume hook', async () => {
+    const seen = new Set<string>();
+    const consume = async (nonce: string) => {
+      if (seen.has(nonce)) return false;
+      seen.add(nonce);
+      return true;
+    };
+    const t = issueToken(base, SECRET);
+    expect(await verifyAndConsumeToken(t, SECRET, 'u1', consume)).toMatchObject({ ok: true, plan: { to: dest, lamports: 1000 } });
+    expect(await verifyAndConsumeToken(t, SECRET, 'u1', consume)).toMatchObject({ ok: false, error: expect.stringMatching(/already used/) });
+  });
+  it('consumeWithdrawConfirmNonce uses skipDuplicates on a primary key and treats a second insert as used', async () => {
+    const rows = new Map<string, { uid: string; expiresAt: Date }>();
+    const db = {
+      withdrawConfirmNonce: {
+        createMany: async ({ data, skipDuplicates }: { data: Array<{ id: string; uid: string; expiresAt: Date }>; skipDuplicates: boolean }) => {
+          let count = 0;
+          for (const row of data) {
+            if (rows.has(row.id)) {
+              if (!skipDuplicates) throw new Error('duplicate');
+              continue;
+            }
+            rows.set(row.id, { uid: row.uid, expiresAt: row.expiresAt });
+            count++;
+          }
+          return { count };
+        },
+      },
+    };
+    expect(await consumeWithdrawConfirmNonce('nonce-1', 'u1', Date.now() + 60_000, db)).toBe(true);
+    expect(await consumeWithdrawConfirmNonce('nonce-1', 'u1', Date.now() + 60_000, db)).toBe(false);
+    expect(rows.size).toBe(1);
   });
 });

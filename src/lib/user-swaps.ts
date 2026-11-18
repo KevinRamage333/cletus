@@ -63,3 +63,14 @@ export async function submitUserSwap(signedTransaction: string, requestId: strin
   }
   throw new Error(`jupiter /execute failed: ${detail}`);
 }
+
+/** User-signed Jupiter /execute is live-only and requires an explicit flag. Simulation and default deploys must 403. */
+export function userSwapExecuteAllowed(
+  mode: string,
+  env: Record<string, string | undefined> = process.env,
+): { ok: true } | { ok: false; status: 403; error: string } {
+  if (mode !== 'live') return { ok: false, status: 403, error: 'swap execute is disabled in simulation mode' };
+  if (env.USER_SWAP_EXECUTE_ENABLED !== 'true') return { ok: false, status: 403, error: 'swap execute is not enabled' };
+  return { ok: true };
+}
+

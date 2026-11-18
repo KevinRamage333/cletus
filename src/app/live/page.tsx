@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import PublicLiveFeed from '@/components/PublicLiveFeed';
+import FeedChart from '@/components/charts/FeedChart';
 
 export default function LivePage() {
   return (
@@ -10,6 +11,7 @@ export default function LivePage() {
         <p className="text-sm text-zinc-400 mt-2 max-w-2xl">Aggregate P&amp;L, win rate, and a ticker of closed trades across Cletus (house) and users. Wallets stay private unless a trader opts in. Numbers are recorded closes only — never sample data.</p>
       </div>
       <Link href="/live/paper" className="font-semibold text-amber-300">Paper trading report</Link>
+      <div className="cx"><FeedChart /></div>
       <PublicLiveFeed />
     </div>
   );

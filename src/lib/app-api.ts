@@ -52,7 +52,8 @@ export async function tradeSession(u: User, a: Account, c: Config, s: AccountSet
     positionSizeIsServer: s.positionSizePct === null, stopLossPercent: e.stopLossPct, takeProfitPercent: e.takeProfitPct,
     maxPositions: e.maxOpenPositions, withinHours: withinTradingHours(s), tradingHours: s.tradingHoursEnabled ? { start: s.tradingStart, end: s.tradingEnd, days: s.activeDays, timezone: s.timezone } : null,
     engineLastScanAt: engineState?.lastScanAt ?? null,
-    engineScanCount: engineState?.scanCount ?? 0,
+    // null when no engine state exists yet; the trade page shows Unavailable (Audit N8).
+    engineScanCount: engineState?.scanCount ?? null,
     engineLastError: engineState?.lastError ?? null,
     paperWorkerLastAt: paperWorkerHeartbeat?.createdAt ?? null,
     paperWorkerMessage: paperWorkerHeartbeat?.message ?? null,

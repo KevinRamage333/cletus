@@ -65,8 +65,8 @@ export default function LiveWatch({ watch, actions, footer }: { watch: LiveWatch
               </div>
               <div className="text-xs text-white/55 space-y-0.5 font-mono text-right">
                 <div>Size {usd(open.sizeUsd)}</div>
-                <div>Entry {open.entryPrice.toPrecision(4)}</div>
-                <div>Last {open.lastPrice.toPrecision(4)}</div>
+                <div>Entry {open.entryPrice === null ? 'Unavailable' : open.entryPrice.toPrecision(4)}</div>
+                <div>Last {open.lastPrice === null ? 'Unavailable' : open.lastPrice.toPrecision(4)}</div>
                 {open.stopLoss != null && <div className="text-red-300">SL {open.stopLoss.toPrecision(4)}</div>}
                 {open.takeProfit != null && <div className="text-emerald-300">TP {open.takeProfit.toPrecision(4)}</div>}
                 <div className="text-white/35">{ago(open.openedAt)}</div>

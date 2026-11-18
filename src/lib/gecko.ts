@@ -7,8 +7,10 @@ export type Timeframe = 'minute' | 'hour' | 'day';
 export interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
 
 interface Bucket { tokens: number; at: number }
-const g = globalThis as unknown as { __gtBucket?: Bucket; __gtCache?: Map<string, { at: number; v: unknown }>; __gtInflight?: Map<string, Promise<unknown>> };
+const g = globalThis as unknown as { __gtChartBucket?: Bucket; __gtBucket?: Bucket; __gtCache?: Map<string, { at: number; v: unknown }>; __gtInflight?: Map<string, Promise<unknown>> };
 const bucket = (g.__gtBucket ??= { tokens: Number(process.env.GECKO_RPM ?? 25), at: Date.now() });
+// Public chart endpoint gets its own (smaller) bucket so anonymous chart traffic can't starve the app's market data.
+const chartBucket = (g.__gtChartBucket ??= { tokens: Number(process.env.GECKO_CHART_RPM ?? 5), at: Date.now() });
 const cache = (g.__gtCache ??= new Map());
 const inflight = (g.__gtInflight ??= new Map());
 
@@ -20,11 +22,11 @@ export function takeToken(b: Bucket, rpm: number, now = Date.now()): boolean {
   return false;
 }
 
-async function cached<T>(key: string, ttlMs: number, f: () => Promise<T>): Promise<{ v: T | null; stale: boolean; limited: boolean }> {
+async function cached<T>(key: string, ttlMs: number, f: () => Promise<T>, which: 'app' | 'chart' = 'app'): Promise<{ v: T | null; stale: boolean; limited: boolean }> {
   const hit = cache.get(key) as { at: number; v: T } | undefined;
   if (hit && Date.now() - hit.at < ttlMs) return { v: hit.v, stale: false, limited: false };
   if (inflight.has(key)) return { v: (await inflight.get(key)) as T, stale: false, limited: false };
-  if (!takeToken(bucket, Number(process.env.GECKO_RPM ?? 25))) return { v: hit?.v ?? null, stale: !!hit, limited: true };
+  if (!(which === 'chart' ? takeToken(chartBucket, Number(process.env.GECKO_CHART_RPM ?? 5)) : takeToken(bucket, Number(process.env.GECKO_RPM ?? 25)))) return { v: hit?.v ?? null, stale: !!hit, limited: true };
   const p = f().then((v) => { cache.set(key, { at: Date.now(), v }); return v; }).finally(() => inflight.delete(key));
   inflight.set(key, p);
   try { return { v: await p, stale: false, limited: false }; } catch { return { v: hit?.v ?? null, stale: !!hit, limited: false }; }
@@ -49,13 +51,13 @@ export const RANGES: Record<string, { tf: Timeframe; aggregate: number; limit: n
   '1Y': { tf: 'day', aggregate: 1, limit: 365, ttlMs: 900_000 },
 };
 
-export async function poolOhlcv(pool: string, range: string, network = 'solana') {
+export async function poolOhlcv(pool: string, range: string, network = 'solana', which: 'app' | 'chart' = 'app') {
   const r = RANGES[range] ?? RANGES['1D'];
   return cached(`ohlcv:${network}:${pool}:${range}`, r.ttlMs, async () => {
     const res = await fetch(`${GT}/networks/${network}/pools/${pool}/ohlcv/${r.tf}?aggregate=${r.aggregate}&limit=${r.limit}&currency=usd`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
     if (!res.ok) throw new Error(`GeckoTerminal HTTP ${res.status}`);
     return parseOhlcv(await res.json());
-  });
+  }, which);
 }
 
 /** 1-minute candles for the market_data collector. Shares the same token bucket + cache as the charts,

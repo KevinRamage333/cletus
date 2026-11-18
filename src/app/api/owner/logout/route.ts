@@ -8,9 +8,3 @@ export async function POST() {
   res.cookies.set(OWNER_COOKIE, '', { ...ownerCookieOptions(0), maxAge: 0 });
   return res;
 }
-
-export async function GET(req: Request) {
-  const res = NextResponse.redirect(new URL('/owner', req.url));
-  res.cookies.set(OWNER_COOKIE, '', { ...ownerCookieOptions(0), maxAge: 0 });
-  return res;
-}

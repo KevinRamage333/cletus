@@ -134,8 +134,9 @@ describe('community feed rules', () => {
 
   it('keeps thread links inside the app shell for mobile navigation', () => {
     expect(threadHref('post 1')).toBe(`${COMMUNITY_FEED_HREF}/post%201`);
-    const nav = readFileSync('src/components/BottomNav.tsx', 'utf8');
+    // The gold app shell carries the mobile tab bar and the "More" menu that links Community.
+    const nav = readFileSync('src/components/app/AppShell.tsx', 'utf8');
     expect(nav).toContain("href: '/app/community'");
-    expect(nav).toContain('md:hidden');
+    expect(nav).toContain('lg:hidden');
   });
 });

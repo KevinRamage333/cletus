@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
   if (isDemo()) {
     const token = await signSession({ uid: 'public-demo-age-attestation', email: 'demo-age@cletus.invalid', adm: false, av: AGE_ATTESTATION_VERSION, tv: null, rv: null, fc: null, w: false }, undefined, 60 * 60 * 24);
-    const response = NextResponse.json({ ok: true, next: '/demo' });
+    const response = NextResponse.json({ ok: true, next: '/app' });
     response.cookies.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false', path: '/', maxAge: 60 * 60 * 24 });
     return response;
   }

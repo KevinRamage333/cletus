@@ -17,7 +17,7 @@ export function devAuditFrom(i: Inspection) {
     if (t.topHolders.length) f.push({ label: 'Top-10 concentration', detail: `${top10.toFixed(1)}% of supply`, severity: top10 > 50 ? 'high' : top10 > 30 ? 'watch' : 'info' });
     if (t.liquidityUsd !== null) f.push({ label: 'Pool liquidity', detail: `$${Math.round(t.liquidityUsd).toLocaleString()}`, severity: t.liquidityUsd < 50_000 ? 'watch' : 'info' });
   } else {
-    f.push({ label: 'SOL balance', detail: `${(i.solBalance ?? 0).toFixed(4)} SOL`, severity: 'info' });
+    f.push({ label: 'SOL balance', detail: i.solBalance == null ? 'Unavailable (balance read failed)' : `${i.solBalance.toFixed(4)} SOL`, severity: 'info' });
     f.push({ label: 'Token holdings', detail: `${i.holdings.length} fungible tokens${i.holdingsTotalUsd !== null ? ` (~$${Math.round(i.holdingsTotalUsd).toLocaleString()} priced)` : ''}`, severity: 'info' });
     if (withdraw) f.push({ label: 'Liquidity removals / burns', detail: `${withdraw} in the last ${txs.length} transactions`, severity: 'high' });
   }

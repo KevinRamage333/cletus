@@ -1,6 +1,7 @@
 'use client';
 /** Every user: SIMULATED withdrawal of paper cash to their own connected wallet (Solana or Base app). No real funds move. */
 import { useCallback, useEffect, useState } from 'react';
+import { walletConnectEnabled } from '@/lib/wallet-flag';
 import BaseWalletConnect, { useBaseAddress } from './BaseWalletConnect';
 
 type St = { cashUsd: number; solanaWallet: string | null; history: Array<{ at: string; to: string; usd: number; status: string }> };
@@ -43,7 +44,7 @@ export default function SimWithdrawPanel() {
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-sky-400/50 text-sky-300">SIMULATED</span>
       </div>
       <p className="text-xs text-white/55">Balances here are paper (simulation) money. Withdrawals go only to <b>your own connected wallet</b> and are simulated: they reduce your paper cash and are logged, but no real crypto is sent. Do not send real funds to deposit.</p>
-      <BaseWalletConnect />
+      {walletConnectEnabled() && <BaseWalletConnect />}
       {st && <div className="text-sm">Simulated cash: <b>${st.cashUsd.toFixed(2)}</b></div>}
       <div className="flex flex-wrap gap-2 items-center">
         <select className="input" value={chain} onChange={(e) => setChain(e.target.value as 'solana' | 'base')}>

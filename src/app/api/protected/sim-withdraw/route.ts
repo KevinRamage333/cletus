@@ -26,10 +26,12 @@ export async function POST(req: Request) {
     const c = checkSimWithdraw(b, { walletPublicKey: u.walletPublicKey ?? null }, a.cashUsd);
     if (!c.ok) throw new HttpError(400, c.error);
     const usd = c.cents / 100;
-    await prisma.$transaction([
-      prisma.account.update({ where: { id: a.id }, data: { cashUsd: { decrement: usd } } }),
-      prisma.withdrawal.create({ data: { userId: u.id, toAddress: `${c.chain}:${c.to}`.slice(0, 64), lamports: String(c.cents), mode: 'simulation-usd', status: 'simulated' } }),
-    ]);
+    // Conditional debit: two concurrent requests cannot push simulated cash below zero (Audit N9).
+    await prisma.$transaction(async (tx) => {
+      const debit = await tx.account.updateMany({ where: { id: a.id, cashUsd: { gte: usd } }, data: { cashUsd: { decrement: usd } } });
+      if (debit.count !== 1) throw new HttpError(409, 'Not enough simulated cash for this withdrawal.');
+      await tx.withdrawal.create({ data: { userId: u.id, toAddress: `${c.chain}:${c.to}`.slice(0, 64), lamports: String(c.cents), mode: 'simulation-usd', status: 'simulated' } });
+    });
     return NextResponse.json({ ok: true, simulated: true, message: `SIMULATED: $${usd.toFixed(2)} withdrawn to your ${c.chain === 'base' ? 'Base app' : 'Solana'} wallet. No real funds moved.` });
   } catch (e) { return errorResponse(e); }
 }

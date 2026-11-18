@@ -42,7 +42,7 @@ export default function AgeEligibilityPage() {
         </label>
         {error && <div className="err" role="alert">{error}</div>}
         <button className="btn primary" disabled={!confirmed18Plus || !legallyPermitted || busy} onClick={submit} style={{ marginTop: 20 }}>{busy ? 'Recording…' : 'Confirm and continue'}</button>
-        <a href="/api/auth/logout" className="muted" style={{ display: 'block', marginTop: 16 }}>I do not meet these requirements — leave</a>
+        <form action="/api/auth/logout" method="post"><button type="submit" className="muted" style={{ display: 'block', marginTop: 16, background: 'none', border: 0, padding: 0, color: 'inherit', cursor: 'pointer' }}>I do not meet these requirements — leave</button></form>
         <p className="muted" style={{ fontSize: 12, marginTop: 16 }}>Eligibility attestation version {AGE_ATTESTATION_VERSION}.</p>
       </div>
     </div>

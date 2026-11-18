@@ -1,238 +1,103 @@
 'use client';
-
-/**
- * Signals page — CoinGecko terminal style, USDC only (not USDT)
- * Black background, logo on every page.
- * Route: /app/signals or /signals
- */
-
-import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
+import { useMovers } from '@/components/market/useMovers';
+import { PageHeader, Refreshed, StateBox, TokenAvatar, useNow } from '@/components/app/ui';
+import { BoostedTag, VerifiedBadge, useListings } from '@/components/listings/Listings';
+import { splitBoosted } from '@/lib/token-boost';
+import { MOVER_SORTS, formatAge, formatPct, formatPrice, formatUsdCompact, freshness, sortMovers, type MoverCard, type MoverSort } from '@/lib/movers';
 
-type Signal = {
-  id: string;
-  pair: string;
-  base: string;
-  quote: string;
-  side: 'LONG' | 'SHORT';
-  score: number;
-  priceUsd: number;
-  change24h: number;
-  volume24h: number;
-  mcap: number;
-  signals: string[];
-  updatedAt: string;
-  status?: string;
-  pool?: string;
-};
-
-function formatUsd(n: number) {
-  if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  return `$${n.toFixed(2)}`;
+function Change({ label, v }: { label: string; v: number | null }) {
+  const cls = v == null ? 'text-[#8a8478] border-white/10' : v >= 0 ? 'text-green-300 border-green-400/30 bg-green-400/5' : 'text-red-300 border-red-400/30 bg-red-400/5';
+  return <span className={`num inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold ${cls}`}><span className="text-[9px] opacity-70">{label}</span>{formatPct(v)}</span>;
 }
 
-function formatPrice(n: number) {
-  if (n < 0.0001) return n.toExponential(2);
-  if (n < 0.01) return n.toFixed(6);
-  if (n < 1) return n.toFixed(4);
-  return n.toFixed(2);
+function Card({ t, now, verified, boostedUntil }: { t: MoverCard; now: number; verified?: boolean; boostedUntil?: string | null }) {
+  return (
+    <article className={`panel group flex flex-col p-3 transition-colors hover:border-[rgba(212,175,55,.45)] ${boostedUntil ? 'border-[#d4af37]/60 shadow-[0_0_0_1px_rgba(212,175,55,.25)]' : ''}`} data-testid="token-card" data-mint={t.mint}>
+      {(verified || boostedUntil) && <div className="mb-2 flex flex-wrap gap-1.5">{boostedUntil && <BoostedTag expiresAt={boostedUntil} />}{verified && <VerifiedBadge />}</div>}
+      <div className="flex gap-3">
+        <TokenAvatar src={t.imageUrl} symbol={t.symbol} size={64} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0"><p className="truncate font-bold text-[#f6f1e4]" title={t.name}>{t.name}</p><p className="truncate text-xs font-semibold text-[#c9a24a]">${t.symbol}</p></div>
+            <span className="num shrink-0 text-[10px] text-[#8a8478]" title="Pool age">{formatAge(t.createdAt, now)}</span>
+          </div>
+          <p className="mt-1 text-[11px] uppercase tracking-wider text-[#8a8478]">Market cap</p>
+          <p className="num -mt-0.5 text-lg font-extrabold text-[#e3c06a]">{formatUsdCompact(t.marketCapUsd)}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5"><Change label="5m" v={t.change5mPct} /><Change label="1h" v={t.change1hPct} /><Change label="24h" v={t.change24hPct} /></div>
+      <dl className="num mt-3 grid grid-cols-3 gap-2 text-[11px]">
+        <div><dt className="text-[#8a8478]">Vol 1h</dt><dd className="text-[#d8d2c5]">{formatUsdCompact(t.volume1hUsd)}</dd></div>
+        <div><dt className="text-[#8a8478]">Vol 24h</dt><dd className="text-[#d8d2c5]">{formatUsdCompact(t.volume24hUsd)}</dd></div>
+        <div><dt className="text-[#8a8478]">Liquidity</dt><dd className="text-[#d8d2c5]">{formatUsdCompact(t.liquidityUsd)}</dd></div>
+      </dl>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-[11px]">
+        <span className="num text-[#8a8478]">{formatPrice(t.priceUsd)} · {t.dex}{t.boosted ? ' · DexScreener boost' : ''}</span>
+        <span className="flex gap-2">
+          <Link href={`/app/audit?mint=${t.mint}`} className="font-semibold text-[#c9a24a] hover:text-[#f3dc95]">Audit</Link>
+          <Link href={`/app/paper?mint=${t.mint}`} className="font-semibold text-[#c9a24a] hover:text-[#f3dc95]">Paper</Link>
+          {t.url && <a href={t.url} target="_blank" rel="noreferrer" className="text-[#8a8478] hover:text-[#f3dc95]">Chart ↗</a>}
+        </span>
+      </div>
+    </article>
+  );
 }
 
 export default function SignalsPage() {
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState('');
-  const [filter, setFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
-
-  const fetchSignals = useCallback(async () => {
-    try {
-      const res = await fetch('/api/signals?quote=USDC');
-      if (res.ok) {
-        const data = await res.json();
-        setSignals(data.signals ?? []);
-      }
-    } catch {
-      // keep previous
-    } finally {
-      setLoading(false);
-      setLastUpdated(new Date().toLocaleTimeString());
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSignals();
-    const t = setInterval(fetchSignals, 10_000);
-    return () => clearInterval(t);
-  }, [fetchSignals]);
-
-  const visible = signals.filter((s) =>
-    filter === 'ALL' ? true : s.side === filter
-  );
+  const { data, state, error, reload } = useMovers(15_000);
+  const [sort, setSort] = useState<MoverSort>('movers');
+  const [q, setQ] = useState('');
+  const now = useNow(5000);
+  const listings = useListings(true);
+  const cards = useMemo(() => {
+    const all = sortMovers(data?.tokens ?? [], sort);
+    const s = q.trim().toLowerCase();
+    return s ? all.filter((t) => t.symbol.toLowerCase().includes(s) || t.name.toLowerCase().includes(s) || t.mint === q.trim()) : all;
+  }, [data, sort, q]);
+  const { boostedRow, rest } = useMemo(() => {
+    const boosts = listings.data?.boosts ?? [];
+    const pool = [...cards, ...(listings.data?.boostedCards ?? []).filter((b) => !cards.some((c) => c.mint === b.mint))];
+    const { boosted } = splitBoosted(pool, boosts);
+    const s = q.trim().toLowerCase();
+    const shown = s ? boosted.filter((t) => t.symbol.toLowerCase().includes(s) || t.name.toLowerCase().includes(s) || t.mint === q.trim()) : boosted;
+    const ids = new Set(shown.map((b) => b.mint));
+    return { boostedRow: shown, rest: cards.filter((c) => !ids.has(c.mint)) };
+  }, [cards, listings.data, q]);
+  const fresh = freshness(data?.fetchedAt, now);
+  const stale = !!data && (data.stale || fresh === 'stale' || (!!error && state === 'ready'));
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Logo on every page */}
-      <header className="border-b border-white/10 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <Link href="/app/intelligence" className="text-xs border border-amber-400/30 text-amber-300 rounded-lg px-3 py-2 hover:bg-amber-400/10">Token Intelligence</Link>
-          <Link href="/app" className="flex items-center gap-3">
-            <Image
-              src="/cletus-logo.png"
-              alt="Cletus"
-              width={40}
-              height={40}
-              className="object-contain"
-              priority
-            />
-            <div>
-              <div className="font-bold text-lg tracking-tight leading-none">Cletus</div>
-              <div className="text-xs text-white/50 mt-0.5">Signals · live</div>
-            </div>
-          </Link>
-          <div className="flex items-center gap-3 text-xs font-mono text-white/50">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE
-            </span>
-            <span>CoinGecko terminal</span>
-            {lastUpdated && <span>Updated {lastUpdated}</span>}
-          </div>
+    <div>
+      <PageHeader eyebrow="Signals scanner · Solana" title="Movers board" actions={<Refreshed at={data?.fetchedAt} stale={stale} />}>
+        Live tokens trending on DexScreener, refreshed every 15 seconds. Market data only, not a recommendation; most micro-caps lose value.
+      </PageHeader>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Sort">
+          {MOVER_SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} onClick={() => setSort(s.id)} className={`whitespace-nowrap border px-3 py-1.5 text-xs font-bold uppercase tracking-wider ${sort === s.id ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f3dc95]' : 'border-white/10 text-[#a39c8f] hover:text-[#f2ede2]'}`}>{s.label}</button>)}
         </div>
-      </header>
-
-      <main className="flex-1 px-6 py-8">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Market Signals</h1>
-              <p className="text-sm text-white/50 mt-1">
-                Live output of Cletus&apos;s scanner (DexScreener data, refreshed every scan) · prices in{' '}
-                <span className="text-emerald-400 font-mono">USD</span> · Cletus only trades long
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {(['ALL', 'LONG', 'SHORT'] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
-                    filter === f
-                      ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
-                      : 'border-white/10 text-white/50 hover:border-white/30'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-              <button
-                onClick={fetchSignals}
-                className="px-3 py-1.5 rounded-lg text-xs font-mono border border-white/10 text-white/60 hover:text-white hover:border-white/30"
-              >
-                ↻ Refresh
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 overflow-hidden bg-[#0a0a0a]">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm font-mono">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03] text-white/40 text-xs uppercase tracking-wider">
-                    <th className="text-left py-3 px-4">Pair</th>
-                    <th className="text-left py-3 px-4">Side</th>
-                    <th className="text-right py-3 px-4">Price (USD)</th>
-                    <th className="text-right py-3 px-4">24h</th>
-                    <th className="text-right py-3 px-4">Vol 24h</th>
-                    <th className="text-right py-3 px-4">Mcap</th>
-                    <th className="text-right py-3 px-4">Score</th>
-                    <th className="text-left py-3 px-4">Signals</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {loading && visible.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-white/30">
-                        Loading terminal feed…
-                      </td>
-                    </tr>
-                  )}
-                  {!loading && visible.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-white/30">
-                        No scanner results yet. The engine fills this after its first scan
-                      </td>
-                    </tr>
-                  )}
-                  {visible.map((s) => (
-                    <tr key={s.id} className="hover:bg-white/[0.03] transition-colors">
-                      <td className="py-3 px-4">
-                        <a href={`/app/chart?address=${s.id}`} className="text-white font-semibold hover:text-emerald-400">{s.base}</a>
-                        <span className="text-white/40">/{s.quote}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded font-semibold ${
-                            s.side === 'LONG'
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : 'bg-red-500/15 text-red-400'
-                          }`}
-                        >
-                          {s.side}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right text-white">
-                        {formatPrice(s.priceUsd)}
-                      </td>
-                      <td
-                        className={`py-3 px-4 text-right font-semibold ${
-                          s.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'
-                        }`}
-                      >
-                        {s.change24h >= 0 ? '+' : ''}
-                        {s.change24h.toFixed(2)}%
-                      </td>
-                      <td className="py-3 px-4 text-right text-white/70">
-                        {formatUsd(s.volume24h)}
-                      </td>
-                      <td className="py-3 px-4 text-right text-white/70">
-                        {formatUsd(s.mcap)}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs ${
-                            s.score >= 80
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : s.score >= 60
-                              ? 'bg-yellow-500/15 text-yellow-400'
-                              : 'bg-white/5 text-white/50'
-                          }`}
-                        >
-                          {s.score}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-white/50">
-                        {s.signals.join(' · ') || '—'}{s.status && <div className="text-[10px] text-white/35">{s.status}</div>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="border-t border-white/10 px-4 py-2 flex justify-between text-xs text-white/30 font-mono">
-              <span>Source: Cletus engine scan · DexScreener · score = composite of 8 self-learning signals</span>
-              <span>{visible.length} rows</span>
-            </div>
-          </div>
-
-          <p className="text-xs text-white/30 text-center">
-            Signals are informational only. Not financial advice. Trading involves risk of
-            loss.
-          </p>
-        </div>
-      </main>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by name, ticker or mint" className="field sm:max-w-xs" aria-label="Filter tokens" />
+      </div>
+      <div className="mb-4 space-y-2">
+        {stale && <StateBox kind="stale" title="Showing the last good board">Live refresh is failing or delayed{error ? ` (${error})` : ''}. Numbers may be out of date.</StateBox>}
+        {state === 'error' && <StateBox kind="error" title="Market data unavailable" action={<button className="btn-line !py-1.5" onClick={() => void reload()}>Retry</button>}>{error}. Nothing is shown rather than guessing.</StateBox>}
+        {state === 'empty' && <StateBox kind="empty" title="No Solana tokens on the board right now">DexScreener returned no Solana listings. It will refresh automatically.</StateBox>}
+      </div>
+      {state === 'loading' && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="signals-loading">{Array.from({ length: 9 }).map((_, i) => <div key={i} className="skeleton h-48" />)}</div>}
+      {state === 'ready' && (
+        <>
+          <p className="mb-3 text-xs text-[#8a8478]" data-testid="signals-count">{cards.length} tokens{q && ` matching “${q}”`}</p>
+          {boostedRow.length > 0 && (
+            <section className="mb-5" data-testid="boosted-row" aria-label="Boosted tokens">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-xs font-bold uppercase tracking-[.18em] text-[#e3c06a]">⚡ Boosted · paid promotion</h2><Link href="/app/boost" className="text-[11px] text-[#8a8478] underline">What is this?</Link></div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{boostedRow.map((t) => <Card key={`b-${t.mint}`} t={t} now={now} verified={listings.isVerified('solana', t.mint)} boostedUntil={listings.boostOf('solana', t.mint)?.expiresAt ?? null} />)}</div>
+              <p className="mt-2 text-[10px] text-[#6f695f]">Boosts are paid placement, not Cletus signals, and never affect what Cletus trades.</p>
+            </section>
+          )}
+          {cards.length === 0 ? <StateBox kind="empty" title="No tokens match that filter" /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="signals-grid">{rest.map((t) => <Card key={t.mint} t={t} now={now} verified={listings.isVerified('solana', t.mint)} />)}</div>}
+        </>
+      )}
     </div>
   );
 }

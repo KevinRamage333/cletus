@@ -29,3 +29,16 @@ describe('live worker exclusive lock', () => {
     c!.release();
   });
 });
+
+  it('refuses to start when the flock helper is unavailable (no racy pid fallback)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cletus-lock-'));
+    const lockPath = path.join(dir, 'live-worker.lock');
+    const got = tryAcquireLiveWorkerLock({
+      lockPath,
+      cwd: dir,
+      env: { LIVE_WORKER_FLOCK_HELPER: path.join(dir, 'missing.py') },
+      cmd: 'scripts/live-worker.ts test-no-helper',
+    });
+    expect(got).toBeNull();
+  });
+

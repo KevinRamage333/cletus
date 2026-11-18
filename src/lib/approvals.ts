@@ -47,7 +47,7 @@ export function tradeFeeView(p: {
   const exitNotional = p.exitPrice && p.tokenAmount ? p.exitPrice * p.tokenAmount : 0;
   const exitOperatorFeeUsd = operatorFeeUsd(exitNotional, bps);
   return {
-    feesUsd: p.feesUsd ?? 0,
+    feesUsd: p.feesUsd ?? null,
     operatorFeeBps: bps,
     operatorFeeUsd: Math.round((entryOperatorFeeUsd + exitOperatorFeeUsd) * 1e6) / 1e6,
     entryOperatorFeeUsd,

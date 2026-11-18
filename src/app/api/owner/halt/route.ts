@@ -7,7 +7,7 @@ import { loadOwnerState } from '@/lib/owner-store';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  const sess = await verifyOwnerSession(cookies().get(OWNER_COOKIE)?.value);
+  const sess = await verifyOwnerSession((await cookies()).get(OWNER_COOKIE)?.value);
   if (!sess) return NextResponse.json({ error: 'not signed in' }, { status: 401 });
   const body = await req.json().catch(() => ({}));
   const action = body.action === 'resume' ? 'resume' : body.action === 'halt' ? 'halt' : null;
