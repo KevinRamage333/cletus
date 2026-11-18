@@ -123,8 +123,9 @@ try {
   await shot(memberPage, 'thread-mobile');
 
   // The status line sits in the desktop sidebar, which the mobile viewport hides.
+  // It is a text node inside the sidebar, not its own element, so match the phrase.
   await adminPage.setViewportSize({ width: 1280, height: 900 });
-  await adminPage.getByText('Live trading disabled.', { exact: true }).waitFor();
+  await adminPage.getByText('Live trading disabled.').waitFor();
   console.log('smoke passed');
 } catch (error) {
   await shot(adminPage, 'failure-admin').catch(() => undefined);
