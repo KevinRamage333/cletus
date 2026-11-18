@@ -54,6 +54,7 @@ type TradeSession = {
   paperWorkerLastAt: string | null;
   paperWorkerMonitorAt: string | null;
   paperWorkerMessage: string | null;
+  syntheticPaper?: boolean;
 };
 
 const EMPTY: TradeSession = {
@@ -107,6 +108,7 @@ export default function ActiveTradingPage() {
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [chartFor, setChartFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -144,6 +146,7 @@ export default function ActiveTradingPage() {
           paperWorkerLastAt: data.paperWorkerLastAt ? String(data.paperWorkerLastAt) : null,
           paperWorkerMonitorAt: data.paperWorkerMonitorAt ? String(data.paperWorkerMonitorAt) : null,
           paperWorkerMessage: data.paperWorkerMessage ? String(data.paperWorkerMessage) : null,
+          syntheticPaper: data.syntheticPaper === true,
         });
         setKnown(true);
         setError(null);
@@ -163,9 +166,18 @@ export default function ActiveTradingPage() {
 
   const post = async (path: string) => {
     setBusy(true);
+    setActionError(null);
     try {
-      await fetch(path, { method: 'POST', credentials: 'include' });
+      const res = await fetch(path, { method: 'POST', credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = typeof data.error === 'string' && data.error.trim() ? data.error : `That action failed (${res.status}).`;
+        setActionError(message);
+        return;
+      }
       await load();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'That action failed.');
     } finally {
       setBusy(false);
     }
@@ -247,8 +259,8 @@ export default function ActiveTradingPage() {
         <div className="max-w-2xl mx-auto space-y-4">
           <CletusPaperBook variant="compact" />
           <ScreenStatus
-            state={screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
-            error={error}
+            state={actionError ? 'error' : screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
+            error={actionError ?? error}
             emptyLabel="No open paper positions."
             refreshedLabel={refreshedLabel('Portfolio P&L', refreshedAt)}
           />
@@ -349,6 +361,17 @@ export default function ActiveTradingPage() {
               </div>
             </div>
           </section>
+
+          {session.syntheticPaper && (
+            <section data-testid="synthetic-paper" className="rounded-2xl border border-amber-400/30 bg-[#121212] p-4 space-y-3">
+              <h2 className="text-sm font-semibold">Synthetic paper ticket</h2>
+              <p className="text-xs text-white/50">Records a simulated buy or sell in this test account. It does not sign or broadcast a transaction.</p>
+              <div className="flex gap-2">
+                <button type="button" data-testid="synthetic-buy" disabled={busy} onClick={() => post('/api/protected/trade/synthetic?side=buy')} className="px-4 py-2 rounded-full text-sm font-semibold bg-[#D4AF37] text-black">Paper buy</button>
+                <button type="button" data-testid="synthetic-sell" disabled={busy} onClick={() => post('/api/protected/trade/synthetic?side=sell')} className="px-4 py-2 rounded-full text-sm font-semibold border border-white/20">Paper sell</button>
+              </div>
+            </section>
+          )}
 
           {/* On-chain verification */}
           <section className="rounded-2xl border border-white/10 bg-[#121212] p-4">

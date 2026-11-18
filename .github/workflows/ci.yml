@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    branches: [master]
   push:
     branches: [master]
 
@@ -50,7 +49,75 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
       - name: Verify the paper ledger and scheduled worker
-        run: npm test -- tests/paper-settlement.pg.test.ts tests/paper-worker.pg.test.ts tests/paper-lifecycle.pg.test.ts
+        run: npm test -- --no-file-parallelism tests/paper-settlement.pg.test.ts tests/paper-worker.pg.test.ts tests/paper-lifecycle.pg.test.ts tests/synthetic-paper.pg.test.ts tests/community-privacy.pg.test.ts tests/public-live-scope.pg.test.ts
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/cletus?schema=app
           PAPER_SETTLEMENT_PG_TEST: '1'
+
+  smoke:
+    name: Browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cletus_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d cletus_smoke"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cletus_smoke?schema=app
+      SESSION_SECRET: smoke-session-secret-at-least-32-chars
+      TRADING_MODE: simulation
+      BETA_MODE: "true"
+      # Actions sets CI=true and GITHUB_ACTIONS=true. Synthetic fills stay off on Vercel.
+      CLETUS_SYNTHETIC_PAPER: "1"
+      # Unverified email sign-up stays closed unless this flag, Actions, and a localhost database are all set.
+      CLETUS_CI_SIGNUP: "1"
+      COOKIE_SECURE: "false"
+      SMOKE_BASE: http://127.0.0.1:3000
+      SMOKE_SHOT_DIR: tests/e2e/artifacts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chrome and psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client wget
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+      - name: Create the disposable app schema and migrate
+        run: |
+          psql "postgresql://postgres:postgres@localhost:5432/cletus_smoke" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA IF NOT EXISTS app;'
+          npx prisma migrate deploy
+      - name: Build, start, and run browser smoke
+        run: |
+          npm run build
+          npm run start > /tmp/cletus-smoke.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/signup >/dev/null; then break; fi
+            if [ "$i" = "60" ]; then echo 'server did not start'; tail -n 80 /tmp/cletus-smoke.log; exit 1; fi
+            sleep 2
+          done
+          npm run test:smoke
+      - name: Upload mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-screenshots
+          path: tests/e2e/artifacts/*.png
+          if-no-files-found: ignore
