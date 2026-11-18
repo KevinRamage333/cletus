@@ -43,6 +43,10 @@ describe('synthetic paper guard', () => {
     expect(ciSignupAllowed({ ...open, DATABASE_URL: undefined })).toBe(false);
     expect(ciSignupAllowed({ ...open, DATABASE_URL: 'not a url' })).toBe(false);
     expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://user:secret@ep-example.neon.tech/cletus?sslmode=require' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://u@localhost/db?host=remote' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://u@127.0.0.1/db?HOST=10.0.0.8' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://u@localhost/db?hostaddr=10.1.2.3' })).toBe(false);
+    expect(ciSignupAllowed({ ...open, DATABASE_URL: 'postgresql://u@[::1]/db?schema=app&HostAddr=remote.example' })).toBe(false);
     expect(ciSignupAllowed({ ...open, VERCEL: '1' })).toBe(false);
     expect(ciSignupAllowed({ ...open, VERCEL_ENV: 'preview' })).toBe(false);
     expect(ciSignupAllowed({ ...open, VERCEL_ENV: 'production' })).toBe(false);

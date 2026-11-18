@@ -85,6 +85,21 @@ export function databaseHost(url: string | undefined): string | null {
   }
 }
 
+/** libpq query keys that replace the URL host. Names are case-insensitive. */
+function queryOverridesHost(url: string | undefined): boolean {
+  if (!url) return false;
+  const query = url.split('#')[0]?.split('?')[1];
+  if (!query) return false;
+  for (const part of query.split('&')) {
+    const raw = part.split('=')[0] ?? '';
+    let key = raw;
+    try { key = decodeURIComponent(raw.replace(/\+/g, ' ')); } catch { /* keep the raw key */ }
+    const name = key.trim().toLowerCase();
+    if (name === 'host' || name === 'hostaddr') return true;
+  }
+  return false;
+}
+
 /**
  * Unverified email sign-up for the disposable smoke job only.
  * Every condition is required. CI, Vitest, or a local database alone is not enough.
@@ -94,7 +109,7 @@ export function ciSignupAllowed(env?: CiSignupEnv): boolean {
   if (flags.CLETUS_CI_SIGNUP !== '1') return false;
   if (flags.GITHUB_ACTIONS !== 'true') return false;
   const host = databaseHost(flags.DATABASE_URL);
-  if (!host || !LOCAL_DB_HOSTS.has(host)) return false;
+  if (!host || !LOCAL_DB_HOSTS.has(host) || queryOverridesHost(flags.DATABASE_URL)) return false;
   if (envPresent(flags.VERCEL) || envPresent(flags.VERCEL_ENV) || envPresent(flags.VERCEL_URL) || envPresent(flags.VERCEL_DEPLOYMENT_ID)) return false;
   return true;
 }
