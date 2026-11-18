@@ -122,6 +122,8 @@ try {
   await memberPage.getByTestId('thread-detail').waitFor();
   await shot(memberPage, 'thread-mobile');
 
+  // The status line sits in the desktop sidebar, which the mobile viewport hides.
+  await adminPage.setViewportSize({ width: 1280, height: 900 });
   await adminPage.getByText('Live trading disabled.', { exact: true }).waitFor();
   console.log('smoke passed');
 } catch (error) {
