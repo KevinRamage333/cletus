@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '@/lib/auth';
-import { assertSyntheticPaper, syntheticPaperAllowed, syntheticPaperRuntimeAllowed } from '@/lib/synthetic-paper';
+import { assertSyntheticPaper, disposableRuntimeAllowed, syntheticPaperAllowed, syntheticPaperRuntimeAllowed } from '@/lib/synthetic-paper';
 
 const flagged = { CLETUS_SYNTHETIC_PAPER: '1' };
 
@@ -24,6 +24,14 @@ describe('synthetic paper guard', () => {
     expect(() => assertSyntheticPaper({ ...flagged, CI: 'true', VERCEL_ENV: 'preview' }, 'simulation')).toThrow(HttpError);
     expect(() => assertSyntheticPaper({ ...flagged, CI: 'true' }, 'simulation')).not.toThrow();
     expect(() => assertSyntheticPaper({ ...flagged, NODE_ENV: 'test' }, 'simulation')).not.toThrow();
+  });
+
+  it('keeps unverified sign-up closed outside CI and the test runner', () => {
+    expect(disposableRuntimeAllowed({ NODE_ENV: 'production' })).toBe(false);
+    expect(disposableRuntimeAllowed({ CI: 'true', NODE_ENV: 'production' })).toBe(true);
+    expect(disposableRuntimeAllowed({ NODE_ENV: 'test' })).toBe(true);
+    expect(disposableRuntimeAllowed({ CI: 'true', VERCEL: '1', VERCEL_ENV: 'preview' })).toBe(false);
+    expect(disposableRuntimeAllowed({ CI: 'true', VERCEL_ENV: 'production' })).toBe(false);
   });
 
   it('refuses the flag on Vercel preview and production even when CI is set', () => {

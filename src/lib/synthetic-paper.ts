@@ -39,6 +39,11 @@ export function syntheticPaperRuntimeAllowed(env: SyntheticEnv): boolean {
   return inCi || inTest;
 }
 
+/** Disposable CI and test runtimes. Vercel preview and production stay closed. */
+export function disposableRuntimeAllowed(env?: SyntheticEnv): boolean {
+  return syntheticPaperRuntimeAllowed(envFlag(env));
+}
+
 /** Test-only switch. Live mode and Vercel preview/production never enable it. */
 export function syntheticPaperAllowed(env?: SyntheticEnv, mode: string = 'simulation'): boolean {
   const flags = envFlag(env);
