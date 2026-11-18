@@ -106,6 +106,7 @@ export default function ActiveTradingPage() {
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [chartFor, setChartFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -163,9 +164,18 @@ export default function ActiveTradingPage() {
 
   const post = async (path: string) => {
     setBusy(true);
+    setActionError(null);
     try {
-      await fetch(path, { method: 'POST', credentials: 'include' });
+      const res = await fetch(path, { method: 'POST', credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = typeof data.error === 'string' && data.error.trim() ? data.error : `That action failed (${res.status}).`;
+        setActionError(message);
+        return;
+      }
       await load();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'That action failed.');
     } finally {
       setBusy(false);
     }
@@ -246,8 +256,8 @@ export default function ActiveTradingPage() {
       <main className="flex-1 px-4 sm:px-6 py-6">
         <div className="max-w-2xl mx-auto space-y-4">
           <ScreenStatus
-            state={screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
-            error={error}
+            state={actionError ? 'error' : screenState({ loading, error, hasData: known, empty: known && session.openPositions.length === 0, refreshedAt })}
+            error={actionError ?? error}
             emptyLabel="No open paper positions."
             refreshedLabel={refreshedLabel('Portfolio P&L', refreshedAt)}
           />
