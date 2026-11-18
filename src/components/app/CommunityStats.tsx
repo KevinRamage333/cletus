@@ -6,7 +6,7 @@ import { COMMUNITY_NETWORKS } from '@/lib/community-overview';
 import CommunityCharts from '@/components/charts/CommunityCharts';
 import type { PnlPoint } from '@/lib/live-chart';
 
-type Overview = { connected: true; updatedAt: string; participants: number; activeNow: number; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number; lossesUsd: number; closedTrades: number }; tokensPerNetwork: Record<string, number>; pnlSeries?: PnlPoint[]; mostTraded?: { mint: string; symbol: string; trades: number } | null };
+type Overview = { connected: true; updatedAt: string; participants: number | null; activeNow: number | null; collectivePnl: { suppressed: true; minContributors: number } | { suppressed: false; netUsd: number; gainsUsd: number; lossesUsd: number; closedTrades: number }; tokensPerNetwork: Record<string, number> | null; pnlSeries?: PnlPoint[]; mostTraded?: { mint: string; symbol: string; trades: number } | null };
 type Status = { kind: 'loading' } | { kind: 'ok'; data: Overview } | { kind: 'signin' } | { kind: 'not-connected'; reason: string } | { kind: 'error'; reason: string };
 const usd = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 
@@ -30,20 +30,22 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
   const pnl = d?.collectivePnl;
   const na = s.kind === 'loading' ? '…' : '—';
   const naSub = s.kind === 'signin' ? 'Sign in to view' : s.kind === 'not-connected' ? 'Not yet connected' : s.kind === 'error' ? 'Unavailable' : undefined;
+  const MIN = 5;
+  const hiddenCount = `Shown once ${MIN}+ opted-in members`;
   const scanning = boardState === 'ready' ? board?.tokens.length ?? null : null;
 
   return (
     <div>
       <PageHeader eyebrow="Gold community" title="Who Cletus trades for" actions={d ? <Refreshed at={d.updatedAt} /> : undefined}>
-        Aggregated, privacy-conscious figures from recorded paper trades. Individual accounts are never shown, and collective P&amp;L is hidden until at least five members contribute.
+        Aggregated figures from the recorded paper trades of members who opted in to the community. Individual accounts are never shown, and every count and P&amp;L figure stays hidden until at least five members are behind it.
       </PageHeader>
       {s.kind === 'not-connected' && <div className="mb-4"><StateBox kind="not-connected" title="Community data not yet connected">{s.reason} Figures below show “—” instead of guessing.</StateBox></div>}
       {s.kind === 'signin' && <div className="mb-4"><StateBox kind="info" title="Sign in to see community figures">Community aggregates are available to members who completed onboarding.</StateBox></div>}
       {s.kind === 'error' && <div className="mb-4"><StateBox kind="error" title="Community data could not load" action={<button className="btn-line !py-1.5" onClick={() => void load()}>Retry</button>}>{s.reason}</StateBox></div>}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="community-stats">
-        <Stat label="People Cletus trades for" value={d ? d.participants.toLocaleString('en-US') : na} sub={d ? `${d.activeNow} with open paper positions` : naSub} testId="stat-people" />
+        <Stat label="People Cletus trades for" value={!d ? na : d.participants == null ? 'Hidden' : d.participants.toLocaleString('en-US')} tone={d && d.participants == null ? 'muted' : undefined} sub={!d ? naSub : d.participants == null ? hiddenCount : d.activeNow == null ? `Open positions hidden below ${MIN} members` : `${d.activeNow.toLocaleString('en-US')} with open paper positions`} testId="stat-people" />
         <Stat label="Collective P&L (paper, realized)" value={!pnl ? na : pnl.suppressed ? 'Hidden' : usd(pnl.netUsd)} tone={!pnl || pnl.suppressed ? 'muted' : pnl.netUsd >= 0 ? 'up' : 'down'} sub={!pnl ? naSub : pnl.suppressed ? `Needs ${pnl.minContributors}+ contributors` : `${pnl.closedTrades} closed trades · gains ${usd(pnl.gainsUsd)} · losses ${usd(pnl.lossesUsd)}`} testId="stat-pnl" />
-        <Stat label="Tokens traded (all networks)" value={d ? Object.values(d.tokensPerNetwork).reduce((a, b) => a + b, 0).toLocaleString('en-US') : na} sub={d ? 'Distinct tokens with paper trades' : naSub} testId="stat-tokens" />
+        <Stat label="Tokens traded (all networks)" value={!d ? na : d.tokensPerNetwork == null ? 'Hidden' : Object.values(d.tokensPerNetwork).reduce((a, b) => a + b, 0).toLocaleString('en-US')} tone={d && d.tokensPerNetwork == null ? 'muted' : undefined} sub={!d ? naSub : d.tokensPerNetwork == null ? hiddenCount : 'Distinct tokens opted-in members paper traded'} testId="stat-tokens" />
         <Stat label="Tokens scanned now" value={scanning == null ? (boardState === 'loading' ? '…' : '—') : scanning.toLocaleString('en-US')} sub="Live Solana board (DexScreener)" testId="stat-scanned" />
       </div>
 
@@ -61,7 +63,7 @@ export default function CommunityStats({ demo }: { demo: boolean }) {
             <td className="py-2.5 pr-3">{n.walletConnect ? <span className="text-green-300">● Ready</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
             <td className="py-2.5 pr-3">{n.marketData ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
             <td className="py-2.5 pr-3">{n.paperTrading ? <span className="text-green-300">● Live</span> : <span className="text-[#8a8478]">○ Planned</span>}</td>
-            <td className="num py-2.5">{d && d.tokensPerNetwork[n.id] != null ? d.tokensPerNetwork[n.id] : <span className="text-[#8a8478]" title={naSub}>—</span>}</td>
+            <td className="num py-2.5">{d?.tokensPerNetwork && d.tokensPerNetwork[n.id] != null ? d.tokensPerNetwork[n.id] : <span className="text-[#8a8478]" title={naSub}>—</span>}</td>
           </tr>
         ))}</tbody>
       </table></div>

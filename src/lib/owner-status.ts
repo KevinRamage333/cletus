@@ -13,7 +13,7 @@ import { readOnchainWallet } from './owner-onchain';
 import { loadOwnerState, snapshotAgeMs } from './owner-store';
 import { EMPTY_HALT, type HaltState } from './owner-halt';
 import {
-  curveFromClosed, enrichPosition, feedFromLiveEvents, isolateLiveWatch, liveWatchFromAccountStatus, mergeFeed, sumTodayPnl, winLoss,
+  curveFromClosed, enrichPosition, feedFromLiveEvents, isolateLiveWatch, liveWatchFromAccountStatus, mergeFeed, sumKnown, sumTodayPnl, winLoss,
   type LiveWatchFeedItem, type LiveWatchModel, type LiveWatchPosition,
 } from './live-watch';
 import { buildPublicBooks, booksFromMaybeMixed, mergeRecorded, recordedFromClosedPositions, recordedFromLiveEvents, type PublicLiveStats } from './public-live';
@@ -217,7 +217,8 @@ export function planForLiveEquity(plan: OwnerPlanStatusView | null, liveEquityUs
   };
 }
 
-function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | null, onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {
+/** @internal Exported for tests. */
+export function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | null, onchain: Awaited<ReturnType<typeof readOnchainWallet>> | null): LiveWatchModel {
   const events = readLiveTrades();
   const fromLog = feedFromLiveEvents(events);
   const feed = mergeFeed(fromLog, watch.feed);
@@ -232,15 +233,16 @@ function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | nul
       open = enrichPosition({
         id: lastBuy.id, symbol: lastBuy.symbol, mint: lastBuy.mint, sizeUsd: lastBuy.sizeUsd ?? null,
         entryPrice: lastBuy.entryPrice, lastPrice: lastBuy.exitPrice ?? lastBuy.entryPrice,
-        pnlUsd: 0, pnlPct: 0, openedAt: lastBuy.at, entryTx: null, solscanEntry: lastBuy.solscan,
+        pnlUsd: null, pnlPct: null, openedAt: lastBuy.at, entryTx: null, solscanEntry: lastBuy.solscan,
         solscanMint: lastBuy.solscanMint, simulated: lastBuy.simulated,
       }, sl, tp);
     }
   }
   const equity = onchain?.equityUsd ?? watch.equityUsd;
-  const realized = sells.length ? sells.reduce((s, t) => s + (t.pnlUsd ?? 0), 0) : watch.realizedPnl;
+  // Unknown (null) when any sell's P&L is missing, never a $0 stand-in for it.
+  const realized = sells.length ? sumKnown(sells.map((t) => t.pnlUsd)) : watch.realizedPnl;
   const today = sells.length ? sumTodayPnl(sells.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))) : watch.todayPnl;
-  const curve = watch.equityCurve.length > 1 ? watch.equityCurve : curveFromClosed(equity != null ? equity - realized : 0, sells.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd })), equity);
+  const curve = watch.equityCurve.length > 1 ? watch.equityCurve : equity == null || realized === null ? [] : curveFromClosed(equity - realized, sells.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd })), equity);
   const c = getConfig();
   return {
     ...watch,
@@ -248,7 +250,7 @@ function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | nul
     sol: onchain?.sol ?? watch.sol,
     solPriceUsd: onchain?.solPriceUsd ?? watch.solPriceUsd,
     realizedPnl: realized,
-    totalPnl: watch.unrealizedPnl === null ? null : realized + watch.unrealizedPnl,
+    totalPnl: watch.unrealizedPnl === null || realized === null ? null : realized + watch.unrealizedPnl,
     todayPnl: today,
     winRate: wl.winRate ?? watch.winRate,
     wins: wl.wins || watch.wins,

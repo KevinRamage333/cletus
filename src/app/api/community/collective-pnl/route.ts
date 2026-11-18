@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireOnboardedUser, errorResponse } from '@/lib/auth';
 import { COLLECTIVE_PRIVACY_THRESHOLD, collectiveFiguresVisible } from '@/lib/community-feed';
+import { COMMUNITY_PAPER_SCOPE, distinctPeople } from '@/lib/community-scope';
 export const dynamic = 'force-dynamic';
 
 const HIDDEN = 'Collective financial metrics are hidden until at least five people have closed paper trades in the opted-in group. Your opt-in status is still visible. No individual account, position, or wallet data is exposed.';
@@ -9,10 +10,7 @@ const SHOWN = 'Aggregates closed paper trades from opted-in, non-muted members o
 const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' };
 
 /** Paper positions of opted-in, non-banned members (lab preset accounts excluded). */
-const optedInPaper = {
-  simulated: true,
-  account: { labPreset: null, user: { is: { banned: false, communityOptIn: { is: { optedIn: true } } } } },
-};
+const optedInPaper = COMMUNITY_PAPER_SCOPE;
 
 /**
  * The privacy threshold is checked on the people actually inside the aggregate
@@ -27,7 +25,7 @@ export async function GET() {
       prisma.position.findMany({ where: closed, distinct: ['accountId'], select: { account: { select: { userId: true } } } }),
       prisma.communityOptIn.findUnique({ where: { userId: user.id }, select: { optedIn: true } }),
     ]);
-    const contributors = new Set(contributorRows.map((r) => r.account.userId).filter((id): id is string => Boolean(id))).size;
+    const contributors = distinctPeople(contributorRows);
     const base = {
       mode: 'paper' as const,
       privacyThreshold: COLLECTIVE_PRIVACY_THRESHOLD,

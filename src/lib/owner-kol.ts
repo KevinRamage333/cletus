@@ -28,8 +28,8 @@ export function emptyKolDesk(): KolDesk {
 export interface CombinedWallets {
   sol: number | null;
   usd: number | null;
-  realizedPnl: number;
-  totalPnl: number;
+  realizedPnl: number | null;
+  totalPnl: number | null;
   openPositions: number;
   mainSol: number | null;
   kolSol: number | null;
@@ -38,7 +38,7 @@ export interface CombinedWallets {
 }
 
 export function combinedWallets(
-  main: { sol?: number | null; equityUsd?: number | null; realizedPnl?: number; totalPnl?: number | null; openAll?: unknown[]; open?: unknown },
+  main: { sol?: number | null; equityUsd?: number | null; realizedPnl?: number | null; totalPnl?: number | null; openAll?: unknown[]; open?: unknown },
   kol: KolDesk | null | undefined,
 ): CombinedWallets {
   const mainSol = main.sol ?? null;
@@ -46,15 +46,17 @@ export function combinedWallets(
   const mainUsd = main.equityUsd ?? null;
   const kolUsd = kol?.usd ?? null;
   const add = (a: number | null, b: number | null) => (a == null && b == null ? null : (a ?? 0) + (b ?? 0));
-  const realized = (main.realizedPnl ?? 0) + (kol?.totals.pnlUsd ?? 0);
-  const unrealized = (kol?.open ?? []).reduce((s, p) => s + p.pnlUsd, 0);
-  const mainTotal = main.totalPnl ?? main.realizedPnl ?? 0;
+  // Unknown main-wallet P&L stays unknown in the combined figures (no $0 or realized-only stand-in).
+  const kolRealized = kol?.totals.pnlUsd ?? 0;
+  const realized = main.realizedPnl == null ? null : main.realizedPnl + kolRealized;
+  const unrealized = sumKnown((kol?.open ?? []).map((p) => (Number.isFinite(p.pnlUsd) ? p.pnlUsd : null)));
+  const mainTotal = main.totalPnl ?? null;
   const openPositions = (main.openAll?.length ?? (main.open ? 1 : 0)) + (kol?.open.length ?? 0);
   return {
     sol: add(mainSol, kolSol),
     usd: add(mainUsd, kolUsd) == null ? null : Math.round(((mainUsd ?? 0) + (kolUsd ?? 0)) * 100) / 100,
-    realizedPnl: Math.round(realized * 100) / 100,
-    totalPnl: Math.round((mainTotal + (kol?.totals.pnlUsd ?? 0) + unrealized) * 100) / 100,
+    realizedPnl: realized === null ? null : Math.round(realized * 100) / 100,
+    totalPnl: mainTotal === null || unrealized === null ? null : Math.round((mainTotal + kolRealized + unrealized) * 100) / 100,
     openPositions,
     mainSol, kolSol, mainUsd, kolUsd,
   };

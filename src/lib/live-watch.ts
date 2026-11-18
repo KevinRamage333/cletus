@@ -63,7 +63,8 @@ export interface LiveWatchModel {
   cashUsd?: number | null;
   sol?: number | null;
   solPriceUsd?: number | null;
-  realizedPnl: number;
+  /** null when any closed trade's P&L is missing (never counted as $0). */
+  realizedPnl: number | null;
   /** null when any open position's P&L is missing from the payload. */
   unrealizedPnl: number | null;
   totalPnl: number | null;
@@ -103,9 +104,9 @@ export function numOrNull(v: unknown): number | null {
 }
 
 /** Sum, or null when any term is unknown. */
-export function sumKnown(values: Array<number | null>): number | null {
+export function sumKnown(values: Array<number | null | undefined>): number | null {
   let total = 0;
-  for (const v of values) { if (v === null) return null; total += v; }
+  for (const v of values) { if (v === null || v === undefined || !Number.isFinite(v)) return null; total += v; }
   return total;
 }
 
@@ -240,7 +241,8 @@ export function liveWatchFromAccountStatus(s: {
     simulated: t.simulated !== false,
   }));
   const wl = winLoss(closed);
-  const realized = Number(s.account?.realizedPnl ?? closed.reduce((n, t) => n + (t.pnlUsd ?? 0), 0));
+  // Prefer the account's own realized figure; otherwise sum closed trades, unknown if any P&L is missing.
+  const realized = numOrNull(s.account?.realizedPnl) ?? sumKnown(closed.map((t) => t.pnlUsd));
   const unrealized = numOrNull(s.account?.unrealizedPnl) ?? sumKnown(openAll.map((p) => p.pnlUsd));
   const equity = s.account?.equity ?? null;
   const start = numOrNull(s.account?.startingBalance);
@@ -255,7 +257,7 @@ export function liveWatchFromAccountStatus(s: {
     cashUsd: s.account?.cash ?? null,
     realizedPnl: realized,
     unrealizedPnl: unrealized,
-    totalPnl: unrealized === null ? null : realized + unrealized,
+    totalPnl: unrealized === null || realized === null ? null : realized + unrealized,
     todayPnl: s.account?.pnl?.day ?? sumTodayPnl(closed.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
     winRate: wl.winRate,
     wins: wl.wins,
@@ -289,13 +291,14 @@ export function isolateLiveWatch(watch: LiveWatchModel, liveEquityUsd: number | 
   const simSells = simFeed.filter((f) => f.kind === 'sell');
   const liveWl = winLoss(liveSells);
   const simWl = winLoss(simSells);
-  const liveRealized = liveSells.reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
-  const simRealized = simSells.reduce((s, t) => s + (t.pnlUsd ?? 0), 0);
+  // A sell with missing P&L makes the book's realized figure unknown, not $0 for that trade.
+  const liveRealized = sumKnown(liveSells.map((t) => t.pnlUsd));
+  const simRealized = sumKnown(simSells.map((t) => t.pnlUsd));
   const liveUnreal = sumKnown(liveOpenAll.map((p) => p.pnlUsd));
   const simUnreal = sumKnown(simOpenAll.map((p) => p.pnlUsd));
   const liveEq = liveEquityUsd;
   // Start the live curve at current live equity minus live realized and open PnL (the wallet at live start).
-  const liveStartEq = liveEq == null || liveUnreal === null ? null : r2(liveEq - liveRealized - liveUnreal);
+  const liveStartEq = liveEq == null || liveUnreal === null || liveRealized === null ? null : r2(liveEq - liveRealized - liveUnreal);
   const liveClosedTrades = liveSells.length;
   const live: LiveWatchModel = {
     ...watch,
@@ -304,9 +307,9 @@ export function isolateLiveWatch(watch: LiveWatchModel, liveEquityUsd: number | 
     book: 'live',
     simulatedBadge: false,
     equityUsd: liveEq,
-    realizedPnl: Math.round(liveRealized * 100) / 100,
+    realizedPnl: r2(liveRealized),
     unrealizedPnl: r2(liveUnreal),
-    totalPnl: liveUnreal === null ? null : r2(liveRealized + liveUnreal),
+    totalPnl: liveUnreal === null || liveRealized === null ? null : r2(liveRealized + liveUnreal),
     todayPnl: sumTodayPnl(liveSells.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
     winRate: liveWl.winRate,
     wins: liveWl.wins,
@@ -318,15 +321,15 @@ export function isolateLiveWatch(watch: LiveWatchModel, liveEquityUsd: number | 
     equityCurve: liveStartEq === null || liveEq == null ? [] : liveClosedTrades ? curveFromClosed(liveStartEq, liveSells.map((t) => ({ at: t.at, pnlUsd: t.pnlUsd })), liveEq) : [{ t: LIVE_BOOK_START_ISO, equityUsd: liveStartEq }, { t: watch.asOf, equityUsd: liveEq }],
     emptyMessage: liveClosedTrades || liveOpen ? null : LIVE_EMPTY_MESSAGE,
   };
-  const inferredSimStart = watch.equityUsd == null || watch.totalPnl === null || simUnreal === null
+  const inferredSimStart = watch.equityUsd == null || watch.totalPnl === null || simUnreal === null || simRealized === null
     ? null
     : watch.equityUsd - watch.totalPnl + simRealized + simUnreal;
   const curveStart = watch.equityCurve[0]?.equityUsd;
   // Prefer the original paper starting equity when the mixed curve still has it
   // (e.g. ~$10k) so the simulation book is not pinned to the $10 live wallet.
   const simStartEq = curveStart != null && (inferredSimStart === null || curveStart > inferredSimStart + 50) ? curveStart : inferredSimStart;
-  const simTotal = simUnreal === null ? null : r2(simRealized + simUnreal);
-  const simEquity = simStartEq === null || simUnreal === null ? null : r2(simStartEq + simRealized + simUnreal);
+  const simTotal = simUnreal === null || simRealized === null ? null : r2(simRealized + simUnreal);
+  const simEquity = simStartEq === null || simUnreal === null || simRealized === null ? null : r2(simStartEq + simRealized + simUnreal);
   const simulation: LiveWatchModel = {
     ...watch,
     mode: 'simulation',
@@ -334,7 +337,7 @@ export function isolateLiveWatch(watch: LiveWatchModel, liveEquityUsd: number | 
     book: 'simulation',
     simulatedBadge: true,
     equityUsd: simSells.length || simOpen ? simEquity : null,
-    realizedPnl: Math.round(simRealized * 100) / 100,
+    realizedPnl: r2(simRealized),
     unrealizedPnl: r2(simUnreal),
     totalPnl: simTotal,
     todayPnl: sumTodayPnl(simSells.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
