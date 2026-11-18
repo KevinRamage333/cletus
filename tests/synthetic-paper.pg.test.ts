@@ -100,3 +100,19 @@ it.skipIf(!enabled)('credits cash and realized P&L when the synthetic position i
   expect(closed.feesUsd).toBeCloseTo(0.2, 6);
   expect(await prisma.position.count({ where: { accountId: account.id, status: 'open' } })).toBe(0);
 });
+
+it.skipIf(!enabled)('credits one synthetic sell when two closes race', async () => {
+  const account = await openAccount(1000);
+  await syntheticPaperFill(account, 'buy');
+  const results = await Promise.allSettled([syntheticPaperFill(account, 'sell'), syntheticPaperFill(account, 'sell')]);
+  const fulfilled = results.filter((result) => result.status === 'fulfilled');
+  const rejected = results.filter((result) => result.status === 'rejected');
+  expect(fulfilled).toHaveLength(1);
+  expect(rejected).toHaveLength(1);
+  expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(HttpError);
+  const fresh = await prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+  expect(fresh.cashUsd).toBeCloseTo(1002.3, 6);
+  expect(fresh.realizedPnl).toBeCloseTo(2.3, 6);
+  expect(await prisma.position.count({ where: { accountId: account.id, status: 'closed' } })).toBe(1);
+  expect(await prisma.position.count({ where: { accountId: account.id, status: 'open' } })).toBe(0);
+});
