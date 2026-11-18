@@ -7,6 +7,7 @@ import { resolveAccount } from './status';
 import { accountSettings, accountEquity, periodPnl, invalidateAccountSettings, mem } from './engine';
 import { effectiveConfig, withinTradingHours, AGGRESSION_UI, type AccountSettings } from './user-settings';
 import { log } from './logger';
+import { syntheticPaperAllowed } from './synthetic-paper';
 
 export async function appContext() {
   const u = await requireOnboardedUser();
@@ -57,7 +58,7 @@ export async function tradeSession(u: User, a: Account, c: Config, s: AccountSet
     paperWorkerLastAt: paperWorkerHeartbeat?.createdAt ?? null,
     paperWorkerMessage: paperWorkerHeartbeat?.message ?? null,
     paperWorkerMonitorAt: paperMonitor?.createdAt ?? null,
-    syntheticPaper: process.env.CLETUS_SYNTHETIC_PAPER === '1' && c.mode !== 'live',
+    syntheticPaper: syntheticPaperAllowed(undefined, c.mode),
     user: { email: u.email },
   };
 }

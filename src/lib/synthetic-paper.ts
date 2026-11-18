@@ -10,15 +10,39 @@ const ENTRY = 1;
 const EXIT = 1.1;
 const FEE = 0.1;
 
-type SyntheticEnv = { CLETUS_SYNTHETIC_PAPER?: string };
+type SyntheticEnv = {
+  CLETUS_SYNTHETIC_PAPER?: string;
+  CI?: string;
+  NODE_ENV?: string;
+  VITEST?: string;
+  VERCEL?: string;
+  VERCEL_ENV?: string;
+};
 
 function envFlag(env?: SyntheticEnv): SyntheticEnv {
-  return env ?? { CLETUS_SYNTHETIC_PAPER: process.env.CLETUS_SYNTHETIC_PAPER };
+  if (env) return env;
+  return {
+    CLETUS_SYNTHETIC_PAPER: process.env.CLETUS_SYNTHETIC_PAPER,
+    CI: process.env.CI,
+    NODE_ENV: process.env.NODE_ENV,
+    VITEST: process.env.VITEST,
+    VERCEL: process.env.VERCEL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+  };
 }
 
-/** Test-only switch. Live mode never enables it, even if the env flag is present. */
+/** CI and the test runner only. A passed env is the whole environment under test. */
+export function syntheticPaperRuntimeAllowed(env: SyntheticEnv): boolean {
+  if (env.VERCEL === '1' || env.VERCEL_ENV === 'preview' || env.VERCEL_ENV === 'production') return false;
+  const inCi = env.CI === 'true' || env.CI === '1';
+  const inTest = env.NODE_ENV === 'test' || env.VITEST === 'true' || env.VITEST === '1';
+  return inCi || inTest;
+}
+
+/** Test-only switch. Live mode and Vercel preview/production never enable it. */
 export function syntheticPaperAllowed(env?: SyntheticEnv, mode: string = 'simulation'): boolean {
-  return envFlag(env).CLETUS_SYNTHETIC_PAPER === '1' && mode !== 'live';
+  const flags = envFlag(env);
+  return flags.CLETUS_SYNTHETIC_PAPER === '1' && mode !== 'live' && syntheticPaperRuntimeAllowed(flags);
 }
 
 export function assertSyntheticPaper(env?: SyntheticEnv, mode = getConfig().mode): void {
