@@ -75,9 +75,15 @@ describe('badge and boost re-checks (Audit H3)', () => {
     await cachedTokenFacts('base', '0xdef', t0 + 59_000, gather);
     expect(gather).toHaveBeenCalledTimes(3);
   });
-  it('sources down with no prior result: not dropped, but never claims a fresh check', async () => {
+  it('sources down with no prior result: fails closed and never claims a fresh check (Audit N2)', async () => {
     const r = await recheckListing('base', '0x1', 5, async () => { throw new Error('down'); });
-    expect(r).toEqual({ ok: true, drops: [], checkedAt: null });
+    expect(r.ok).toBe(false);
+    expect(r.checkedAt).toBeNull();
+    expect(r.drops).toHaveLength(1);
+  });
+  it('a pool that disappeared drops the badge (Audit N1)', () => {
+    expect(recheckDrops(facts({ liquidityUsd: null }))).toContain('No live liquidity pool was found.');
+    expect(recheckDrops(facts({ liquidityUsd: 100_000 }))).toEqual([]);
   });
 });
 

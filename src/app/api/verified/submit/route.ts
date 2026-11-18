@@ -21,8 +21,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again in a few minutes.' }, { status: 429 });
   }
   // Single use: a signed challenge can be submitted once (only a hash of purpose+nonce is stored).
-  const fresh = await consumeNonce('verified-siws', proof.nonce, `verified:${proof.network}:${proof.token}`, proof.expMs)
-    .catch(() => consumeNonceInMemory('verified-siws', proof.nonce, proof.expMs));
+  // With a database configured, a nonce-store failure is a 503, never a per-instance memory fallback (Audit N4).
+  let fresh: boolean;
+  if (process.env.DATABASE_URL) {
+    try { fresh = await consumeNonce('verified-siws', proof.nonce, `verified:${proof.network}:${proof.token}`, proof.expMs); }
+    catch { return NextResponse.json({ error: 'Verification is temporarily unavailable. Try again shortly.' }, { status: 503 }); }
+  } else {
+    fresh = consumeNonceInMemory('verified-siws', proof.nonce, proof.expMs);
+  }
   if (!fresh) {
     return NextResponse.json({ error: 'This signed challenge was already used. Start again.' }, { status: 400 });
   }

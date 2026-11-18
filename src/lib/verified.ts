@@ -142,7 +142,9 @@ export const RECHECK_TTL_MS = 60 * 60_000;
  */
 export function recheckDrops(f: Pick<TokenSecurityFacts, 'network' | 'liquidityUsd' | 'honeypot' | 'sellTaxPct' | 'buyTaxPct' | 'mintAuthority' | 'freezeAuthority' | 'ownerCanMint' | 'token2022Risks'>): string[] {
   const out: string[] = [];
-  if (f.liquidityUsd != null && f.liquidityUsd < 10_000) out.push('Liquidity fell under $10,000.');
+  // A pool that disappeared (no liquidity reported) drops the badge/boost too, not only a thin one (Audit N1).
+  if (f.liquidityUsd == null || !Number.isFinite(f.liquidityUsd)) out.push('No live liquidity pool was found.');
+  else if (f.liquidityUsd < 10_000) out.push('Liquidity fell under $10,000.');
   if (f.honeypot === true) out.push('Now flagged as a honeypot.');
   if ((f.sellTaxPct ?? 0) > 10 || (f.buyTaxPct ?? 0) > 10) out.push('Tax rose over 10%.');
   if (f.network === 'solana') {

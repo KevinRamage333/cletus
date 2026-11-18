@@ -9,8 +9,8 @@ export type PaperRow = {
   pnlUsd: number | null; pnlPct: number | null; exitReason: string | null; chartUrl: string | null;
   openedAt: string | null; closedAt: string | null;
 };
-export type PaperBook = { book: string; label: string; startingUsd: number | null; cashUsd: number | null; equityUsd: number | null; open: number; closed: number };
-export type PaperNetwork = { network: string; open: number; closed: number; wins: number | null; pnlUsd: number | null };
+export type PaperBook = { book: string; label: string; startingUsd: number | null; cashUsd: number | null; equityUsd: number | null; open: number | null; closed: number | null };
+export type PaperNetwork = { network: string; open: number | null; closed: number | null; wins: number | null; pnlUsd: number | null };
 export type PaperSnapshot = {
   available: boolean; simulated: true; mode: 'paper'; publishedAt: string | null; stale: boolean;
   startingUsd: number | null; equityUsd: number | null; totalPnlUsd: number | null; realizedUsd: number | null; unrealizedUsd: number | null;
@@ -64,10 +64,10 @@ export function buildSnapshot(snap: { published_at: unknown; summary: unknown } 
   const recent = all.filter((r) => r.status === 'closed').sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '')).slice(0, 25);
   const books: PaperBook[] = Array.isArray(s.books) ? (s.books as Array<Record<string, unknown>>).map((b) => ({
     book: str(b.book) ?? 'book', label: str(b.label) ?? 'Book', startingUsd: num(b.startingUsd), cashUsd: num(b.cashUsd), equityUsd: num(b.equityUsd),
-    open: num(b.open) ?? 0, closed: num(b.closed) ?? 0,
+    open: num(b.open), closed: num(b.closed),
   })) : [];
   const networks: PaperNetwork[] = s.networks && typeof s.networks === 'object'
-    ? Object.entries(s.networks as Record<string, Record<string, unknown>>).map(([network, v]) => ({ network, open: num(v.open) ?? 0, closed: num(v.closed) ?? 0, wins: num(v.wins), pnlUsd: num(v.pnlUsd) }))
+    ? Object.entries(s.networks as Record<string, Record<string, unknown>>).map(([network, v]) => ({ network, open: num(v.open), closed: num(v.closed), wins: num(v.wins), pnlUsd: num(v.pnlUsd) }))
     : [];
   const closedCount = num(s.closedCount); // never infer from the 25 most recent rows
   return {

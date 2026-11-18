@@ -58,12 +58,12 @@ export default function CletusPaperBook({ variant = 'full' }: { variant?: 'full'
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="paper-stats">
         <Stat label="Paper equity" value={usd(data.equityUsd)} sub={`Started with ${usd(data.startingUsd)}`} testId="paper-equity" />
         <Stat label="Total P&L" value={usd(data.totalPnlUsd, true)} tone={tone(data.totalPnlUsd)} sub={`Realized ${usd(data.realizedUsd, true)} · open ${usd(data.unrealizedUsd, true)}`} />
-        <Stat label="Open positions" value={data.openCount} sub={data.books.map((b) => `${b.label} ${b.open}`).join(' · ') || '—'} testId="paper-open-count" />
+        <Stat label="Open positions" value={data.openCount} sub={data.books.map((b) => `${b.label} ${b.open ?? 'unavailable'}`).join(' · ') || '—'} testId="paper-open-count" />
         <Stat label="Closed trades" value={data.closedCount ?? "—"} sub={data.winRatePct == null ? 'Win rate —' : `Win rate ${data.winRatePct.toFixed(1)}% (${data.wins ?? '—'}W/${data.losses ?? '—'}L)`} testId="paper-closed-count" />
       </div>
       {variant !== 'compact' && data.books.length > 0 && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2" data-testid="paper-books">
-          {data.books.map((b) => <div key={b.book} className="panel p-3 text-xs text-[#a39c8f]"><p className="font-semibold text-[#f6f1e4]">{b.label}</p><p className="num mt-1">start {usd(b.startingUsd)} · cash {usd(b.cashUsd)} · equity {usd(b.equityUsd)} · {b.open} open / {b.closed} closed</p></div>)}
+          {data.books.map((b) => <div key={b.book} className="panel p-3 text-xs text-[#a39c8f]"><p className="font-semibold text-[#f6f1e4]">{b.label}</p><p className="num mt-1">start {usd(b.startingUsd)} · cash {usd(b.cashUsd)} · equity {usd(b.equityUsd)} · {b.open ?? 'Unavailable'} open / {b.closed ?? 'Unavailable'} closed</p></div>)}
         </div>
       )}
       {variant === 'full' && data.networks.length > 0 && (

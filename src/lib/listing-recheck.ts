@@ -38,7 +38,8 @@ export async function recheckListing(network: ListingNetwork, token: string, now
   } catch {
     // Sources down: keep the last known result (if any) but never claim a fresh check.
     if (prev) return { ok: prev.drops.length === 0, drops: prev.drops, checkedAt: new Date(prev.at).toISOString() };
-    return { ok: true, drops: [], checkedAt: null };
+    // Cold instance with sources down: fail closed. The badge/boost is hidden until a check succeeds (Audit N2).
+    return { ok: false, drops: ['Listing could not be re-checked right now.'], checkedAt: null };
   }
 }
 

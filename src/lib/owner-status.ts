@@ -185,9 +185,10 @@ async function fromDatabase(): Promise<{ watch: LiveWatchModel; plan: OwnerPlanS
   }
 }
 
-function fallbackPlan(equityUsd: number, openPositions: number, solPriceUsd: number): OwnerPlanStatusView {
+function fallbackPlan(equityUsd: number | null, openPositions: number, solPriceUsd: number): OwnerPlanStatusView {
   const plan = parseOwnerPlanConfig(process.env);
-  const sized = tradeSizeForEquity(equityUsd, plan.sizeTiers, plan.sizeStepUsd, plan.sizeIncrementUsd);
+  // Unknown equity sizes at the first (smallest) tier but is reported as null, not $0 (Audit N8).
+  const sized = tradeSizeForEquity(equityUsd ?? 0, plan.sizeTiers, plan.sizeStepUsd, plan.sizeIncrementUsd);
   return {
     enabled: plan.enabled, sweepArmed: plan.sweepArmed, sweepPausedReason: plan.sweepArmed ? null : 'Payout wallet is not confirmed',
     payoutWallet: plan.payoutWallet, tradingWallet: OWNER_TRADING_WALLET, equityUsd,
@@ -229,7 +230,7 @@ function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | nul
       const sl = plan?.stopLossPct;
       const tp = plan?.takeProfitPct;
       open = enrichPosition({
-        id: lastBuy.id, symbol: lastBuy.symbol, mint: lastBuy.mint, sizeUsd: lastBuy.sizeUsd ?? 0,
+        id: lastBuy.id, symbol: lastBuy.symbol, mint: lastBuy.mint, sizeUsd: lastBuy.sizeUsd ?? null,
         entryPrice: lastBuy.entryPrice, lastPrice: lastBuy.exitPrice ?? lastBuy.entryPrice,
         pnlUsd: 0, pnlPct: 0, openedAt: lastBuy.at, entryTx: null, solscanEntry: lastBuy.solscan,
         solscanMint: lastBuy.solscanMint, simulated: lastBuy.simulated,
@@ -247,7 +248,7 @@ function applyLogAndChain(watch: LiveWatchModel, plan: OwnerPlanStatusView | nul
     sol: onchain?.sol ?? watch.sol,
     solPriceUsd: onchain?.solPriceUsd ?? watch.solPriceUsd,
     realizedPnl: realized,
-    totalPnl: realized + watch.unrealizedPnl,
+    totalPnl: watch.unrealizedPnl === null ? null : realized + watch.unrealizedPnl,
     todayPnl: today,
     winRate: wl.winRate ?? watch.winRate,
     wins: wl.wins || watch.wins,
@@ -317,7 +318,7 @@ export async function buildOwnerStatus(): Promise<OwnerStatusPayload> {
     }, recordedFromLiveEvents(readLiveTrades(), true), onchain?.equityUsd ?? watch.equityUsd ?? null), kol, halt);
   }
 
-  const plan = fallbackPlan(onchain?.equityUsd ?? 0, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd);
+  const plan = fallbackPlan(onchain?.equityUsd ?? null, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd);
   const events = readLiveTrades();
   const watch = applyLogAndChain(emptyWatch(c.mode, onchain), plan, onchain);
   return withKolViews(withIsolatedBooks({
@@ -343,7 +344,7 @@ function emptyOwner(c: ReturnType<typeof getConfig>, onchain: Awaited<ReturnType
     tradingWallet: OWNER_TRADING_WALLET,
     payoutWallet: c.ownerPlan.payoutWallet,
     ownerWallet: resolveOwnerWallet(),
-    plan: plan ?? fallbackPlan(onchain?.equityUsd ?? 0, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd),
+    plan: plan ?? fallbackPlan(onchain?.equityUsd ?? null, 0, onchain?.solPriceUsd ?? c.solPriceFallbackUsd),
     engine: {
       mode: c.mode, liveBlockedReason: c.liveBlockedReason, killSwitch: false, killReason: null,
       lastScanAt: null, scanCount: null, lastScanSummary: null, withinSchedule: null,

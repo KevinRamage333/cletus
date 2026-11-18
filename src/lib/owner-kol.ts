@@ -1,7 +1,7 @@
 /** Owner desk: KOL add-on view (wallet balance, last scan round, open KOL positions, KOL trade history with P&L). */
 import { KOL_TRADING_WALLET } from './owner-withdraw-queue';
 import { solscanAccountUrl, solscanTxUrl } from './approvals';
-import { curveFromClosed, enrichPosition, sumTodayPnl, winLoss, type LiveWatchModel } from './live-watch';
+import { curveFromClosed, enrichPosition, sumKnown, sumTodayPnl, winLoss, type LiveWatchModel } from './live-watch';
 
 export interface KolDeskPosition { id: string; symbol: string; mint: string; entryPrice: number; lastPrice: number; sizeUsd: number; valueUsd: number; pnlUsd: number; pnlPct: number; openedAt: string }
 export interface KolDeskTrade { id: string; symbol: string; mint: string; openedAt: string; closedAt: string | null; sizeUsd: number; pnlUsd: number; pnlPct: number; exitReason: string | null; exitTxUrl: string | null }
@@ -38,7 +38,7 @@ export interface CombinedWallets {
 }
 
 export function combinedWallets(
-  main: { sol?: number | null; equityUsd?: number | null; realizedPnl?: number; totalPnl?: number; openAll?: unknown[]; open?: unknown },
+  main: { sol?: number | null; equityUsd?: number | null; realizedPnl?: number; totalPnl?: number | null; openAll?: unknown[]; open?: unknown },
   kol: KolDesk | null | undefined,
 ): CombinedWallets {
   const mainSol = main.sol ?? null;
@@ -74,9 +74,9 @@ export function kolWatchFromDesk(kol: KolDesk, opts?: { halted?: boolean; solPri
   })).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const wl = winLoss(feed);
   const realized = kol.totals.pnlUsd;
-  const unrealized = openAll.reduce((s, p) => s + p.pnlUsd, 0);
+  const unrealized = sumKnown(openAll.map((p) => p.pnlUsd));
   const equity = kol.usd;
-  const start = equity == null ? 0 : Math.round((equity - realized - unrealized) * 100) / 100;
+  const start = equity == null || unrealized === null ? 0 : Math.round((equity - realized - unrealized) * 100) / 100;
   const hasBook = feed.length > 0 || openAll.length > 0;
   return {
     asOf: opts?.asOf ?? new Date().toISOString(),
@@ -87,8 +87,8 @@ export function kolWatchFromDesk(kol: KolDesk, opts?: { halted?: boolean; solPri
     sol: kol.sol,
     solPriceUsd: opts?.solPriceUsd ?? null,
     realizedPnl: realized,
-    unrealizedPnl: Math.round(unrealized * 100) / 100,
-    totalPnl: Math.round((realized + unrealized) * 100) / 100,
+    unrealizedPnl: unrealized === null ? null : Math.round(unrealized * 100) / 100,
+    totalPnl: unrealized === null ? null : Math.round((realized + unrealized) * 100) / 100,
     todayPnl: sumTodayPnl(feed.map((t) => ({ pnlUsd: t.pnlUsd, at: t.at }))),
     winRate: wl.winRate,
     wins: wl.wins,

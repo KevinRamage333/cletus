@@ -75,7 +75,7 @@ export default function ApprovalQueue({ approvals, demo, onChange }: Props) {
       )}
       {pending.map((row) => {
         const left = remainingMs(row.expiresAt, now);
-        const fee = row.operatorFeeUsd ?? 0;
+        const fee = row.operatorFeeUsd ?? null;
         const bps = row.operatorFeeBps ?? 50;
         return (
           <div key={row.id} className="rounded-xl border border-amber-500/30 bg-black/40 p-4 space-y-3" data-testid="approval-item">
@@ -88,7 +88,7 @@ export default function ApprovalQueue({ approvals, demo, onChange }: Props) {
             </div>
             {row.reason && <p className="text-xs text-white/60">{row.reason}</p>}
             <div className="text-xs text-white/50">
-              Platform fee (0.5%): <span className="text-amber-300 font-mono">${fee.toFixed(2)}</span> ({bps} bps)
+              Platform fee ({(bps / 100).toFixed(1)}%): <span className="text-amber-300 font-mono">{fee === null ? 'Unavailable' : `$${fee.toFixed(2)}`}</span> ({bps} bps)
               {row.priceImpactPct != null ? ` · impact ${row.priceImpactPct.toFixed(2)}%` : ''}
             </div>
             <div className="flex flex-wrap gap-2">

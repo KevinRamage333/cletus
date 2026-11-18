@@ -336,7 +336,8 @@ export interface OwnerPlanStatusView {
   sweepPausedReason: string | null;
   payoutWallet: string | null;
   tradingWallet: string;
-  equityUsd: number;
+  /** null when the wallet read failed; never shown as $0. */
+  equityUsd: number | null;
   currentTier: EquitySizeTier;
   tradeSizeUsd: number;
   feeReserveSol: number;
@@ -358,7 +359,7 @@ export function describeOwnerPlan(s: OwnerPlanStatusView): string {
   const sweep = s.sweepArmed
     ? (s.sweepPausedReason ?? `next sweep at $${s.nextSweepTargetUsd.toFixed(0)} (base $${s.currentBaseUsd.toFixed(0)}); $${s.totalPaidUsd.toFixed(2)} paid out so far`)
     : (s.sweepPausedReason ?? 'profit sweep is not armed');
-  return `Owner plan: equity $${s.equityUsd.toFixed(2)}, ${s.maxOpenPositions} position at a time, ${s.stopLossPct}% stop / ${s.takeProfitPct}% take-profit, Balanced band. Current trade size ${size} (tier from $${s.currentTier.minEquityUsd}). ${sweep}.`;
+  return `Owner plan: equity ${s.equityUsd === null ? "unavailable" : `$${s.equityUsd.toFixed(2)}`}, ${s.maxOpenPositions} position at a time, ${s.stopLossPct}% stop / ${s.takeProfitPct}% take-profit, Balanced band. Current trade size ${size} (tier from $${s.currentTier.minEquityUsd}). ${sweep}.`;
 }
 
 export function reserveLamportsForTrading(feeReserveSol: number): number {
