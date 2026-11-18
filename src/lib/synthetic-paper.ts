@@ -26,29 +26,37 @@ export function assertSyntheticPaper(env?: SyntheticEnv, mode = getConfig().mode
   if (!syntheticPaperAllowed(envFlag(env), mode)) throw new HttpError(404, 'Not found.');
 }
 
+const BUY_COST = SIZE_USD + FEE;
+
 /** Book a simulated fill locally. No quote, signature, or broadcast. */
 export async function syntheticPaperFill(account: Account, side: 'buy' | 'sell') {
   assertSyntheticPaper();
   if (side === 'buy') {
-    const position = await prisma.position.create({
-      data: {
-        accountId: account.id,
-        network: 'solana',
-        mint: SYNTHETIC_MINT,
-        symbol: SYNTHETIC_SYMBOL,
-        status: 'open',
-        simulated: true,
-        entryPrice: ENTRY,
-        sizeUsd: SIZE_USD,
-        tokenAmount: SIZE_USD / ENTRY,
-        feesUsd: FEE,
-        highestPrice: ENTRY,
-        lastPrice: ENTRY,
-        compositeScore: 0,
-        signals: '{}',
-      },
+    const position = await prisma.$transaction(async (tx) => {
+      const taken = await tx.account.updateMany({
+        where: { id: account.id, cashUsd: { gte: BUY_COST } },
+        data: { cashUsd: { decrement: BUY_COST } },
+      });
+      if (taken.count !== 1) throw new HttpError(400, 'Insufficient paper cash for this synthetic buy.');
+      return tx.position.create({
+        data: {
+          accountId: account.id,
+          network: 'solana',
+          mint: SYNTHETIC_MINT,
+          symbol: SYNTHETIC_SYMBOL,
+          status: 'open',
+          simulated: true,
+          entryPrice: ENTRY,
+          sizeUsd: SIZE_USD,
+          tokenAmount: SIZE_USD / ENTRY,
+          feesUsd: FEE,
+          highestPrice: ENTRY,
+          lastPrice: ENTRY,
+          compositeScore: 0,
+          signals: '{}',
+        },
+      });
     });
-    await prisma.account.update({ where: { id: account.id }, data: { cashUsd: { decrement: SIZE_USD + FEE } } });
     return { ok: true, side: 'buy' as const, simulated: true, signed: false, broadcast: false, symbol: SYNTHETIC_SYMBOL, id: position.id };
   }
   if (side !== 'sell') throw new HttpError(400, 'side must be buy or sell');
