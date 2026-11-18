@@ -60,6 +60,7 @@ function StatCard({
   positive,
   neutral,
   icon,
+  unavailable = value === 'Unavailable',
 }: {
   label: string;
   value: string;
@@ -67,22 +68,26 @@ function StatCard({
   positive?: boolean;
   neutral?: boolean;
   icon: string;
+  /** A missing figure is dimmed so it never reads like a real value. */
+  unavailable?: boolean;
 }) {
-  const valueColor = neutral
+  const valueColor = unavailable
+    ? 'text-white/35 italic font-medium'
+    : neutral
     ? 'text-sky-400'
     : positive
     ? 'text-emerald-400'
     : 'text-red-400';
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#121212] p-4 flex flex-col gap-2">
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-[#121212] p-4 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-white/40 uppercase tracking-wider font-medium">
           {label}
         </span>
         <span className="text-base leading-none">{icon}</span>
       </div>
-      <div className={`text-2xl font-bold font-mono tabular-nums ${valueColor}`}>
+      <div className={`min-w-0 break-words text-xl sm:text-2xl font-bold font-mono tabular-nums ${valueColor}`}>
         {value}
       </div>
       {sub && <div className="text-xs text-white/40">{sub}</div>}

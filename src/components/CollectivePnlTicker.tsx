@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type CollectivePnl = {
   netProfit: number | null;
@@ -44,6 +44,8 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
   const [data, setData] = useState<CollectivePnl | null>(null);
   const [phase, setPhase] = useState<Phase>(demo ? 'demo' : 'loading');
   const [stale, setStale] = useState(false);
+  // Tracks whether any data has loaded, so the error path never calls setState inside a setData updater.
+  const hasData = useRef(false);
 
   useEffect(() => {
     if (demo) return;
@@ -62,16 +64,14 @@ export default function CollectivePnlTicker({ demo = false, showCommunityLink = 
           updatedAt: payload.updatedAt || null,
           suppressed: Boolean(payload.suppressed),
         };
+        hasData.current = true;
         setData(next);
         setStale(false);
         setPhase(next.suppressed || next.netProfit === null ? 'suppressed' : 'ready');
       } catch {
         if (!stopped) {
-          setData((current) => {
-            if (current) setStale(true);
-            else setPhase('error');
-            return current;
-          });
+          if (hasData.current) setStale(true);
+          else setPhase('error');
         }
       }
     }

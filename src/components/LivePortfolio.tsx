@@ -73,7 +73,7 @@ export default function LivePortfolio(p: Props) {
         {p.open.length === 0 ? <p className="text-sm text-white/40">No open positions.</p> : (
           <table className="w-full text-sm">
             <thead className="text-[11px] text-white/40 uppercase tracking-wider">
-              <tr><th className="text-left py-2">Token</th><th className="text-right">Size</th><th className="text-right">Entry</th><th className="text-right">Last</th><th className="text-right">P&L</th><th className="text-right">0.5% fee</th><th className="text-right">On-chain</th></tr>
+              <tr><th className="text-left py-2">Token</th><th className="text-right">Size</th><th className="text-right">Entry</th><th className="text-right">Last</th><th className="text-right">P&L</th><th className="text-right">{(bps / 100).toFixed(1)}% fee</th><th className="text-right">On-chain</th></tr>
             </thead>
             <tbody>
               {p.open.map((r) => (
@@ -97,7 +97,7 @@ export default function LivePortfolio(p: Props) {
         {p.closed.length === 0 ? <p className="text-sm text-white/40">No closed trades yet.</p> : (
           <table className="w-full text-sm">
             <thead className="text-[11px] text-white/40 uppercase tracking-wider">
-              <tr><th className="text-left py-2">Token</th><th className="text-right">Size</th><th className="text-right">P&L</th><th className="text-right">0.5% fee</th><th className="text-right">Fees total</th><th className="text-left">Exit</th><th className="text-right">Solscan</th></tr>
+              <tr><th className="text-left py-2">Token</th><th className="text-right">Size</th><th className="text-right">P&L</th><th className="text-right">{(bps / 100).toFixed(1)}% fee</th><th className="text-right">Fees total</th><th className="text-left">Exit</th><th className="text-right">Solscan</th></tr>
             </thead>
             <tbody>
               {p.closed.map((r) => (

@@ -34,7 +34,7 @@ export default function PerformancePage() {
       const res = await fetch('/api/protected/performance', { credentials: 'include', cache: 'no-store' });
       if (!res.ok) throw new Error('Unable to load performance data');
       setData(await res.json());
-      setError('');
+      setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : 'Performance data unavailable'); }
     finally { setLoading(false); }
   }, []);

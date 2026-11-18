@@ -56,7 +56,7 @@ export default function TaxCenterPage() {
           </div>
 
           <ScreenStatus
-            state={screenState({ loading, error, hasData: Boolean(info), empty: Boolean(info) && !info?.taxAckAt, refreshedAt })}
+            state={screenState({ loading, error, hasData: Boolean(info), empty: Boolean(info) && !info?.taxAckAt, refreshedAt, staleMs: Infinity })}
             error={error}
             emptyLabel="No tax acknowledgment on file yet."
             refreshedLabel={refreshedLabel('Tax view', refreshedAt)}
